@@ -40,7 +40,6 @@ def main(
                     **agent_args,
                 )
             del agent_args["recurrent"]
-            del agent_args["num_conv_layers"]
             return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
@@ -101,7 +100,6 @@ def control_flow_args(parser):
     parsers.agent.add_argument("--task-embed-size", type=int)
     parsers.agent.add_argument("--lower-embed-size", type=int)
     parsers.agent.add_argument("--inventory-hidden-size", type=int)
-    parsers.agent.add_argument("--num-conv-layers", type=int)
     parsers.agent.add_argument("--num-edges", type=int)
     parsers.agent.add_argument("--gate-coef", type=float)
     parsers.agent.add_argument("--no-op-coef", type=float)
