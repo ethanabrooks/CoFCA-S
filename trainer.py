@@ -195,9 +195,9 @@ class Trainer(tune.Trainable):
         set_seeds(cuda, cuda_deterministic, seed)
 
         if cuda:
-            self.device = "cuda" if self.name is None else get_device(self.name)
+            self.device = torch.device("cuda") if self.name else get_device(self.name)
         else:
-            self.device = "cpu"
+            self.device = torch.device("cpu")
         print("Using device", self.device)
 
         train_envs = make_vec_envs(evaluation=False)

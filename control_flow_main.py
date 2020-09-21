@@ -64,6 +64,11 @@ def main(**kwargs):
                     k in inspect.signature(env.Env.__init__).parameters
                     or k in inspect.signature(self.make_env).parameters
                 ):
+                    if k == "lower_level":
+                        if v:
+                            print("lower_level specified. Using gridworld env")
+                        else:
+                            print("lower_level not specified. Using debug_env")
                     env_args[k] = v
                 if k in inspect.signature(ours.Recurrence.__init__).parameters:
                     agent_args[k] = v

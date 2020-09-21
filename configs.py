@@ -84,4 +84,9 @@ debug_default.update(
 )
 del debug_default["lower_level_config"]
 del debug_default["lower_level_load_path"]
-configs = dict(search=search, debug_search=debug_search, default=default)
+configs = dict(
+    search=search,
+    debug_search=debug_search,
+    default=default,
+    debug_default=debug_default,
+)
