@@ -178,9 +178,9 @@ class Trainer(tune.Trainable):
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
 
+                action = envs.preprocess(act.action)
                 # Observe reward and next obs
-                obs, reward, done, infos = envs.step(act.action)
-                self.process_infos(episode_counter, done, infos, **act.log)
+                obs, reward, done, infos = envs.step(action)
 
                 # If done then clean the history of observations.
                 masks = torch.tensor(
