@@ -602,12 +602,7 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-        cumulative_reward,
+        self, state, action, lower_level_action, reward, cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -615,8 +610,7 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
+                "Lower Level Action:", self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
@@ -644,12 +638,7 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
+        self, term, success, lines, state, agent_ptr,
     ):
 
         if term:
@@ -796,9 +785,6 @@ class Env(gym.Env):
                     ipdb.set_trace()
 
                 info.update(
-                    instruction=[self.preprocess_line(l) for l in lines],
-                    actions=actions,
-                    program_counter=program_counter,
                     success=success,
                     cumulative_reward=cumulative_reward,
                     instruction_len=len(lines),
