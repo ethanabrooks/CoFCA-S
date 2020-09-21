@@ -146,31 +146,6 @@ class Trainer(tune.Trainable):
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        class EpochCounter:
-            def __init__(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
-                self.rewards = np.zeros(num_processes)
-                self.time_steps = np.zeros(num_processes)
-
-            def update(self, reward, done):
-                self.rewards += reward.numpy()
-                self.time_steps += np.ones_like(done)
-                self.episode_rewards += list(self.rewards[done])
-                self.episode_time_steps += list(self.time_steps[done])
-                self.rewards[done] = 0
-                self.time_steps[done] = 0
-
-            def reset(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
-
-            def items(self, prefix=""):
-                if self.episode_rewards:
-                    yield prefix + "rewards", np.mean(self.episode_rewards)
-                if self.episode_time_steps:
-                    yield prefix + "time_steps", np.mean(self.episode_time_steps)
-
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return lambda: self.make_env(
@@ -320,14 +295,6 @@ class Trainer(tune.Trainable):
                     train_means = MeanAggregator()
         finally:
             train_envs.close()
-
-    @staticmethod
-    def process_infos(episode_counter, done, infos, **act_log):
-        for d in infos:
-            for k, v in d.items():
-                episode_counter[k] += v if type(v) is list else [float(v)]
-        for k, v in act_log.items():
-            episode_counter[k] += v if type(v) is list else [float(v)]
 
     @staticmethod
     def build_agent(envs, **agent_args):

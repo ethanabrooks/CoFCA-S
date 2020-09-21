@@ -10,11 +10,9 @@ import env
 import networks
 import ours
 from env import Action
-from epoch_counter import EpochCounter
 from lower_level import LowerLevel
 from main import add_arguments
 from trainer import Trainer
-from utils import hierarchical_parse_args
 
 
 def main(
@@ -92,10 +90,6 @@ def main(
                 else:
                     other_args[k] = v
             return dict(env_args=env_args, agent_args=agent_args, **other_args)
-
-        @classmethod
-        def build_epoch_counter(cls, num_processes):
-            return EpochCounter(num_processes)
 
     ControlFlowTrainer.main(
         **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"
