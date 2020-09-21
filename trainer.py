@@ -39,6 +39,7 @@ class Trainer(tune.Trainable):
         super().__init__(*args, **kwargs)
 
     def setup(self, config):
+        config = self.structure_config(config)
         self.iterator = self.gen(**config)
 
     def structure_config(self, config):
@@ -101,6 +102,7 @@ class Trainer(tune.Trainable):
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
+        env_args: dict,
         env_id: str,
         log_interval: int,
         normalize: float,
@@ -157,6 +159,7 @@ class Trainer(tune.Trainable):
                     rank=rank,
                     evaluation=evaluation,
                     env_id=env_id,
+                    **env_args,
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -306,8 +309,8 @@ class Trainer(tune.Trainable):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, evaluation):
-        env = gym.make(env_id)
+    def make_env(env_id, seed, rank, evaluation, **kwargs):
+        env = gym.make(env_id, **kwargs)
         env.seed(seed + rank)
         return env
 

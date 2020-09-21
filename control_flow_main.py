@@ -18,7 +18,6 @@ from utils import hierarchical_parse_args
 
 
 def main(
-    env_args,
     env_id,
     log_dir,
     lower_level,
@@ -56,9 +55,9 @@ def main(
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, env_id=None):
+        def make_env(seed, rank, evaluation, env_id=None, **kwargs):
             args = dict(
-                **env_args,
+                **kwargs,
                 min_eval_lines=min_eval_lines,
                 max_eval_lines=max_eval_lines,
                 seed=seed + rank,
@@ -134,4 +133,4 @@ def control_flow_args(parser):
 
 if __name__ == "__main__":
     PARSER = ArgumentParser()
-    main(**hierarchical_parse_args(control_flow_args(PARSER)))
+    main(**vars(control_flow_args(PARSER).parse_args()))
