@@ -1,5 +1,6 @@
 # third party
 import csv
+import re
 from io import StringIO
 import random
 import subprocess
@@ -215,3 +216,13 @@ def hierarchical_parse_args(parser: argparse.ArgumentParser, include_positional=
     if include_positional:
         return positional, nonpositional
     return nonpositional
+
+
+def get_device(name):
+    match = re.search("\d+$", name)
+    if match:
+        device_num = int(match.group()) % get_n_gpu()
+    else:
+        device_num = get_random_gpu()
+
+    return torch.device("cuda", device_num)

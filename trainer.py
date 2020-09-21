@@ -1,17 +1,16 @@
 import os
-import re
 import sys
-from collections import defaultdict, namedtuple
+from collections import namedtuple, defaultdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import gym
-import numpy as np
 import ray
 import torch
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
+import numpy as np
 
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -19,7 +18,7 @@ from common.vec_env.util import set_seeds
 from networks import Agent, AgentOutputs
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import k_scalar_pairs, get_n_gpu, get_random_gpu
+from utils import k_scalar_pairs, get_device
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
@@ -34,13 +33,13 @@ class Trainer(tune.Trainable):
         self.device = None
         super().__init__(*args, **kwargs)
 
-    def _setup(self, config):
+    def setup(self, config):
         self.iterator = self.gen(**config)
 
     def _train(self):
         return next(self.iterator)
 
-    def _save(self, tmp_checkpoint_dir):
+    def save_checkpoint(self, tmp_checkpoint_dir):
         modules = dict(
             optimizer=self.ppo.optimizer, agent=self.agent
         )  # type: Dict[str, torch.nn.Module]
@@ -51,14 +50,14 @@ class Trainer(tune.Trainable):
         torch.save(dict(step=self.i, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
 
-    def _restore(self, checkpoint):
-        state_dict = torch.load(checkpoint, map_location=self.device)
+    def load_checkpoint(self, checkpoint_path):
+        state_dict = torch.load(checkpoint_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
         start = state_dict.get("step", -1) + 1
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
-        print(f"Loaded parameters from {checkpoint}.")
+        print(f"Loaded parameters from {checkpoint_path}.")
 
     def loop(self):
         yield from self.iterator
@@ -72,7 +71,7 @@ class Trainer(tune.Trainable):
         log_interval: int,
         normalize: float,
         num_batch: int,
-        num_iterations: int,
+        num_iterations: Optional[int],
         num_processes: int,
         ppo_args: dict,
         render: bool,
@@ -167,7 +166,7 @@ class Trainer(tune.Trainable):
         # reproducibility
         set_seeds(cuda, cuda_deterministic, seed)
 
-        self.device = self.get_device() if cuda else "cpu"
+        self.device = get_device(self.name) if cuda else "cpu"
         print("Using device", self.device)
 
         train_envs = make_vec_envs(evaluation=False)
@@ -277,15 +276,6 @@ class Trainer(tune.Trainable):
         env = gym.make(env_id)
         env.seed(seed + rank)
         return env
-
-    def get_device(self):
-        match = re.search("\d+$", self.name)
-        if match:
-            device_num = int(match.group()) % get_n_gpu()
-        else:
-            device_num = get_random_gpu()
-
-        return torch.device("cuda", device_num)
 
     @classmethod
     def main(
