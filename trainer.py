@@ -116,7 +116,6 @@ class Trainer:
         log_interval: int,
         name: str,
         normalize: float,
-        num_batch: int,
         num_iterations: int,
         num_processes: int,
         ppo_args: dict,
@@ -209,10 +208,11 @@ class Trainer:
 
             ppo = PPO(agent=agent, **ppo_args)
             train_means = MeanAggregator()
+            start = 0
             if load_path:
-                self.load_checkpoint(load_path, ppo, agent, device)
+                start = self.load_checkpoint(load_path, ppo, agent, device)
 
-            for i in range(num_iterations):
+            for i in range(start, num_iterations):
                 eval_means = EvalMeanAggregator()
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
