@@ -1,21 +1,20 @@
-import itertools
 import inspect
+import itertools
 import os
 import sys
-from abc import ABC
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 from pathlib import Path
 from pprint import pprint
 from typing import Dict, Optional
 
 import gym
-import numpy as np
 import ray
 import torch
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
+from aggregator import SumAcrossEpisode, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -23,30 +22,9 @@ from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import get_device
-from wrappers import VecPyTorch, get_vec_normalize
+from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
-
-
-class Aggregator(ABC):
-    def __init__(self):
-        self.values = defaultdict(list)
-
-    def update(self, **values):
-        for k, v in values.items():
-            self.values[k].append(v)
-
-
-class MeanAggregator(Aggregator):
-    def items(self):
-        for k, v in self.values.items():
-            yield k, np.mean(v)
-
-
-class EvalMeanAggregator(MeanAggregator):
-    def items(self):
-        for k, v in super().items():
-            yield "eval_" + k, v
 
 
 class Trainer:
@@ -226,13 +204,15 @@ class Trainer:
                 rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
-            train_means = MeanAggregator()
+            train_report = SumAcrossEpisode()
+            train_infos = InfosAggregator()
             start = 0
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
 
             for i in range(start, num_iterations):
-                eval_means = EvalMeanAggregator()
+                eval_report = EvalWrapper(SumAcrossEpisode())
+                eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
@@ -250,38 +230,42 @@ class Trainer:
                             device=device,
                         )
 
-                        for epoch_output in run_epoch(
+                        for output in run_epoch(
                             obs=eval_envs.reset(),
                             rnn_hxs=eval_recurrent_hidden_states,
                             masks=eval_masks,
                             envs=eval_envs,
                             num_steps=eval_steps,
                         ):
-                            eval_means.update(reward=epoch_output.reward.mean().item())
-                            for info in epoch_output.infos:
-                                eval_means.update(**info)
+                            eval_report.update(
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
+                            )
+                            eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
 
                 rollouts.obs[0].copy_(train_envs.reset())
 
-                for epoch_output in run_epoch(
+                for output in run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
                     masks=rollouts.masks[0],
                     envs=train_envs,
                     num_steps=train_steps,
                 ):
-                    train_means.update(reward=epoch_output.reward.mean().item())
-                    for info in epoch_output.infos:
-                        train_means.update(**info)
+                    train_report.update(
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
+                    )
+                    train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
-                        obs=epoch_output.obs,
-                        recurrent_hidden_states=epoch_output.act.rnn_hxs,
-                        actions=epoch_output.act.action,
-                        action_log_probs=epoch_output.act.action_log_probs,
-                        values=epoch_output.act.value,
-                        rewards=epoch_output.reward,
-                        masks=epoch_output.masks,
+                        obs=output.obs,
+                        recurrent_hidden_states=output.act.rnn_hxs,
+                        actions=output.act.action,
+                        action_log_probs=output.act.action_log_probs,
+                        values=output.act.value,
+                        rewards=output.reward,
+                        masks=output.masks,
                     )
 
                 with torch.no_grad():
@@ -299,15 +283,16 @@ class Trainer:
                 if total_num_steps % log_interval == 0:
                     report = dict(
                         **train_results,
-                        **dict(train_means.items()),
-                        **dict(eval_means.items()),
+                        **dict(train_report.items()),
+                        **dict(eval_report.items()),
                     )
                     if use_tune:
                         tune.report(**report)
                     else:
                         assert report_iterator is not None
                         report_iterator.send(report)
-                    train_means = MeanAggregator()
+                    train_report = SumAcrossEpisode()
+                    train_infos = InfosAggregator()
                 if save_interval and total_num_steps % save_interval == 0:
                     if use_tune:
                         with tune.checkpoint_dir(i) as _dir:
