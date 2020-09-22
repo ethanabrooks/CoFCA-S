@@ -49,18 +49,10 @@ class EvalMeanAggregator(MeanAggregator):
             yield "eval_" + k, v
 
 
-class Trainer(tune.Trainable):
-    def __init__(self, *args, **kwargs):
-        self.iterator = None
-        self.agent = None
-        self.ppo = None
-        self.i = None
-        self.device = None
-        super().__init__(*args, **kwargs)
-
-    def setup(self, config):
+class Trainer:
+    def run(self, config):
         config = self.structure_config(**config)
-        self.iterator = self.gen(**config)
+        self.train(**config)
 
     def structure_config(self, **config):
         agent_args = {}
@@ -78,7 +70,7 @@ class Trainer(tune.Trainable):
                 rollouts_args[k] = v
             if k in inspect.signature(PPO.__init__).parameters:
                 ppo_args[k] = v
-            if k in inspect.signature(self.gen).parameters or k not in (
+            if k in inspect.signature(self.train).parameters or k not in (
                 list(agent_args.keys())
                 + list(rollouts_args.keys())
                 + list(ppo_args.keys())
@@ -92,34 +84,29 @@ class Trainer(tune.Trainable):
         )
         return config
 
-    def step(self):
-        return next(self.iterator)
-
-    def save_checkpoint(self, tmp_checkpoint_dir):
+    @staticmethod
+    def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
         modules = dict(
-            optimizer=self.ppo.optimizer, agent=self.agent
+            optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
-        torch.save(dict(step=self.i, **state_dict), save_path)
+        torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
 
-    def load_checkpoint(self, checkpoint_path):
-        state_dict = torch.load(checkpoint_path, map_location=self.device)
-        self.agent.load_state_dict(state_dict["agent"])
-        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        start = state_dict.get("step", -1) + 1
+    @staticmethod
+    def load_checkpoint(checkpoint_path, ppo, agent, device):
+        state_dict = torch.load(checkpoint_path, map_location=device)
+        agent.load_state_dict(state_dict["agent"])
+        ppo.optimizer.load_state_dict(state_dict["optimizer"])
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
+        return state_dict.get("step", -1) + 1
 
-    def loop(self):
-        while True:
-            yield self.step()
-
-    def gen(
+    def train(
         self,
         agent_args: dict,
         cuda: bool,
@@ -127,12 +114,14 @@ class Trainer(tune.Trainable):
         env_args: dict,
         env_id: str,
         log_interval: int,
+        name: str,
         normalize: float,
         num_batch: int,
         num_iterations: int,
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
+        report: callable,
         rollouts_args: dict,
         seed: int,
         synchronous: bool,
@@ -196,17 +185,15 @@ class Trainer(tune.Trainable):
         set_seeds(cuda, cuda_deterministic, seed)
 
         if cuda:
-            self.device = torch.device("cuda") if self.name else get_device(self.name)
+            device = torch.device("cuda") if name else get_device(name)
         else:
-            self.device = torch.device("cpu")
-        print("Using device", self.device)
+            device = torch.device("cpu")
+        print("Using device", device)
 
         train_envs = make_vec_envs(evaluation=False)
         try:
-            train_envs.to(self.device)
+            train_envs.to(device)
             agent = self.build_agent(envs=train_envs, **agent_args)
-            if load_path:
-                self.load_checkpoint(load_path)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
                 obs_space=train_envs.observation_space,
@@ -217,11 +204,13 @@ class Trainer(tune.Trainable):
 
             # copy to device
             if cuda:
-                agent.to(self.device)
-                rollouts.to(self.device)
+                agent.to(device)
+                rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
             train_means = MeanAggregator()
+            if load_path:
+                self.load_checkpoint(load_path, ppo, agent, device)
 
             for i in range(num_iterations):
                 eval_means = EvalMeanAggregator()
@@ -232,14 +221,14 @@ class Trainer(tune.Trainable):
                     #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
                     # self.envs.evaluate()
-                    eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                    eval_masks = torch.zeros(num_processes, 1, device=device)
                     eval_envs = make_vec_envs(evaluation=True)
-                    eval_envs.to(self.device)
+                    eval_envs.to(device)
                     with agent.recurrent_module.evaluating(eval_envs.observation_space):
                         eval_recurrent_hidden_states = torch.zeros(
                             num_processes,
                             agent.recurrent_hidden_state_size,
-                            device=self.device,
+                            device=device,
                         )
 
                         for epoch_output in run_epoch(
@@ -289,7 +278,7 @@ class Trainer(tune.Trainable):
 
                 total_num_steps = num_processes * train_steps * i
                 if total_num_steps % log_interval == 0:
-                    yield dict(
+                    report(
                         **train_results,
                         **dict(train_means.items()),
                         **dict(eval_means.items()),
@@ -317,35 +306,34 @@ class Trainer(tune.Trainable):
         num_samples,
         name,
         config,
-        save_interval=None,
         **kwargs,
     ):
-        cls.name = name
         if config is None:
             config = dict()
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 config[k] = v
 
+        config.update(name=name)
+        trainer = cls()
         if num_samples is None:
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
-            trainer = cls(config)
-            for i, result in enumerate(trainer.loop()):
-                pprint(result)
-                if writer is not None:
-                    for k, v in k_scalar_pairs(**result):
-                        writer.add_scalar(k, v, i)
-                if (
-                    None not in (log_dir, save_interval)
-                    and (i + 1) % save_interval == 0
-                ):
-                    print("steps until save:", save_interval - i)
-                    trainer.save_checkpoint(Path(log_dir, "checkpoint.pt"))
+
+            def report_generator():
+                for i in itertools.count():
+                    if i % config["log_interval"] == 0:
+                        values = yield
+                        pprint(values)
+                        for k, v in values.items():
+                            writer.add_scalar(k, v, i)
+
+            report_iterator = report_generator()
+            config.update(report=report_iterator.send)
+            trainer.run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
 
             if local_mode:
@@ -358,8 +346,9 @@ class Trainer(tune.Trainable):
                 )
             if log_dir is not None:
                 kwargs.update(local_dir=log_dir)
+            config.update(report=tune.report)
             tune.run(
-                cls,
+                trainer.run,
                 name=name,
                 config=config,
                 resources_per_trial=resources_per_trial,

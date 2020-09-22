@@ -76,7 +76,7 @@ def main(**kwargs):
                     agent_args[k] = v
                 if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
                     agent_args[k] = v
-                if k in inspect.signature(self.gen).parameters:
+                if k in inspect.signature(self.train).parameters:
                     gen_args[k] = v
             d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
             return d
