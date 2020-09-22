@@ -397,7 +397,9 @@ class Recurrence(nn.Module):
                 delta = D[t].clone() - half
                 self.print("D[t], delta", D[t], delta)
                 P.view(N, *self.P_shape())
+            self.print("old p", p)
             p = p + delta
+            self.print("new p", p)
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
 
             # try:
