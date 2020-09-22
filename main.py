@@ -17,7 +17,7 @@ Parsers = namedtuple("Parser", "main agent ppo rollouts")
 def get_config(name):
     if name is None:
         return {}
-    path = Path("configs", name).with_suffix(".json")
+    path = Path(name)
     if path.exists():
         with path.open() as f:
             return json.load(f)
