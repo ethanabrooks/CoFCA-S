@@ -210,7 +210,7 @@ class Trainer:
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
 
-            for i in range(start, num_iterations):
+            for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:

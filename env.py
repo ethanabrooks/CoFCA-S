@@ -848,6 +848,7 @@ class Env(gym.Env):
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
+
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
                 int(action.upper),
