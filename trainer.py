@@ -129,6 +129,7 @@ class Trainer(tune.Trainable):
         log_interval: int,
         normalize: float,
         num_batch: int,
+        num_iterations: int,
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
@@ -222,7 +223,7 @@ class Trainer(tune.Trainable):
             ppo = PPO(agent=agent, **ppo_args)
             train_means = MeanAggregator()
 
-            for i in itertools.count():
+            for i in range(num_iterations):
                 eval_means = EvalMeanAggregator()
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
@@ -313,7 +314,6 @@ class Trainer(tune.Trainable):
         gpus_per_trial,
         cpus_per_trial,
         log_dir,
-        num_iterations,
         num_samples,
         name,
         config,
@@ -356,9 +356,6 @@ class Trainer(tune.Trainable):
                     search_alg=HyperOptSearch(config, metric="eval_reward"),
                     num_samples=num_samples,
                 )
-            if num_iterations:
-                kwargs.update(stop=dict(training_iteration=num_iterations))
-
             tune.run(
                 cls,
                 name=name,
