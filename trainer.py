@@ -327,7 +327,7 @@ class Trainer(tune.Trainable):
             if k not in config or v is not None:
                 config[k] = v
 
-        if log_dir:
+        if num_samples is None:
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
             trainer = cls(config)
@@ -356,6 +356,8 @@ class Trainer(tune.Trainable):
                     search_alg=HyperOptSearch(config, metric="eval_reward"),
                     num_samples=num_samples,
                 )
+            if log_dir is not None:
+                kwargs.update(local_dir=log_dir)
             tune.run(
                 cls,
                 name=name,
