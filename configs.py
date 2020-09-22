@@ -6,7 +6,6 @@ from hyperopt import hp
 from lines import Subtask, If, Else, While
 
 default = dict(
-    control_flow_types=[Subtask, If, While, Else],
     conv_hidden_size=64,
     entropy_coef=0.015,
     eval_interval=100,
@@ -18,8 +17,6 @@ default = dict(
     kernel_size=2,
     learning_rate=0.003,
     lower_embed_size=64,
-    lower_level_config=Path("checkpoint/lower.json"),
-    lower_level_load_path=Path("checkpoint/lower.pt"),
     max_eval_lines=50,
     max_failure_sample_prob=0.3,
     max_lines=10,
@@ -40,7 +37,6 @@ default = dict(
     reject_while_prob=0.6,
     stride=1,
     task_embed_size=64,
-    term_on=["mine", "sell"],
     time_to_waste=0,
     train_steps=25,
     world_size=6,
@@ -71,16 +67,16 @@ search.update(
 
 debug_search = copy.deepcopy(search)
 debug_search.update(
-    kernel_size=1, stride=1, world_size=1,
+    kernel_size=1,
+    stride=1,
+    world_size=1,
 )
-del debug_search["lower_level_config"]
-del debug_search["lower_level_load_path"]
 debug_default = copy.deepcopy(default)
 debug_default.update(
-    kernel_size=1, stride=1, world_size=1,
+    kernel_size=1,
+    stride=1,
+    world_size=1,
 )
-del debug_default["lower_level_config"]
-del debug_default["lower_level_load_path"]
 configs = dict(
     search=search,
     debug_search=debug_search,

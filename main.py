@@ -76,9 +76,6 @@ def add_arguments(parser):
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument(
-        "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU(),
-    )
-    agent_parser.add_argument(
         "--entropy-coef", type=float, help="entropy term coefficient",
     )
     agent_parser.add_argument(

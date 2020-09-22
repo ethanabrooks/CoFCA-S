@@ -22,7 +22,7 @@ from common.vec_env.util import set_seeds
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import k_scalar_pairs, get_device
+from utils import get_device
 from wrappers import VecPyTorch, get_vec_normalize
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
@@ -50,7 +50,7 @@ class EvalMeanAggregator(MeanAggregator):
 
 
 class Trainer:
-    def run(self, config):
+    def run(self, **config):
         config = self.structure_config(**config)
         self.train(**config)
 
@@ -113,6 +113,7 @@ class Trainer:
         cuda_deterministic: bool,
         env_args: dict,
         env_id: str,
+        log_dir: Optional[str],
         log_interval: int,
         name: str,
         normalize: float,
@@ -120,11 +121,12 @@ class Trainer:
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
-        report: callable,
         rollouts_args: dict,
         seed: int,
+        save_interval: int,
         synchronous: bool,
         train_steps: int,
+        use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
         no_eval: bool = False,
@@ -136,6 +138,23 @@ class Trainer:
         #  - https://github.com/ray-project/ray/issues/3609
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
+
+        if use_tune:
+            report_iterator = None
+        else:
+
+            def report_generator():
+                writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
+
+                for i in itertools.count():
+                    if i % log_interval == 0:
+                        values = yield
+                        pprint(values)
+                        if writer:
+                            for k, v in values.items():
+                                writer.add_scalar(k, v, i)
+
+            report_iterator = report_generator()
 
         def make_vec_envs(evaluation):
             def env_thunk(rank):
@@ -276,14 +295,28 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                total_num_steps = num_processes * train_steps * i
+                total_num_steps = num_processes * train_steps * (i + 1)
                 if total_num_steps % log_interval == 0:
-                    report(
+                    report = dict(
                         **train_results,
                         **dict(train_means.items()),
                         **dict(eval_means.items()),
                     )
+                    if use_tune:
+                        tune.report(**report)
+                    else:
+                        assert report_iterator is not None
+                        report_iterator.send(report)
                     train_means = MeanAggregator()
+                if save_interval and total_num_steps % save_interval == 0:
+                    if use_tune:
+                        with tune.checkpoint_dir(i) as _dir:
+                            checkpoint_dir = _dir
+                    else:
+                        checkpoint_dir = Path(log_dir, str(i))
+
+                    self.save_checkpoint(checkpoint_dir, ppo=ppo, agent=agent, step=i)
+
         finally:
             train_envs.close()
 
@@ -300,41 +333,28 @@ class Trainer:
     @classmethod
     def main(
         cls,
-        gpus_per_trial,
-        cpus_per_trial,
-        log_dir,
-        num_samples,
-        name,
-        config,
+        gpus_per_trial: float,
+        cpus_per_trial: float,
+        log_dir: str,
+        num_samples: int,
+        name: str,
+        config: dict,
         **kwargs,
     ):
-        if config is None:
-            config = dict()
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 config[k] = v
 
-        config.update(name=name)
-        trainer = cls()
+        config.update(name=name, log_dir=log_dir)
         if num_samples is None:
-            print("Not using tune, because log_dir was specified")
-            writer = SummaryWriter(logdir=str(log_dir))
-
-            def report_generator():
-                for i in itertools.count():
-                    if i % config["log_interval"] == 0:
-                        values = yield
-                        pprint(values)
-                        for k, v in values.items():
-                            writer.add_scalar(k, v, i)
-
-            report_iterator = report_generator()
-            config.update(report=report_iterator.send)
-            trainer.run(config)
+            print("Not using tune, because num_samples was not specified")
+            config.update(use_tune=False)
+            cls().run(**config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
+            config.update(use_tune=True)
 
             if local_mode:
                 print("Using local mode because num_samples is None")
@@ -346,9 +366,12 @@ class Trainer:
                 )
             if log_dir is not None:
                 kwargs.update(local_dir=log_dir)
-            config.update(report=tune.report)
+
+            def run(c):
+                cls().run(**c)
+
             tune.run(
-                trainer.run,
+                run,
                 name=name,
                 config=config,
                 resources_per_trial=resources_per_trial,

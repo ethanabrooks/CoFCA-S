@@ -85,34 +85,38 @@ class Env(gym.Env):
 
     def __init__(
         self,
-        term_on,
-        max_world_resamples,
-        max_while_loops,
-        use_water,
-        max_failure_sample_prob,
-        one_condition,
-        failure_buffer_size,
-        reject_while_prob,
-        long_jump,
-        min_eval_lines,
-        max_eval_lines,
-        min_lines,
-        max_lines,
-        eval_condition_size,
-        single_control_flow_type,
-        no_op_limit,
-        time_to_waste,
-        subtasks_only,
-        break_on_fail,
-        max_loops,
-        rank,
-        lower_level,
-        control_flow_types,
+        max_world_resamples: int,
+        max_while_loops: int,
+        use_water: bool,
+        max_failure_sample_prob: int,
+        one_condition: bool,
+        failure_buffer_size: int,
+        reject_while_prob: float,
+        long_jump: bool,
+        min_eval_lines: int,
+        max_eval_lines: int,
+        min_lines: int,
+        max_lines: int,
+        eval_condition_size: int,
+        single_control_flow_type: bool,
+        no_op_limit: int,
+        time_to_waste: int,
+        subtasks_only: bool,
+        break_on_fail: bool,
+        max_loops: int,
+        rank: int,
+        lower_level: str,
+        control_flow_types=None,
+        evaluating=False,
         max_nesting_depth=1,
         seed=0,
-        evaluating=False,
+        term_on=None,
         world_size=6,
     ):
+        if control_flow_types is None:
+            control_flow_types = [Subtask, If, While, Else]
+        if term_on is None:
+            term_on = [self.mine, self.sell]
         self.counts = None
         self.reject_while_prob = reject_while_prob
         self.one_condition = one_condition
@@ -605,12 +609,7 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-        cumulative_reward,
+        self, state, action, lower_level_action, reward, cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -618,8 +617,7 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
+                "Lower Level Action:", self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
@@ -647,12 +645,7 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
+        self, term, success, lines, state, agent_ptr,
     ):
 
         if term:
