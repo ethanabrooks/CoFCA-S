@@ -38,22 +38,25 @@ class Trainer:
         ppo_args = {}
         gen_args = {}
         for k, v in config.items():
-            if k in inspect.signature(self.build_agent).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(Agent.__init__).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(MLPBase.__init__).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(RolloutStorage.__init__).parameters:
-                rollouts_args[k] = v
-            if k in inspect.signature(PPO.__init__).parameters:
-                ppo_args[k] = v
-            if k in inspect.signature(self.train).parameters or k not in (
-                list(agent_args.keys())
-                + list(rollouts_args.keys())
-                + list(ppo_args.keys())
-            ):
+            if k in ["num_processes"]:
                 gen_args[k] = v
+            else:
+                if k in inspect.signature(self.build_agent).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(Agent.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(MLPBase.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(RolloutStorage.__init__).parameters:
+                    rollouts_args[k] = v
+                if k in inspect.signature(PPO.__init__).parameters:
+                    ppo_args[k] = v
+                if k in inspect.signature(self.train).parameters or k not in (
+                    list(agent_args.keys())
+                    + list(rollouts_args.keys())
+                    + list(ppo_args.keys())
+                ):
+                    gen_args[k] = v
         config = dict(
             agent_args=agent_args,
             rollouts_args=rollouts_args,
@@ -195,6 +198,7 @@ class Trainer:
                 obs_space=train_envs.observation_space,
                 action_space=train_envs.action_space,
                 recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
+                num_processes=num_processes,
                 **rollouts_args,
             )
 
@@ -238,8 +242,7 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(),
-                                dones=output.done,
+                                reward=output.reward.cpu().numpy(), dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
@@ -254,8 +257,7 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(),
-                        dones=output.done,
+                        reward=output.reward.cpu().numpy(), dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
