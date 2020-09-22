@@ -120,12 +120,14 @@ class Env(env.Env):
         print("Condition bit:", state.counts)
         print(RESET)
 
-    def get_observation(self, obs, preprocessed_lines, state):
+    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
         return Obs(
             obs=obs,
             lines=preprocessed_lines,
             active=self.n_lines if state.ptr is None else state.ptr,
             inventory=np.array([0]),
+            subtask_complete=1,
+            truthy=truthy,
         )
 
 
