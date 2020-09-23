@@ -113,7 +113,7 @@ class Recurrence(nn.Module):
             "offset",
             F.pad(torch.tensor(self.obs_spaces.lines.nvec[0, :-1]).cumsum(0), [1, 0]),
         )
-        d, h, w = observation_space.obs.shape
+        d, h, w = (2, 1, 1) if self.debug_obs else observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
         self.padding = optimal_padding(h, kernel_size, stride) + 1
@@ -314,7 +314,7 @@ class Recurrence(nn.Module):
                         stride=self.stride,
                         padding=self.padding,
                     )
-                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(obs[t].unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             ).relu()

@@ -299,12 +299,12 @@ class Trainer:
                         report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
-                if save_interval and total_num_steps % save_interval == 0:
+                if save_interval and i % save_interval == 0:
                     if use_tune:
                         with tune.checkpoint_dir(i) as _dir:
                             checkpoint_dir = _dir
                     else:
-                        checkpoint_dir = Path(log_dir, str(i)) if log_dir else None
+                        checkpoint_dir = Path(log_dir) if log_dir else None
 
                     if checkpoint_dir:
                         self.save_checkpoint(
