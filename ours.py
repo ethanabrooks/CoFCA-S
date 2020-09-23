@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
+from torch import Tensor
 
 from distributions import FixedCategorical, Categorical
 from env import Action
@@ -20,6 +21,17 @@ RecurrentState = namedtuple(
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
+
+
+def with_last_col_1(x: Tensor, last1=None):
+    if last1 is None:
+        last1 = torch.zeros_like(x)
+        last1[..., -1] = 1
+    return x - x * last1 + last1
+
+
+def scan(x: Tensor) -> Tensor:
+    return with_last_col_1((1 - x).cumprod(-1)).roll(1, -1) * x
 
 
 def gate(g, new, old):
@@ -256,25 +268,14 @@ class Recurrence(nn.Module):
                 G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, -1)
             B = self.beta(G).sigmoid()
-            # arange = torch.zeros(6).float()
-            # arange[0] = 1
-            # arange[1] = 1
-            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.ne)
-            last = torch.zeros(nl, N, 2 * nl, self.ne, device=rnn_hxs.device)
-            last[:, :, -1] = 1
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
-            P = B * C
-            P = P.view(nl, N, nl, 2, self.ne)
-            f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
+            # B = (torch.rand(size=B.size()) < 0.5).float()
+            B1 = B.transpose(2, 4)
+            B2 = B1.reshape(-1, 2, nl)
+            f, b = B2.unbind(1)
+            scanned = scan(torch.stack([f, b.flip(-1)], dim=0))
+            f1, b1 = scanned.unbind(0)
+            cat = torch.cat([f1, b1.flip(1)], dim=1) / (f1 + b1).sum(1, keepdim=True)
+            P = cat.view(nl, N, self.ne, 2 * nl).transpose(-1, -2)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
