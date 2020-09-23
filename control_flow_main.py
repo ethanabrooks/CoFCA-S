@@ -58,7 +58,6 @@ def main(**kwargs):
                 config["lower_level"] = "pre-trained"
 
             agent_args["eval_lines"] = config["max_eval_lines"]
-            agent_args["debug"] = config["render"] and config["debug"]
 
             for k, v in config.items():
                 if (

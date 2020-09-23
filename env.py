@@ -36,7 +36,9 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active lines obs inventory subtask_complete truthy")
+Obs = namedtuple("Obs", "active inventory lines obs subtask_complete truthy")
+assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
+
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
@@ -621,12 +623,7 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-        cumulative_reward,
+        self, state, action, lower_level_action, reward, cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -634,14 +631,13 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
+                "Lower Level Action:", self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
-        _obs, _inventory = state.obs
+        _obs = state.obs
         _obs = _obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
@@ -663,12 +659,7 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
+        self, term, success, lines, state, agent_ptr,
     ):
 
         if term:
