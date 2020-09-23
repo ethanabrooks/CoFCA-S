@@ -267,14 +267,14 @@ class Recurrence(nn.Module):
                 )
                 G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, -1)
-            B = self.beta(G).sigmoid()
+            B = self.beta(G).sigmoid()  # [nl, N, nl, 2, ne]
             # B = (torch.rand(size=B.size()) < 0.5).float()
-            B1 = B.transpose(2, 4)
-            B2 = B1.reshape(-1, 2, nl)
-            f, b = B2.unbind(1)
+            B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
+            B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
+            f, b = B2.unbind(1)  # [nl * N, * ne, nl] x 2
             scanned = scan(torch.stack([f, b.flip(-1)], dim=0))
             f1, b1 = scanned.unbind(0)
-            cat = torch.cat([f1, b1.flip(1)], dim=1) / (f1 + b1).sum(1, keepdim=True)
+            cat = torch.cat([b1.flip(1), f1], dim=1) / (f1 + b1).sum(1, keepdim=True)
             P = cat.view(nl, N, self.ne, 2 * nl).transpose(-1, -2)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
