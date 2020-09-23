@@ -132,7 +132,6 @@ class Recurrence(nn.Module):
         zeta1_input_size = m_size + self.conv_hidden_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
-        z2_size = 2
         if self.olsk:
             assert self.ne == 3
             self.upsilon = nn.GRUCell(z2_size, hidden_size)
@@ -300,6 +299,18 @@ class Recurrence(nn.Module):
                 self.kernel_size,
                 self.kernel_size,
             )
+
+            obs = (
+                torch.stack(
+                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
+                    dim=-1,
+                )
+                .unsqueeze(-1)
+                .unsqueeze(-1)
+                if self.debug_obs
+                else state.obs[t]
+            )
+
             h1 = torch.cat(
                 [
                     F.conv2d(
@@ -309,7 +320,7 @@ class Recurrence(nn.Module):
                         stride=self.stride,
                         padding=self.padding,
                     )
-                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             ).relu()
@@ -336,6 +347,7 @@ class Recurrence(nn.Module):
                 L[t] = ll_output.action.flatten()
 
             if self.fuzz:
+                assert not self.debug_obs
                 ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
                 sell = (be == 2).long()
                 channel_index = 3 * sell + (it - 1) * (1 - sell)
@@ -374,9 +386,6 @@ class Recurrence(nn.Module):
             # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
             # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
             # z2 = (channel1 > channel2).unsqueeze(-1).float()
-            z2 = torch.stack(
-                [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)], dim=-1
-            )
 
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
