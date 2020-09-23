@@ -36,7 +36,9 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active lines obs inventory")
+Obs = namedtuple("Obs", "active inventory lines obs subtask_complete truthy")
+assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
+
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
@@ -205,7 +207,9 @@ class Env(gym.Env):
                         * self.n_lines
                     )
                 ),
-                obs=spaces.Box(low=0, high=1, shape=self.world_shape),
+                obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
+                subtask_complete=spaces.Discrete(2),
+                truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
             )._asdict()
         )
         self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
@@ -827,7 +831,22 @@ class Env(gym.Env):
             obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
-            obs = self.get_observation(obs, preprocessed_lines, state)
+            truthy = [
+                self.evaluate_line(l, None, state.counts)
+                if agent_ptr < len(lines)
+                else 2
+                for l in lines
+            ]
+            truthy = [2 if t is None else int(t) for t in truthy]
+            truthy += [3] * (self.n_lines - len(truthy))
+
+            obs = self.get_observation(
+                obs,
+                preprocessed_lines=preprocessed_lines,
+                state=state,
+                subtask_complete=state.subtask_complete,
+                truthy=truthy,
+            )
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
@@ -867,12 +886,14 @@ class Env(gym.Env):
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
-    def get_observation(self, obs, preprocessed_lines, state):
+    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
         return Obs(
             obs=obs,
             lines=preprocessed_lines,
             active=self.n_lines if state.ptr is None else state.ptr,
             inventory=np.array([state.inventory[i] for i in self.items]),
+            subtask_complete=subtask_complete,
+            truthy=truthy,
         )
 
     @property
