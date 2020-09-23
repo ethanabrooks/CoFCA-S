@@ -213,7 +213,7 @@ class Env(gym.Env):
                 ),
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
-                truthy=spaces.Discrete(3),
+                truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
             )._asdict()
         )
         self.world_space = spaces.Box(
@@ -623,7 +623,12 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self, state, action, lower_level_action, reward, cumulative_reward,
+        self,
+        state,
+        action,
+        lower_level_action,
+        reward,
+        cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -631,7 +636,8 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:", self.lower_level_actions[lower_level_action],
+                "Lower Level Action:",
+                self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
@@ -659,7 +665,12 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self, term, success, lines, state, agent_ptr,
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
     ):
 
         if term:
@@ -847,12 +858,14 @@ class Env(gym.Env):
             obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
-            truthy = (
-                self.evaluate_line(lines[agent_ptr], None, state.counts)
+            truthy = [
+                self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)
                 else 2
-            )
-            truthy = 2 if truthy is None else int(truthy)
+                for l in lines
+            ]
+            truthy = [2 if t is None else int(t) for t in truthy]
+            truthy += [3] * (self.n_lines - len(truthy))
 
             obs = self.get_observation(
                 obs,

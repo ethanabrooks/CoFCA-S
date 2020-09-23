@@ -132,7 +132,7 @@ class Recurrence(nn.Module):
         zeta1_input_size = m_size + self.conv_hidden_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
-        z2_size = 1
+        z2_size = 2
         if self.olsk:
             assert self.ne == 3
             self.upsilon = nn.GRUCell(z2_size, hidden_size)
@@ -290,12 +290,6 @@ class Recurrence(nn.Module):
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
-        obs = (
-            torch.stack([state.truthy, state.subtask_complete], dim=2).unsqueeze(-1)
-            if self.debug_obs
-            else state.obs
-        )
-
         for t in range(T):
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
@@ -315,7 +309,7 @@ class Recurrence(nn.Module):
                         stride=self.stride,
                         padding=self.padding,
                     )
-                    for o, k in zip(obs[t].unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(state.obs[t].unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             ).relu()
@@ -373,13 +367,16 @@ class Recurrence(nn.Module):
             self.print("lines[R, p]", lines[t][R, p])
             z2 = torch.cat([zeta1_input, embedded_lower], dim=-1)
 
-            _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
             # sell = (be == 2).long()
-            index1 = it - 1
-            index2 = 1 + ((it - 3) % 3)
-            channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            z2 = (channel1 > channel2).unsqueeze(-1).float()
+            # index1 = it - 1
+            # index2 = 1 + ((it - 3) % 3)
+            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
+            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
+            # z2 = (channel1 > channel2).unsqueeze(-1).float()
+            z2 = torch.stack(
+                [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)], dim=-1
+            )
 
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
