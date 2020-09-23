@@ -132,6 +132,7 @@ class Recurrence(nn.Module):
         zeta1_input_size = m_size + self.conv_hidden_size + inventory_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
         z2_size = zeta1_input_size + lower_embed_size
+        z2_size = 1
         if self.olsk:
             assert self.ne == 3
             self.upsilon = nn.GRUCell(z2_size, hidden_size)
@@ -371,17 +372,18 @@ class Recurrence(nn.Module):
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             z2 = torch.cat([zeta1_input, embedded_lower], dim=-1)
+
+            _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
+            # sell = (be == 2).long()
+            index1 = it - 1
+            index2 = 1 + ((it - 3) % 3)
+            channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
+            channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
+            z2 = (channel1 > channel2).unsqueeze(-1).float()
+
             d_gate = self.d_gate(z2)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
-
-            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # index1 = it - 1
-            # index2 = 1 + ((it - 3) % 3)
-            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            # z = (channel1 > channel2).unsqueeze(-1).float()
 
             if self.olsk or self.no_pointer:
                 h = self.upsilon(z2, h)
