@@ -52,7 +52,6 @@ def add_arguments(parser):
         type=int,
         help="how many training CPU processes to use",
     )
-    parser.add_argument("--eval-steps", type=int, help="number of steps for evaluation")
     parser.add_argument(
         "--num-samples",
         "-n",
@@ -68,9 +67,6 @@ def add_arguments(parser):
         type=int,
         help="number of forward steps in A2C",
     )
-    parser.add_argument("--render", action="store_true")
-    parser.add_argument("--render-eval", action="store_true")
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
         "--env",
         dest="env_id",
