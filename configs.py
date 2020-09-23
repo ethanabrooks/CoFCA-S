@@ -6,11 +6,10 @@ from hyperopt import hp
 from lines import Subtask, If, Else, While
 
 default = dict(
-    control_flow_types=[Subtask, If, Else, While],
     conv_hidden_size=64,
     entropy_coef=0.015,
     eval_interval=100,
-    eval_steps=200,
+    eval_steps=500,
     failure_buffer_size=500,
     gate_coef=0.01,
     hidden_size=256,
@@ -18,8 +17,6 @@ default = dict(
     kernel_size=2,
     learning_rate=0.003,
     lower_embed_size=64,
-    lower_level_config=Path("checkpoint/lower.json"),
-    lower_level_load_path=Path("checkpoint/lower.pt"),
     max_eval_lines=50,
     max_failure_sample_prob=0.3,
     max_lines=10,
@@ -33,13 +30,13 @@ default = dict(
     no_op_limit=30,
     num_batch=1,
     num_edges=2,
-    num_iterations=99999,
+    num_iterations=9999,
+    num_layers=0,
     num_processes=150,
     ppo_epoch=2,
     reject_while_prob=0.6,
-    stride=2,
+    stride=1,
     task_embed_size=64,
-    term_on=["mine", "sell"],
     time_to_waste=0,
     train_steps=25,
     world_size=6,
@@ -70,10 +67,15 @@ search.update(
 
 debug_search = copy.deepcopy(search)
 debug_search.update(
-    kernel_size=1,
-    stride=1,
-    world_size=1,
+    kernel_size=1, stride=1, world_size=1,
 )
-del debug_search["lower_level_config"]
-del debug_search["lower_level_load_path"]
-configs = dict(search=search, debug_search=debug_search, default=default)
+debug_default = copy.deepcopy(default)
+debug_default.update(
+    kernel_size=1, stride=1, world_size=1,
+)
+configs = dict(
+    search=search,
+    debug_search=debug_search,
+    default=default,
+    debug_default=debug_default,
+)
