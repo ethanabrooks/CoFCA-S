@@ -58,8 +58,6 @@ def main(
         def make_env(seed, rank, evaluation, env_id=None, **kwargs):
             args = dict(
                 **kwargs,
-                min_eval_lines=min_eval_lines,
-                max_eval_lines=max_eval_lines,
                 seed=seed + rank,
                 rank=rank,
             )

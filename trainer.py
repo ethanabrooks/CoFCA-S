@@ -16,6 +16,7 @@ from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
+from aggregator import SumAcrossEpisode, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -26,27 +27,6 @@ from utils import k_scalar_pairs, get_device
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
-
-
-class Aggregator(ABC):
-    def __init__(self):
-        self.values = defaultdict(list)
-
-    def update(self, **values):
-        for k, v in values.items():
-            self.values[k].append(v)
-
-
-class MeanAggregator(Aggregator):
-    def items(self):
-        for k, v in self.values.items():
-            yield k, np.mean(v)
-
-
-class EvalMeanAggregator(MeanAggregator):
-    def items(self):
-        for k, v in super().items():
-            yield "eval_" + k, v
 
 
 class Trainer(tune.Trainable):
@@ -108,10 +88,10 @@ class Trainer(tune.Trainable):
         state_dict = torch.load(checkpoint_path, map_location=self.device)
         self.agent.load_state_dict(state_dict["agent"])
         self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        start = state_dict.get("step", -1) + 1
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
+        return state_dict.get("step", -1) + 1
 
     def loop(self):
         while True:
@@ -127,6 +107,7 @@ class Trainer(tune.Trainable):
         log_interval: int,
         normalize: float,
         num_batch: int,
+        num_iterations: int,
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
@@ -228,8 +209,9 @@ class Trainer(tune.Trainable):
         try:
             train_envs.to(self.device)
             agent = self.build_agent(envs=train_envs, **agent_args)
+            start = 0
             if load_path:
-                self.load_checkpoint(load_path)
+                start = self.load_checkpoint(load_path)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
                 num_processes=num_processes,
@@ -244,11 +226,14 @@ class Trainer(tune.Trainable):
                 agent.to(self.device)
                 rollouts.to(self.device)
 
+            train_report = SumAcrossEpisode()
+            train_infos = InfosAggregator()
             ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
             train_counter = EpochCounter()
 
-            for i in itertools.count():
-                eval_counter = EpochCounter()
+            for i in range(start, num_iterations + 1):
+                eval_report = EvalWrapper(SumAcrossEpisode())
+                eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
@@ -266,38 +251,42 @@ class Trainer(tune.Trainable):
                             device=self.device,
                         )
 
-                        for epoch_output in run_epoch(
+                        for output in run_epoch(
                             obs=eval_envs.reset(),
                             rnn_hxs=eval_recurrent_hidden_states,
                             masks=eval_masks,
                             envs=eval_envs,
                             num_steps=eval_steps,
                         ):
-                            eval_counter.update(
-                                reward=epoch_output.reward, done=epoch_output.done
+                            eval_report.update(
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
                             )
+                            eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
 
                 rollouts.obs[0].copy_(train_envs.reset())
 
-                for epoch_output in run_epoch(
+                for output in run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
                     masks=rollouts.masks[0],
                     envs=train_envs,
                     num_steps=train_steps,
                 ):
-                    train_counter.update(
-                        reward=epoch_output.reward, done=epoch_output.done
+                    train_report.update(
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
                     )
+                    train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
-                        obs=epoch_output.obs,
-                        recurrent_hidden_states=epoch_output.act.rnn_hxs,
-                        actions=epoch_output.act.action,
-                        action_log_probs=epoch_output.act.action_log_probs,
-                        values=epoch_output.act.value,
-                        rewards=epoch_output.reward,
-                        masks=epoch_output.masks,
+                        obs=output.obs,
+                        recurrent_hidden_states=output.act.rnn_hxs,
+                        actions=output.act.action,
+                        action_log_probs=output.act.action_log_probs,
+                        values=output.act.value,
+                        rewards=output.reward,
+                        masks=output.masks,
                     )
 
                 with torch.no_grad():
@@ -314,10 +303,14 @@ class Trainer(tune.Trainable):
                 if i % log_interval == 0:
                     yield dict(
                         **train_results,
-                        **dict(train_counter.items()),
-                        **dict(eval_counter.items(prefix="eval_")),
+                        **dict(train_report.items()),
+                        **dict(train_infos.items()),
+                        **dict(eval_report.items()),
+                        **dict(eval_infos.items()),
+                        step=i,
                     )
-                    train_counter.reset()
+                    train_report = SumAcrossEpisode()
+                    train_infos = InfosAggregator()
         finally:
             train_envs.close()
 
@@ -359,6 +352,7 @@ class Trainer(tune.Trainable):
             if k not in config or v is not None:
                 config[k] = v
 
+        config.update(num_iterations=num_iterations)
         if log_dir:
             print("Not using tune, because log_dir was specified")
             writer = SummaryWriter(logdir=str(log_dir))
