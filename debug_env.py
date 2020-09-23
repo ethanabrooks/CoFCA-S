@@ -47,7 +47,7 @@ class Env(env.Env):
             condition_bit = self.random.choice(2)
             prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
 
-    def evaluate_line(self, *args, condition_bit, **kwargs) -> bool:
+    def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
         return bool(condition_bit)
 
     def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
