@@ -303,7 +303,7 @@ class Trainer:
                         with tune.checkpoint_dir(i) as _dir:
                             checkpoint_dir = _dir
                     else:
-                        checkpoint_dir = Path(log_dir, str(i)) if log_dir else None
+                        checkpoint_dir = Path(log_dir) if log_dir else None
 
                     if checkpoint_dir:
                         self.save_checkpoint(
