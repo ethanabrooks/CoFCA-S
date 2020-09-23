@@ -291,7 +291,9 @@ class Trainer:
                     report = dict(
                         **train_results,
                         **dict(train_report.items()),
+                        **dict(train_infos.items()),
                         **dict(eval_report.items()),
+                        **dict(eval_infos.items()),
                     )
                     if use_tune:
                         tune.report(**report)
