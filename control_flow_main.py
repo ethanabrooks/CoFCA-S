@@ -47,7 +47,8 @@ def main(**kwargs):
                 return debug_env.Env(**kwargs)
             return env.Env(**kwargs)
 
-        def structure_config(self, **config):
+        @classmethod
+        def structure_config(cls, **config):
             config = super().structure_config(**config)
             agent_args = config.pop("agent_args")
             env_args = {}
@@ -62,7 +63,7 @@ def main(**kwargs):
             for k, v in config.items():
                 if (
                     k in inspect.signature(env.Env.__init__).parameters
-                    or k in inspect.signature(self.make_env).parameters
+                    or k in inspect.signature(cls.make_env).parameters
                 ):
                     if k == "lower_level":
                         if v:
@@ -76,7 +77,7 @@ def main(**kwargs):
                     agent_args[k] = v
                 if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
                     agent_args[k] = v
-                if k in inspect.signature(self.train).parameters:
+                if k in inspect.signature(cls.run).parameters:
                     gen_args[k] = v
             d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
             return d
