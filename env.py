@@ -216,7 +216,9 @@ class Env(gym.Env):
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
             )._asdict()
         )
-        self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
+        self.world_space = spaces.Box(
+            low=0, high=self.world_size - 1, shape=[2], dtype=np.float32
+        )
 
     @staticmethod
     @functools.lru_cache(maxsize=200)
@@ -611,7 +613,12 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self, state, action, lower_level_action, reward, cumulative_reward,
+        self,
+        state,
+        action,
+        lower_level_action,
+        reward,
+        cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -619,13 +626,14 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:", self.lower_level_actions[lower_level_action],
+                "Lower Level Action:",
+                self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
-        _obs, _inventory = state.obs
+        _obs = state.obs
         _obs = _obs.transpose(1, 2, 0).astype(int)
         grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
         chars = [" "] + [o for (o, *_) in self.world_contents]
@@ -647,7 +655,12 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self, term, success, lines, state, agent_ptr,
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
     ):
 
         if term:
@@ -865,6 +878,7 @@ class Env(gym.Env):
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
+
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
                 int(action.upper),
@@ -949,7 +963,6 @@ def add_arguments(p):
     p.add_argument("--time-to-waste", type=int)
     p.add_argument(
         "--control-flow-types",
-        default=[],
         nargs="*",
         type=lambda s: dict(Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop)[
             s
