@@ -2,13 +2,11 @@ import inspect
 from argparse import ArgumentParser
 from pathlib import Path
 
-import torch
 from gym import spaces
 
 import control_flow_agent
 import debug_env
 import env
-import lines
 import networks
 import ours
 from env import Action
@@ -82,99 +80,6 @@ def main(**kwargs):
                 if k in inspect.signature(cls.run).parameters:
                     gen_args[k] = v
             d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
-            d = {
-                "agent_args": {
-                    "activation": torch.nn.ReLU(),
-                    "conv_hidden_size": 64,
-                    "debug": False,
-                    "entropy_coef": 0.015,
-                    "eval_lines": 50,
-                    "fuzz": False,
-                    "gate_coef": 0.01,
-                    "hidden_size": 256,
-                    "inventory_hidden_size": 128,
-                    "kernel_size": 2,
-                    "lower_embed_size": 64,
-                    "lower_level": "pre-trained",
-                    "lower_level_config": Path("checkpoint/lower.json"),
-                    "lower_level_load_path": "checkpoint/lower.pt",
-                    "no_op_coef": 0.0,
-                    "no_pointer": False,
-                    "no_roll": False,
-                    "no_scan": False,
-                    "num_edges": 2,
-                    "num_layers": 0,
-                    "olsk": False,
-                    "recurrent": False,
-                    "stride": 1,
-                    "task_embed_size": 64,
-                    "transformer": False,
-                },
-                "cuda": True,
-                "cuda_deterministic": False,
-                "env_args": {
-                    "break_on_fail": False,
-                    "control_flow_types": [
-                        lines.Subtask,
-                        lines.If,
-                        lines.While,
-                        lines.Else,
-                    ],
-                    "env_id": "control-flow",
-                    "eval_condition_size": False,
-                    "failure_buffer_size": 500,
-                    "long_jump": False,
-                    "lower_level": "pre-trained",
-                    "max_eval_lines": 50,
-                    "max_failure_sample_prob": 0.3,
-                    "max_lines": 10,
-                    "max_loops": 3,
-                    "max_nesting_depth": 1,
-                    "max_while_loops": 10,
-                    "max_world_resamples": 50,
-                    "min_eval_lines": 1,
-                    "min_lines": 1,
-                    "no_op_limit": 30,
-                    "one_condition": False,
-                    "reject_while_prob": 0.6,
-                    "seed": 0,
-                    "single_control_flow_type": False,
-                    "subtasks_only": False,
-                    "term_on": ["mine", "sell"],
-                    "time_to_waste": 0,
-                    "use_water": True,
-                    "world_size": 6,
-                },
-                "env_id": "control-flow",
-                "eval_interval": 100,
-                "eval_steps": 500,
-                "load_path": None,
-                "log_interval": 10,
-                "no_eval": False,
-                "normalize": False,
-                "num_batch": 1,
-                "num_processes": 150,
-                "ppo_args": {
-                    "clip_param": 0.2,
-                    "eps": 1e-05,
-                    "learning_rate": 0.003,
-                    "max_grad_norm": 0.5,
-                    "num_batch": 1,
-                    "ppo_epoch": 2,
-                    "value_loss_coef": 0.5,
-                },
-                "render": False,
-                "render_eval": False,
-                "rollouts_args": {
-                    "gamma": 0.99,
-                    "num_processes": 150,
-                    "tau": 0.95,
-                    "use_gae": False,
-                },
-                "seed": 0,
-                "synchronous": False,
-                "train_steps": 25,
-            }
             return d
 
     kwargs.update(env_id="control-flow")
