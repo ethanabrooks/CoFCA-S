@@ -214,11 +214,10 @@ class Trainer:
 
             rollouts.obs[0].copy_(train_envs.reset())
 
-            for step in range(start, num_iterations + 1):
-                print(step, "/", eval_interval)
+            for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
-                if eval_interval and not no_eval and step % eval_interval == 0:
+                if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
                     #     vec_norm.eval()
@@ -285,8 +284,7 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                total_num_steps = num_processes * train_steps * (step + 1)
-                if total_num_steps % log_interval == 0:
+                if i % log_interval == 0:
                     report = dict(
                         **train_results,
                         **dict(train_report.items()),
@@ -301,16 +299,16 @@ class Trainer:
                         report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
-                if save_interval and total_num_steps % save_interval == 0:
+                if save_interval and i % save_interval == 0:
                     if use_tune:
-                        with tune.checkpoint_dir(step) as _dir:
+                        with tune.checkpoint_dir(i) as _dir:
                             checkpoint_dir = _dir
                     else:
-                        checkpoint_dir = Path(log_dir, str(step)) if log_dir else None
+                        checkpoint_dir = Path(log_dir, str(i)) if log_dir else None
 
                     if checkpoint_dir:
                         self.save_checkpoint(
-                            checkpoint_dir, ppo=ppo, agent=agent, step=step
+                            checkpoint_dir, ppo=ppo, agent=agent, step=i
                         )
 
         finally:
