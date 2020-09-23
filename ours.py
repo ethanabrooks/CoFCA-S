@@ -39,29 +39,31 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 class Recurrence(nn.Module):
     def __init__(
         self,
-        hidden_size,
-        conv_hidden_size,
-        fuzz,
-        inventory_hidden_size,
-        gate_coef,
-        observation_space,
-        lower_level_load_path,
-        lower_embed_size,
-        kernel_size,
-        stride,
         action_space,
+        conv_hidden_size,
+        debug,
+        debug_obs,
+        eval_lines,
+        fuzz,
+        kernel_size,
         lower_level_config,
-        task_embed_size,
-        num_edges,
-        olsk,
+        lower_embed_size,
+        lower_level_load_path,
+        gate_coef,
+        hidden_size,
+        inventory_hidden_size,
         no_pointer,
-        transformer,
         no_roll,
         no_scan,
-        debug,
-        eval_lines,
+        num_edges,
+        observation_space,
+        olsk,
+        stride,
+        task_embed_size,
+        transformer,
     ):
         super().__init__()
+        self.debug_obs = debug_obs
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
