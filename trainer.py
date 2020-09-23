@@ -282,8 +282,7 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                total_num_steps = num_processes * train_steps * (i + 1)
-                if total_num_steps % log_interval == 0:
+                if i % log_interval == 0:
                     report = dict(
                         **train_results,
                         **dict(train_report.items()),
