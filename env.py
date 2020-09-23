@@ -36,7 +36,7 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active lines obs inventory")
+Obs = namedtuple("Obs", "active lines obs inventory subtask_complete truthy")
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
@@ -85,34 +85,38 @@ class Env(gym.Env):
 
     def __init__(
         self,
-        term_on,
-        max_world_resamples,
-        max_while_loops,
-        use_water,
-        max_failure_sample_prob,
-        one_condition,
-        failure_buffer_size,
-        reject_while_prob,
-        long_jump,
-        min_eval_lines,
-        max_eval_lines,
-        min_lines,
-        max_lines,
-        eval_condition_size,
-        single_control_flow_type,
-        no_op_limit,
-        time_to_waste,
-        subtasks_only,
-        break_on_fail,
-        max_loops,
-        rank,
-        lower_level,
-        control_flow_types,
+        max_world_resamples: int,
+        max_while_loops: int,
+        use_water: bool,
+        max_failure_sample_prob: int,
+        one_condition: bool,
+        failure_buffer_size: int,
+        reject_while_prob: float,
+        long_jump: bool,
+        min_eval_lines: int,
+        max_eval_lines: int,
+        min_lines: int,
+        max_lines: int,
+        eval_condition_size: int,
+        single_control_flow_type: bool,
+        no_op_limit: int,
+        time_to_waste: int,
+        subtasks_only: bool,
+        break_on_fail: bool,
+        max_loops: int,
+        rank: int,
+        lower_level: str,
+        control_flow_types=None,
+        evaluating=False,
         max_nesting_depth=1,
         seed=0,
-        evaluating=False,
+        term_on=None,
         world_size=6,
     ):
+        if control_flow_types is None:
+            control_flow_types = [Subtask, If, While, Else]
+        if term_on is None:
+            term_on = [self.mine, self.sell]
         self.counts = None
         self.reject_while_prob = reject_while_prob
         self.one_condition = one_condition
@@ -205,10 +209,14 @@ class Env(gym.Env):
                         * self.n_lines
                     )
                 ),
-                obs=spaces.Box(low=0, high=1, shape=self.world_shape),
+                obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
+                subtask_complete=spaces.Discrete(2),
+                truthy=spaces.Discrete(3),
             )._asdict()
         )
-        self.world_space = spaces.Box(low=0, high=self.world_size - 1, shape=[2])
+        self.world_space = spaces.Box(
+            low=0, high=self.world_size - 1, shape=[2], dtype=np.float32
+        )
 
     @staticmethod
     @functools.lru_cache(maxsize=200)
@@ -603,7 +611,12 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self, state, action, lower_level_action, reward, cumulative_reward,
+        self,
+        state,
+        action,
+        lower_level_action,
+        reward,
+        cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -611,7 +624,8 @@ class Env(gym.Env):
         print("Action:", action)
         if lower_level_action is not None:
             print(
-                "Lower Level Action:", self.lower_level_actions[lower_level_action],
+                "Lower Level Action:",
+                self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
@@ -639,7 +653,12 @@ class Env(gym.Env):
             print("-" * len(string))
 
     def render_instruction(
-        self, term, success, lines, state, agent_ptr,
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
     ):
 
         if term:
@@ -827,7 +846,20 @@ class Env(gym.Env):
             obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
-            obs = self.get_observation(obs, preprocessed_lines, state)
+            truthy = (
+                self.evaluate_line(lines[agent_ptr], None, state.counts)
+                if agent_ptr < len(lines)
+                else 2
+            )
+            truthy = 2 if truthy is None else int(truthy)
+
+            obs = self.get_observation(
+                obs,
+                preprocessed_lines=preprocessed_lines,
+                state=state,
+                subtask_complete=state.subtask_complete,
+                truthy=truthy,
+            )
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
@@ -842,6 +874,7 @@ class Env(gym.Env):
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             actions.extend([int(a) for a in action])
+
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
                 int(action.upper),
@@ -867,12 +900,14 @@ class Env(gym.Env):
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
-    def get_observation(self, obs, preprocessed_lines, state):
+    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
         return Obs(
             obs=obs,
             lines=preprocessed_lines,
             active=self.n_lines if state.ptr is None else state.ptr,
             inventory=np.array([state.inventory[i] for i in self.items]),
+            subtask_complete=subtask_complete,
+            truthy=truthy,
         )
 
     @property

@@ -8,16 +8,13 @@ from torch import nn as nn
 from configs import configs, default
 from trainer import Trainer
 
-ACTIVATIONS = dict(
-    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
-)
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
 def get_config(name):
     if name is None:
         return {}
-    path = Path("configs", name).with_suffix(".json")
+    path = Path(name)
     if path.exists():
         with path.open() as f:
             return json.load(f)
@@ -43,7 +40,7 @@ def add_arguments(parser):
     )
     parser.add_argument("--name")
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
+    parser.add_argument("--gpus-per-trial", "-g", type=int, default=0.5)
     parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
     parser.add_argument("--num-iterations", type=int)
     parser.add_argument(
@@ -75,9 +72,6 @@ def add_arguments(parser):
     # parser.add_argument("--success-reward", type=float)
 
     agent_parser = parser.add_argument_group("agent_args")
-    agent_parser.add_argument(
-        "--activation", type=lambda s: eval(f"nn.{s}"), default=nn.ReLU(),
-    )
     agent_parser.add_argument(
         "--entropy-coef", type=float, help="entropy term coefficient",
     )

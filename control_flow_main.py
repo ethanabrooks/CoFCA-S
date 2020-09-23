@@ -42,14 +42,15 @@ def main(**kwargs):
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, lower_level, env_id=None, **kwargs):
+        def make_env(seed, rank, evaluation, lower_level=None, env_id=None, **kwargs):
             kwargs.update(seed=seed + rank, rank=rank, lower_level=lower_level)
             if not lower_level:
                 kwargs.update(world_size=1)
                 return debug_env.Env(**kwargs)
             return env.Env(**kwargs)
 
-        def structure_config(self, **config):
+        @classmethod
+        def structure_config(cls, **config):
             config = super().structure_config(**config)
             agent_args = config.pop("agent_args")
             env_args = {}
@@ -64,8 +65,13 @@ def main(**kwargs):
             for k, v in config.items():
                 if (
                     k in inspect.signature(env.Env.__init__).parameters
-                    or k in inspect.signature(self.make_env).parameters
+                    or k in inspect.signature(cls.make_env).parameters
                 ):
+                    if k == "lower_level":
+                        if v:
+                            print("lower_level specified. Using gridworld env")
+                        else:
+                            print("lower_level not specified. Using debug_env")
                     env_args[k] = v
                 if k in inspect.signature(ours.Recurrence.__init__).parameters:
                     agent_args[k] = v
@@ -73,7 +79,7 @@ def main(**kwargs):
                     agent_args[k] = v
                 if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
                     agent_args[k] = v
-                if k in inspect.signature(self.gen).parameters:
+                if k in inspect.signature(cls.run).parameters:
                     gen_args[k] = v
             d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
             d = {
@@ -186,6 +192,7 @@ def control_flow_args(parser):
     env.add_arguments(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)
     parsers.agent.add_argument("--no-debug", dest="debug", action="store_false")
+    parsers.agent.add_argument("--debug-obs", action="store_true")
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
