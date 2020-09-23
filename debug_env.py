@@ -14,25 +14,9 @@ from env import ObjectMap, Coord, Line, State, Action, Obs
 class Env(env.Env):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.observation_space = spaces.Dict(
-            Obs(
-                active=spaces.Discrete(self.n_lines + 1),
-                inventory=spaces.MultiBinary(1),
-                lines=spaces.MultiDiscrete(
-                    np.array(
-                        [
-                            [
-                                len(Line.types),
-                                1 + len(self.behaviors),
-                                1 + len(self.items),
-                                1 + self.max_loops,
-                            ]
-                        ]
-                        * self.n_lines
-                    )
-                ),
-                obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
-            )._asdict()
+        self.observation_space.spaces.update(
+            inventory=spaces.MultiBinary(1),
+            obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
         )
 
     def state_generator(
