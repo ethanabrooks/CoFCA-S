@@ -28,11 +28,8 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 class Trainer:
-    def run(self, **config):
-        config = self.structure_config(**config)
-        self.train(**config)
-
-    def structure_config(self, **config):
+    @classmethod
+    def structure_config(cls, **config):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
@@ -41,7 +38,7 @@ class Trainer:
             if k in ["num_processes"]:
                 gen_args[k] = v
             else:
-                if k in inspect.signature(self.build_agent).parameters:
+                if k in inspect.signature(cls.build_agent).parameters:
                     agent_args[k] = v
                 if k in inspect.signature(Agent.__init__).parameters:
                     agent_args[k] = v
@@ -51,7 +48,7 @@ class Trainer:
                     rollouts_args[k] = v
                 if k in inspect.signature(PPO.__init__).parameters:
                     ppo_args[k] = v
-                if k in inspect.signature(self.train).parameters or k not in (
+                if k in inspect.signature(cls.run).parameters or k not in (
                     list(agent_args.keys())
                     + list(rollouts_args.keys())
                     + list(ppo_args.keys())
@@ -87,7 +84,7 @@ class Trainer:
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
-    def train(
+    def run(
         self,
         agent_args: dict,
         cuda: bool,
@@ -246,7 +243,8 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(), dones=output.done,
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
@@ -262,7 +260,8 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(), dones=output.done,
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
@@ -343,10 +342,15 @@ class Trainer:
                 config[k] = v
 
         config.update(name=name, log_dir=log_dir)
+
+        def run(c):
+            c = cls.structure_config(**c)
+            cls().run(**c)
+
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
             config.update(use_tune=False)
-            cls().run(**config)
+            run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
@@ -363,9 +367,6 @@ class Trainer:
                 )
             if log_dir is not None:
                 kwargs.update(local_dir=log_dir)
-
-            def run(c):
-                cls().run(**c)
 
             tune.run(
                 run,
