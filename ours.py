@@ -289,12 +289,6 @@ class Recurrence(nn.Module):
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
-        obs = (
-            torch.stack([state.truthy, state.subtask_complete], dim=2).unsqueeze(-1)
-            if self.debug_obs
-            else state.obs
-        )
-
         for t in range(T):
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
@@ -305,6 +299,18 @@ class Recurrence(nn.Module):
                 self.kernel_size,
                 self.kernel_size,
             )
+
+            obs = (
+                torch.stack(
+                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
+                    dim=-1,
+                )
+                .unsqueeze(-1)
+                .unsqueeze(-1)
+                if self.debug_obs
+                else state.obs[t]
+            )
+
             h1 = torch.cat(
                 [
                     F.conv2d(
@@ -314,7 +320,7 @@ class Recurrence(nn.Module):
                         stride=self.stride,
                         padding=self.padding,
                     )
-                    for o, k in zip(obs[t].unbind(0), conv_kernel.unbind(0))
+                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
                 ],
                 dim=0,
             ).relu()
@@ -341,6 +347,7 @@ class Recurrence(nn.Module):
                 L[t] = ll_output.action.flatten()
 
             if self.fuzz:
+                assert not self.debug_obs
                 ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
                 sell = (be == 2).long()
                 channel_index = 3 * sell + (it - 1) * (1 - sell)
@@ -371,9 +378,6 @@ class Recurrence(nn.Module):
             self.print("L[t]", L[t])
             self.print("lines[R, p]", lines[t][R, p])
             z2 = torch.cat([zeta1_input, embedded_lower], dim=-1)
-            d_gate = self.d_gate(z2)
-            self.sample_new(DG[t], d_gate)
-            dg = DG[t].unsqueeze(-1).float()
 
             # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
             # sell = (be == 2).long()
@@ -381,7 +385,11 @@ class Recurrence(nn.Module):
             # index2 = 1 + ((it - 3) % 3)
             # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
             # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            # z = (channel1 > channel2).unsqueeze(-1).float()
+            # z2 = (channel1 > channel2).unsqueeze(-1).float()
+
+            d_gate = self.d_gate(z2)
+            self.sample_new(DG[t], d_gate)
+            dg = DG[t].unsqueeze(-1).float()
 
             if self.olsk or self.no_pointer:
                 h = self.upsilon(z2, h)
