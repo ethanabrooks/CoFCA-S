@@ -47,7 +47,7 @@ class Env(env.Env):
             condition_bit = self.random.choice(2)
             prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
 
-    def evaluate_line(self, *args, condition_bit, **kwargs) -> bool:
+    def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
         return bool(condition_bit)
 
     def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
@@ -104,12 +104,14 @@ class Env(env.Env):
         print("Condition bit:", state.counts)
         print(RESET)
 
-    def get_observation(self, obs, preprocessed_lines, state):
+    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
         return Obs(
             obs=obs,
             lines=preprocessed_lines,
             active=self.n_lines if state.ptr is None else state.ptr,
             inventory=np.array([0]),
+            subtask_complete=1,
+            truthy=truthy,
         )
 
 

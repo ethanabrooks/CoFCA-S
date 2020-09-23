@@ -289,6 +289,12 @@ class Recurrence(nn.Module):
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
+        obs = (
+            torch.stack([state.truthy, state.subtask_complete], dim=2).unsqueeze(-1)
+            if self.debug_obs
+            else state.obs
+        )
+
         for t in range(T):
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
