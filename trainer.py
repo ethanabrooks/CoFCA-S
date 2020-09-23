@@ -242,8 +242,7 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(),
-                                dones=output.done,
+                                reward=output.reward.cpu().numpy(), dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
@@ -259,8 +258,7 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(),
-                        dones=output.done,
+                        reward=output.reward.cpu().numpy(), dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
@@ -291,6 +289,7 @@ class Trainer:
                         **dict(train_infos.items()),
                         **dict(eval_report.items()),
                         **dict(eval_infos.items()),
+                        step=i,
                     )
                     if use_tune:
                         tune.report(**report)
