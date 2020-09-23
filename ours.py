@@ -106,7 +106,6 @@ class Recurrence(nn.Module):
 
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
-        d, h, _ = self.obs_spaces.obs.shape
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer(
             "offset",
