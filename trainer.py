@@ -29,20 +29,9 @@ from wrappers import VecPyTorch
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
-class Trainer(tune.Trainable):
-    def __init__(self, *args, **kwargs):
-        self.iterator = None
-        self.agent = None
-        self.ppo = None
-        self.i = None
-        self.device = None
-        super().__init__(*args, **kwargs)
-
-    def setup(self, config):
-        config = self.structure_config(config)
-        self.iterator = self.gen(**config)
-
-    def structure_config(self, config):
+class Trainer:
+    @classmethod
+    def structure_config(cls, config):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
@@ -50,7 +39,7 @@ class Trainer(tune.Trainable):
         for k, v in config.items():
             if k in ["train_steps", "num_processes", "num_batch"]:
                 other_args[k] = v
-            elif k in inspect.signature(self.build_agent).parameters:
+            elif k in inspect.signature(cls.build_agent).parameters:
                 agent_args[k] = v
             elif k in inspect.signature(Agent.__init__).parameters:
                 agent_args[k] = v
@@ -69,9 +58,6 @@ class Trainer(tune.Trainable):
             **other_args,
         )
         return config
-
-    def step(self):
-        return next(self.iterator)
 
     def save_checkpoint(self, tmp_checkpoint_dir):
         modules = dict(
@@ -93,10 +79,6 @@ class Trainer(tune.Trainable):
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
-    def loop(self):
-        while True:
-            yield self.step()
-
     def gen(
         self,
         agent_args: dict,
@@ -104,6 +86,7 @@ class Trainer(tune.Trainable):
         cuda_deterministic: bool,
         env_args: dict,
         env_id: str,
+        log_dir: Path,
         log_interval: int,
         normalize: float,
         num_batch: int,
@@ -121,6 +104,8 @@ class Trainer(tune.Trainable):
         load_path: Path = None,
         render: bool = False,
     ):
+        writer = SummaryWriter(logdir=str(log_dir))
+
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -301,7 +286,7 @@ class Trainer(tune.Trainable):
                 rollouts.after_update()
 
                 if i % log_interval == 0:
-                    yield dict(
+                    result = dict(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
@@ -309,6 +294,16 @@ class Trainer(tune.Trainable):
                         **dict(eval_infos.items()),
                         step=i,
                     )
+                    pprint(result)
+                    if writer is not None:
+                        for k, v in k_scalar_pairs(**result):
+                            writer.add_scalar(k, v, i)
+                    #     if (
+                    #         None not in (log_dir, save_interval)
+                    #         and (i + 1) % save_interval == 0
+                    #     ):
+                    #         print("steps until save:", save_interval - i)
+                    #         trainer.save_checkpoint(Path(log_dir, "checkpoint.pt"))
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
         finally:
@@ -352,22 +347,11 @@ class Trainer(tune.Trainable):
             if k not in config or v is not None:
                 config[k] = v
 
-        config.update(num_iterations=num_iterations)
+        config.update(num_iterations=num_iterations, log_dir=log_dir)
         if log_dir:
             print("Not using tune, because log_dir was specified")
-            writer = SummaryWriter(logdir=str(log_dir))
-            trainer = cls(config)
-            for i, result in enumerate(trainer.loop()):
-                pprint(result)
-                if writer is not None:
-                    for k, v in k_scalar_pairs(**result):
-                        writer.add_scalar(k, v, i)
-                if (
-                    None not in (log_dir, save_interval)
-                    and (i + 1) % save_interval == 0
-                ):
-                    print("steps until save:", save_interval - i)
-                    trainer.save_checkpoint(Path(log_dir, "checkpoint.pt"))
+            c = cls().structure_config(config)
+            cls().gen(**c)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)

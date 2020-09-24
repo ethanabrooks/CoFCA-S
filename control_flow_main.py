@@ -68,7 +68,8 @@ def main(
             else:
                 return env.Env(**args)
 
-        def structure_config(self, config):
+        @classmethod
+        def structure_config(cls, config):
             config = super().structure_config(config)
             agent_args = config.pop("agent_args")
             env_args = {}
