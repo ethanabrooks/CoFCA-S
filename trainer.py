@@ -64,21 +64,23 @@ class Trainer:
         )
         return config
 
-    def save_checkpoint(self, tmp_checkpoint_dir):
+    @staticmethod
+    def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
         modules = dict(
-            optimizer=self.ppo.optimizer, agent=self.agent
+            optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
-        torch.save(dict(step=self.i, **state_dict), save_path)
+        torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
 
-    def load_checkpoint(self, checkpoint_path):
-        state_dict = torch.load(checkpoint_path, map_location=self.device)
-        self.agent.load_state_dict(state_dict["agent"])
-        self.ppo.optimizer.load_state_dict(state_dict["optimizer"])
+    @staticmethod
+    def load_checkpoint(checkpoint_path, ppo, agent, device):
+        state_dict = torch.load(checkpoint_path, map_location=device)
+        agent.load_state_dict(state_dict["agent"])
+        ppo.optimizer.load_state_dict(state_dict["optimizer"])
         # if isinstance(self.envs.venv, VecNormalize):
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
