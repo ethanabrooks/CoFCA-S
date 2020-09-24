@@ -46,7 +46,6 @@ def main(
             return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                eval_lines=max_eval_lines,
                 debug=render and debug,
                 lower_level=lower_level,
                 lower_level_load_path=lower_level_load_path,
@@ -69,27 +68,39 @@ def main(
                 return env.Env(**args)
 
         @classmethod
-        def structure_config(cls, config):
-            config = super().structure_config(config)
+        def structure_config(cls, **config):
+            config = super().structure_config(**config)
             agent_args = config.pop("agent_args")
             env_args = {}
-            other_args = {}
+            gen_args = {}
+
+            # if config["lower_level_load_path"]:
+            #     config["lower_level"] = "pre-trained"
+
+            agent_args["eval_lines"] = config["max_eval_lines"]
+            agent_args["debug"] = config["render"] or config["render_eval"]
+
             for k, v in config.items():
-                if k in ["seed"]:
-                    other_args[k] = v
-                elif k in inspect.signature(env.Env.__init__).parameters:
-                    env_args[k] = v
-                elif k in inspect.signature(ours.Recurrence.__init__).parameters:
-                    agent_args[k] = v
-                elif (
-                    k in inspect.signature(control_flow_agent.Agent.__init__).parameters
+                if (
+                    k in inspect.signature(env.Env.__init__).parameters
+                    or k in inspect.signature(cls.make_env).parameters
                 ):
+                    if k == "lower_level":
+                        if v:
+                            print("lower_level specified. Using gridworld env")
+                        else:
+                            print("lower_level not specified. Using debug_env")
+                    env_args[k] = v
+                if k in inspect.signature(ours.Recurrence.__init__).parameters:
                     agent_args[k] = v
-                elif k in inspect.signature(LowerLevel.__init__).parameters:
-                    pass
-                else:
-                    other_args[k] = v
-            return dict(env_args=env_args, agent_args=agent_args, **other_args)
+                if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(cls.run).parameters:
+                    gen_args[k] = v
+            d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
+            return d
 
     ControlFlowTrainer.main(
         **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"

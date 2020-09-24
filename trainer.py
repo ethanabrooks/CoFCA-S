@@ -31,31 +31,36 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 class Trainer:
     @classmethod
-    def structure_config(cls, config):
+    def structure_config(cls, **config):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
-        other_args = {}
+        gen_args = {}
         for k, v in config.items():
-            if k in ["train_steps", "num_processes", "num_batch"]:
-                other_args[k] = v
-            elif k in inspect.signature(cls.build_agent).parameters:
-                agent_args[k] = v
-            elif k in inspect.signature(Agent.__init__).parameters:
-                agent_args[k] = v
-            elif k in inspect.signature(MLPBase.__init__).parameters:
-                agent_args[k] = v
-            elif k in inspect.signature(RolloutStorage.__init__).parameters:
-                rollouts_args[k] = v
-            elif k in inspect.signature(PPO.__init__).parameters:
-                ppo_args[k] = v
+            if k in ["num_processes"]:
+                gen_args[k] = v
             else:
-                other_args[k] = v
+                if k in inspect.signature(cls.build_agent).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(Agent.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(MLPBase.__init__).parameters:
+                    agent_args[k] = v
+                if k in inspect.signature(RolloutStorage.__init__).parameters:
+                    rollouts_args[k] = v
+                if k in inspect.signature(PPO.__init__).parameters:
+                    ppo_args[k] = v
+                if k in inspect.signature(cls.run).parameters or k not in (
+                    list(agent_args.keys())
+                    + list(rollouts_args.keys())
+                    + list(ppo_args.keys())
+                ):
+                    gen_args[k] = v
         config = dict(
             agent_args=agent_args,
             rollouts_args=rollouts_args,
             ppo_args=ppo_args,
-            **other_args,
+            **gen_args,
         )
         return config
 
@@ -79,7 +84,7 @@ class Trainer:
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
-    def gen(
+    def run(
         self,
         agent_args: dict,
         cuda: bool,
@@ -140,10 +145,8 @@ class Trainer:
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    seed=int(seed),
                     rank=rank,
                     evaluation=evaluation,
-                    env_id=env_id,
                     **env_args,
                 )
 
@@ -213,7 +216,7 @@ class Trainer:
 
             train_report = SumAcrossEpisode()
             train_infos = InfosAggregator()
-            ppo = PPO(agent=agent, num_batch=num_batch, **ppo_args)
+            ppo = PPO(agent=agent, **ppo_args)
             train_counter = EpochCounter()
 
             for i in range(start, num_iterations + 1):
@@ -350,8 +353,8 @@ class Trainer:
         config.update(num_iterations=num_iterations, log_dir=log_dir)
         if log_dir:
             print("Not using tune, because log_dir was specified")
-            c = cls().structure_config(config)
-            cls().gen(**c)
+            c = cls().structure_config(**config)
+            cls().run(**c)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
