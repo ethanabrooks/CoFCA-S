@@ -1,8 +1,12 @@
 from collections import namedtuple
+import numpy as np
+from typing import Optional
 
 from gym.spaces import Box, Discrete
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch import Tensor
 
 from distributions import Categorical, DiagGaussian
 from layers import Flatten
@@ -274,3 +278,22 @@ class MLPBase(NNBase):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class MultiEmbeddingBag(nn.Module):
+    def __init__(self, embeddings_nvec: np.ndarray, **kwargs):
+        super().__init__()
+        offsets = F.pad(torch.tensor(embeddings_nvec[:-1]).cumsum(0), [1, 0])
+        self.register_buffer(
+            "offsets",
+            offsets,
+        )
+        self.embedding_bag = nn.EmbeddingBag(
+            num_embeddings=embeddings_nvec.sum(), **kwargs
+        )
+
+    def forward(self, input: Tensor):
+        import ipdb
+
+        ipdb.set_trace()
+        return self.embedding_bag(input + self.offsets)

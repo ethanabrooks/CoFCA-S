@@ -1,7 +1,5 @@
-import functools
 from abc import ABC
-from enum import Enum
-from typing import List, Type, Generator, Tuple
+from typing import List, Type, Generator
 
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
@@ -53,9 +51,6 @@ class Line:
             n, remaining_depth, random=random, legal_lines=legal_lines
         )
 
-    def assign_id(self, **kwargs):
-        self.id = 0
-
     @staticmethod
     def transitions(line_index, previous_condition):
         raise NotImplementedError
@@ -86,7 +81,6 @@ class If(Line):
 class Else(Line):
     required_lines = 5
     required_depth = 1
-    condition = True
     depth_change = -1, 1
 
     @staticmethod
@@ -110,7 +104,6 @@ class Else(Line):
 
 
 class EndIf(Line):
-    condition = False
     depth_change = -1, 0
 
     @property
@@ -131,70 +124,28 @@ class EndIf(Line):
         yield line_index, line_index + 1  # True: If/Else -> If/Else + 1
 
 
-class While(Line):
+class Loop(Line):
     required_lines = 3
     required_depth = 1
-    condition = True
     depth_change = 0, 1
 
-    @staticmethod
-    def generate_types(n: int, remaining_depth: int, **kwargs):
-        yield While
+    @classmethod
+    def generate_types(cls, n: int, remaining_depth: int, **kwargs):
+        yield cls
         yield from Line.generate_types(n - 2, remaining_depth - 1, **kwargs)
-        yield EndWhile
+        yield cls.end_loop
 
     @staticmethod
     def transitions(line_index, previous_condition):
         previous_condition.append(line_index)
         yield from ()
 
-
-class EndWhile(Line):
-    condition = False
-    depth_change = -1, 0
-
-    @property
-    def terminates(self):
-        return While
-
-    @staticmethod
-    def generate_types(*args, **kwargs):
-        raise RuntimeError
-
-    @staticmethod
-    def transitions(line_index, previous_conditions):
-        prev = previous_conditions[-1]
-        # While
-        yield prev, line_index + 1  # False: While -> EndWhile + 1
-        yield prev, prev + 1  # True: While -> While + 1
-        # EndWhile
-        yield line_index, prev  # False: EndWhile -> While
-        yield line_index, prev  # True: EndWhile -> While
+    @classmethod
+    def end_loop(cls):
+        raise NotImplementedError
 
 
-class Loop(Line):
-    condition = True
-    required_lines = 3
-    required_depth = 1
-    depth_change = 0, 1
-
-    @staticmethod
-    def generate_types(n: int, remaining_depth: int, **kwargs):
-        yield Loop
-        yield from Line.generate_types(n - 2, remaining_depth - 1, **kwargs)
-        yield EndLoop
-
-    def assign_id(self, random, max_loops, **kwargs):
-        self.id = random.randint(1, 1 + max_loops)
-
-    @staticmethod
-    def transitions(line_index, previous_conditions):
-        previous_conditions.append(line_index)
-        yield from ()
-
-
-class EndLoop(Line):
-    condition = False
+class EndLoop(Line, ABC):
     depth_change = -1, 0
 
     @staticmethod
@@ -210,10 +161,29 @@ class EndLoop(Line):
         # EndWhile
         yield line_index, prev  # False: EndWhile -> While
         yield line_index, prev  # True: EndWhile -> While
+
+
+class While(Loop):
+    @classmethod
+    def end_loop(cls):
+        return EndWhile
+
+
+class EndWhile(EndLoop):
+    pass
+
+
+class For(Loop):
+    @classmethod
+    def end_loop(cls):
+        return EndLoop
+
+
+class EndFor(EndLoop):
+    pass
 
 
 class Subtask(Line):
-    condition = False
     required_lines = 1
     required_depth = 0
     depth_change = 0, 0
@@ -223,17 +193,74 @@ class Subtask(Line):
         yield Subtask
         yield from Line.generate_types(n - 1, *args, **kwargs)
 
-    def assign_id(self, random, num_subtasks, **kwargs):
-        self.id = random.choice(num_subtasks)
-
     @staticmethod
     def transitions(line_index, _):
         yield line_index, line_index + 1
         yield line_index, line_index + 1
 
 
+class SelfLoop(Subtask):
+    required_lines = 1
+    required_depth = 0
+    depth_change = 0, 0
+
+    @classmethod
+    def generate_types(cls, n: int, *args, **kwargs):
+        yield cls
+        yield from Line.generate_types(n - 1, *args, **kwargs)
+
+    @staticmethod
+    def transitions(line_index, _):
+        yield line_index, line_index  # False: do not advance
+        yield line_index, line_index + 1  # True: advance by 1
+
+
+class Some(SelfLoop):
+    pass
+
+
+class Most(SelfLoop):
+    pass
+
+
+class ForAWhile(Loop):
+    @classmethod
+    def end_loop(cls):
+        return EndForAWhile
+
+
+class EndForAWhile(EndLoop):
+    pass
+
+
+class EnoughToBuy(Loop):
+    @classmethod
+    def end_loop(cls):
+        return EndEnoughToBuy
+
+
+class EndEnoughToBuy(EndLoop):
+    pass
+
+
 class Padding(Line, ABC):
     pass
 
 
-Line.types = [Subtask, If, Else, EndIf, While, EndWhile, Loop, EndLoop, Padding]
+Line.types = [
+    Subtask,
+    If,
+    Else,
+    EndIf,
+    While,
+    EndWhile,
+    For,
+    EndFor,
+    Some,
+    Most,
+    ForAWhile,
+    EndForAWhile,
+    EnoughToBuy,
+    EndEnoughToBuy,
+    Padding,
+]

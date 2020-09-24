@@ -1,8 +1,3 @@
-- update captions
-- write analysis of simple-rewards graph
-- generate generalization lengths 11-15 graphs (for no-roll and no-pointer)
-- analysis??
-- spruce up the Example instruction diagram
-- debug conditions when counts are equal
-- debug save intervals
-- rerun generalization by length baselines and generate graphs.
+- make inventory one-hot to allow multiple items
+- Add recurrence
+- Figure out how to deal with feasibility in the case of for a while

@@ -12,6 +12,7 @@ from distributions import FixedCategorical, Categorical
 from env import Action
 from lower_level import Agent, get_obs_sections
 from env import Obs
+from networks import MultiEmbeddingBag
 from transformer import TransformerModel
 from utils import init_
 
@@ -121,7 +122,7 @@ class Recurrence(nn.Module):
             self.action_space_nvec.lower + 1, lower_embed_size
         )
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.inventory.n, inventory_hidden_size)),
+            MultiEmbeddingBag(observation_space.inventory),
             nn.ReLU(),
         )
         m_size = (

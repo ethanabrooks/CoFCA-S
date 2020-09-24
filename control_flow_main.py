@@ -17,12 +17,10 @@ from trainer import Trainer
 
 def main(**kwargs):
     class ControlFlowTrainer(Trainer):
-        def build_agent(
-            self, envs, lower_level="train-alone", debug=False, **agent_args
-        ):
+        def build_agent(self, envs, train_lower_alone=False, debug=False, **agent_args):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
-            if lower_level == "train-alone":
+            if train_lower_alone:
                 return networks.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
@@ -34,20 +32,28 @@ def main(**kwargs):
             return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                lower_level=lower_level,
+                train_lower_alone=train_lower_alone,
                 debug=debug,
                 **agent_args,
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluating, lower_level=None, env_id=None, **kwargs):
+        def make_env(
+            seed,
+            rank,
+            evaluating,
+            lower_level_load_path=None,
+            lower_level_alone=False,
+            env_id=None,
+            **kwargs
+        ):
             kwargs.update(
                 seed=seed + rank,
                 rank=rank,
-                lower_level=lower_level,
+                lower_level_alone=lower_level_alone,
                 evaluating=evaluating,
             )
-            if not lower_level:
+            if not lower_level_load_path:
                 kwargs.update(world_size=1)
                 return debug_env.Env(**kwargs)
             return env.Env(**kwargs)
@@ -58,9 +64,6 @@ def main(**kwargs):
             agent_args = config.pop("agent_args")
             env_args = {}
             gen_args = {}
-
-            if config["lower_level_load_path"]:
-                config["lower_level"] = "pre-trained"
 
             agent_args["eval_lines"] = config["max_eval_lines"]
             agent_args["debug"] = config["render"] or config["render_eval"]
@@ -93,11 +96,11 @@ def main(**kwargs):
 
 def control_flow_args(parser):
     parsers = add_arguments(parser)
-    parser = parsers.main
+    parser = parsers.play
     parser.add_argument("--min-eval-lines", type=int)
     parser.add_argument("--max-eval-lines", type=int)
     parser.add_argument("--no-eval", action="store_true")
-    parser.add_argument("--lower-level", choices=["train-alone", "train-with-upper"])
+    parser.add_argument("--train-lower-alone", action="store_true")
     parser.add_argument("--lower-level-load-path")
     env.add_arguments(parser.add_argument_group("env_args"))
     parsers.agent.add_argument("--lower-level-config", type=Path)

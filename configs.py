@@ -30,7 +30,6 @@ default = {
     "log_interval": 10,
     "long_jump": False,
     "lower_embed_size": 128,
-    "lower_level": None,
     "lower_level_config": None,
     "lower_level_load_path": None,
     "max_eval_lines": 50,

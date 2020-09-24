@@ -37,7 +37,7 @@ VOLUME /ppo
 #RUN conda install -y -c pytorch pytorch 
 #RUN conda install -y pandas
 COPY environment.yml .
-RUN conda env create -f environment.yml
+RUN conda self create -f environment.yml
 RUN git clone git@github.com:ethanabrooks/rl-utils.git
 RUN pip install -e rl-utils
 COPY setup.py /ppo
