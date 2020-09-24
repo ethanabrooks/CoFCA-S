@@ -247,7 +247,7 @@ class Trainer:
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
 
-                    rollouts.obs[0].copy_(train_envs.reset())
+                rollouts.obs[0].copy_(train_envs.reset())
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
