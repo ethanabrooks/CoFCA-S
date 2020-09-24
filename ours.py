@@ -404,11 +404,11 @@ class Recurrence(nn.Module):
             # except ValueError:
             # print("t", t)
             # print(f.shape)
-            self.print("f back", f[t, 0, :, :half])
-            self.print("f", f[t, 0, :, half:])
+            self.print("f back", f[p, 0, :, :half])
+            self.print("f", f[p, 0, :, half:])
             # print(b.shape)
-            self.print("b", b[t, 0, :, :half])
-            self.print("b forward", b[t, 0, :, half:])
+            self.print("b backward", b[p, 0, :, :half])
+            self.print("b forward", b[p, 0, :, half:])
             # pass
             yield RecurrentState(
                 a=A[t],
@@ -462,7 +462,9 @@ class Recurrence(nn.Module):
         stack = torch.stack([b.flip(1), f], dim=1)  # [nl * N * ne, 2, 2 * nl]
         reshaped = stack.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
         P = reshaped.transpose(-1, -2)
-        return P, f.view(nl, N, self.ne, 2 * nl), b.view(nl, N, self.ne, 2 * nl)
+        f1 = f.view(nl, N, self.ne, 2 * nl)
+        b1 = b.flip(1).view(nl, N, self.ne, 2 * nl)
+        return P, f1, b1
 
     @property
     def gru_in_size(self):
