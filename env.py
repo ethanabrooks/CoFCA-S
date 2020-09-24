@@ -102,7 +102,7 @@ class Env(gym.Env):
         eval_condition_size: int,
         single_control_flow_type: bool,
         no_op_limit: int,
-        time_to_waste: int,
+        time_limit: int,
         subtasks_only: bool,
         break_on_fail: bool,
         max_loops: int,
@@ -146,7 +146,7 @@ class Env(gym.Env):
         self.single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
-        self.time_to_waste = time_to_waste
+        self.time_limit = time_limit
         self.i = 0
         self.success_count = 0
 
@@ -355,31 +355,18 @@ class Env(gym.Env):
         initial_objects = deepcopy(objects)
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
-        if self.lower_level == "train-alone":
-            time_remaining = 0
-        else:
-            time_remaining = 200 if self.evaluating else self.time_to_waste
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
             line_iterator, lines, counts=self.count_objects(objects)
         )
-
-        def update_time():
-            time_delta = 3 * self.world_size
-            return (
-                time_delta + self.time_to_waste
-                if self.lower_level == "train-alone"
-                else time_remaining + time_delta
-            )
+        time_remaining = self.time_limit
 
         prev, ptr = 0, next(subtask_iterator)
-        if ptr is not None:
-            time_remaining = update_time()
 
         term = False
         while True:
-            term |= not time_remaining
+            term |= not self.evaluating and not time_remaining
             if term and ptr is not None:
                 self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
 
@@ -465,8 +452,6 @@ class Env(gym.Env):
                         ptr,
                         subtask_iterator.send(dict(counts=self.count_objects(objects))),
                     )
-                    if ptr is not None:
-                        time_remaining = update_time()
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
@@ -628,7 +613,6 @@ class Env(gym.Env):
         action,
         lower_level_action,
         reward,
-        cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -640,7 +624,6 @@ class Env(gym.Env):
                 self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
-        print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
         _obs = state.obs
@@ -787,8 +770,6 @@ class Env(gym.Env):
 
         state_iterator = self.state_generator(objects, _agent_pos, lines)
         state = next(state_iterator)
-        actions = []
-        program_counter = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -796,10 +777,7 @@ class Env(gym.Env):
         term = False
         action = None
         lower_level_action = None
-        cumulative_reward = 0
         while True:
-            if state.ptr is not None:
-                program_counter.append(state.ptr)
             success = state.ptr is None
             self.success_count += success
 
@@ -808,7 +786,6 @@ class Env(gym.Env):
                 reward = 1 if state.subtask_complete else 0
             else:
                 reward = int(success)
-            cumulative_reward += reward
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -817,10 +794,10 @@ class Env(gym.Env):
                     ipdb.set_trace()
 
                 info.update(
-                    success=success,
-                    cumulative_reward=cumulative_reward,
                     instruction_len=len(lines),
                 )
+                if not use_failure_buf:
+                    info.update(success_without_failure_buf=success)
                 if success:
                     info.update(success_line=len(lines), progress=1)
                 else:
@@ -834,7 +811,6 @@ class Env(gym.Env):
                 )
 
             info.update(
-                regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
             )
 
@@ -851,7 +827,6 @@ class Env(gym.Env):
                     action=action,
                     lower_level_action=lower_level_action,
                     reward=reward,
-                    cumulative_reward=cumulative_reward,
                 )
 
             self._render = render
@@ -887,7 +862,6 @@ class Env(gym.Env):
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
-            actions.extend([int(a) for a in action])
 
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
@@ -899,7 +873,6 @@ class Env(gym.Env):
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
-                successes_per_episode=self.success_count / self.i,
             )
 
             if action == self.num_subtasks:
@@ -970,7 +943,7 @@ def add_arguments(p):
     p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
-    p.add_argument("--time-to-waste", type=int)
+    p.add_argument("--time-limit", type=int)
     p.add_argument(
         "--control-flow-types",
         nargs="*",

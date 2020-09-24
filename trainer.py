@@ -135,10 +135,10 @@ class Trainer:
             report_iterator = report_generator()
             next(report_iterator)
 
-        def make_vec_envs(evaluation):
+        def make_vec_envs(evaluating):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    rank=rank, evaluation=evaluation, **env_args
+                    rank=rank, evaluating=evaluating, **env_args
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -187,7 +187,7 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = make_vec_envs(evaluation=False)
+        train_envs = make_vec_envs(evaluating=False)
         try:
             train_envs.to(device)
             agent = self.build_agent(envs=train_envs, **agent_args)
@@ -212,8 +212,6 @@ class Trainer:
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
 
-            rollouts.obs[0].copy_(train_envs.reset())
-
             for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
@@ -225,7 +223,7 @@ class Trainer:
 
                     # self.envs.evaluate()
                     eval_masks = torch.zeros(num_processes, 1, device=device)
-                    eval_envs = make_vec_envs(evaluation=True)
+                    eval_envs = make_vec_envs(evaluating=True)
                     eval_envs.to(device)
                     with agent.recurrent_module.evaluating(eval_envs.observation_space):
                         eval_recurrent_hidden_states = torch.zeros(
@@ -242,13 +240,16 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(), dones=output.done,
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
+
+                rollouts.obs[0].copy_(train_envs.reset())
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -258,7 +259,8 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(), dones=output.done,
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
@@ -318,7 +320,7 @@ class Trainer:
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
-    def make_env(env_id, seed, rank, evaluation, **kwargs):
+    def make_env(env_id, seed, rank, evaluating, **kwargs):
         env = gym.make(env_id, **kwargs)
         env.seed(seed + rank)
         return env
