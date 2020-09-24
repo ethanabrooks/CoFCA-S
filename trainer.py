@@ -102,6 +102,7 @@ class Trainer:
         ppo_args: dict,
         render_eval: bool,
         rollouts_args: dict,
+        save_interval: int,
         seed: int,
         synchronous: bool,
         train_steps: int,
@@ -206,10 +207,9 @@ class Trainer:
                 agent.to(device)
                 rollouts.to(device)
 
+            ppo = PPO(agent=agent, **ppo_args)
             train_report = SumAcrossEpisode()
             train_infos = InfosAggregator()
-            ppo = PPO(agent=agent, **ppo_args)
-
             start = 0
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
@@ -299,6 +299,17 @@ class Trainer:
                         report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
+                if save_interval and i % save_interval == 0:
+                    if use_tune:
+                        with tune.checkpoint_dir(i) as _dir:
+                            checkpoint_dir = _dir
+                    else:
+                        checkpoint_dir = Path(log_dir) if log_dir else None
+
+                    if checkpoint_dir:
+                        self.save_checkpoint(
+                            checkpoint_dir, ppo=ppo, agent=agent, step=i
+                        )
 
         finally:
             train_envs.close()
@@ -341,7 +352,9 @@ class Trainer:
             if k not in config or v is not None:
                 config[k] = v
 
-        config.update(num_iterations=num_iterations, log_dir=log_dir)
+        config.update(
+            num_iterations=num_iterations, log_dir=log_dir, save_interval=save_interval
+        )
         if log_dir:
             print("Not using tune, because log_dir was specified")
             c = cls().structure_config(**config)
