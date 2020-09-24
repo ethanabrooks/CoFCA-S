@@ -95,23 +95,23 @@ class Trainer:
         env_id: str,
         log_dir: Optional[str],
         log_interval: int,
+        name: str,
         normalize: float,
-        num_batch: int,
         num_iterations: int,
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
         rollouts_args: dict,
-        save_interval: int,
         seed: int,
+        save_interval: int,
         synchronous: bool,
         train_steps: int,
+        use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
         no_eval: bool = False,
         load_path: Path = None,
         render: bool = False,
-        use_tune=False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -184,7 +184,7 @@ class Trainer:
         set_seeds(cuda, cuda_deterministic, seed)
 
         if cuda:
-            device = torch.device("cuda")  # if name else get_device(name)
+            device = torch.device("cuda") if name else get_device(name)
         else:
             device = torch.device("cpu")
         print("Using device", device)
@@ -258,8 +258,7 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(),
-                        dones=output.done,
+                        reward=output.reward.cpu().numpy(), dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
@@ -315,14 +314,6 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def process_infos(episode_counter, done, infos, **act_log):
-        for d in infos:
-            for k, v in d.items():
-                episode_counter[k] += v if type(v) is list else [float(v)]
-        for k, v in act_log.items():
-            episode_counter[k] += v if type(v) is list else [float(v)]
-
-    @staticmethod
     def build_agent(envs, **agent_args):
         return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
@@ -335,35 +326,33 @@ class Trainer:
     @classmethod
     def main(
         cls,
-        gpus_per_trial,
-        cpus_per_trial,
-        log_dir,
-        num_iterations,
-        num_samples,
-        name,
-        config,
-        save_interval=None,
+        gpus_per_trial: float,
+        cpus_per_trial: float,
+        log_dir: str,
+        num_samples: int,
+        name: str,
+        config: dict,
         **kwargs,
     ):
-        cls.name = name
-        if config is None:
-            config = dict()
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 config[k] = v
 
-        config.update(
-            num_iterations=num_iterations, log_dir=log_dir, save_interval=save_interval
-        )
-        if log_dir:
-            print("Not using tune, because log_dir was specified")
-            c = cls().structure_config(**config)
+        config.update(name=name, log_dir=log_dir)
+
+        def run(c):
+            c = cls.structure_config(**c)
             cls().run(**c)
+
+        if num_samples is None:
+            print("Not using tune, because num_samples was not specified")
+            config.update(use_tune=False)
+            run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
+            config.update(use_tune=True)
 
             if local_mode:
                 print("Using local mode because num_samples is None")
@@ -373,11 +362,11 @@ class Trainer:
                     search_alg=HyperOptSearch(config, metric="eval_reward"),
                     num_samples=num_samples,
                 )
-            if num_iterations:
-                kwargs.update(stop=dict(training_iteration=num_iterations))
+            if log_dir is not None:
+                kwargs.update(local_dir=log_dir)
 
             tune.run(
-                cls,
+                run,
                 name=name,
                 config=config,
                 resources_per_trial=resources_per_trial,
