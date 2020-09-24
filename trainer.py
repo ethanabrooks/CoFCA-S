@@ -93,7 +93,7 @@ class Trainer:
         cuda_deterministic: bool,
         env_args: dict,
         env_id: str,
-        log_dir: Path,
+        log_dir: Optional[str],
         log_interval: int,
         normalize: float,
         num_batch: int,
@@ -110,6 +110,7 @@ class Trainer:
         no_eval: bool = False,
         load_path: Path = None,
         render: bool = False,
+        use_tune=False,
     ):
         writer = SummaryWriter(logdir=str(log_dir))
 
@@ -119,30 +120,23 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        class EpochCounter:
-            def __init__(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
-                self.rewards = np.zeros(num_processes)
-                self.time_steps = np.zeros(num_processes)
+        if use_tune:
+            report_iterator = None
+        else:
 
-            def update(self, reward, done):
-                self.rewards += reward.numpy()
-                self.time_steps += np.ones_like(done)
-                self.episode_rewards += list(self.rewards[done])
-                self.episode_time_steps += list(self.time_steps[done])
-                self.rewards[done] = 0
-                self.time_steps[done] = 0
+            def report_generator():
+                writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
 
-            def reset(self):
-                self.episode_rewards = []
-                self.episode_time_steps = []
+                for i in itertools.count():
+                    if i % log_interval == 0:
+                        values = yield
+                        pprint(values)
+                        if writer:
+                            for k, v in values.items():
+                                writer.add_scalar(k, v, i)
 
-            def items(self, prefix=""):
-                if self.episode_rewards:
-                    yield prefix + "rewards", np.mean(self.episode_rewards)
-                if self.episode_time_steps:
-                    yield prefix + "time_steps", np.mean(self.episode_time_steps)
+            report_iterator = report_generator()
+            next(report_iterator)
 
         def make_vec_envs(evaluation):
             def env_thunk(rank):
@@ -219,7 +213,6 @@ class Trainer:
             train_report = SumAcrossEpisode()
             train_infos = InfosAggregator()
             ppo = PPO(agent=agent, **ppo_args)
-            train_counter = EpochCounter()
 
             for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
