@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 from gym import spaces
 
 from distributions import FixedCategorical, Categorical
@@ -105,17 +106,21 @@ class Recurrence(nn.Module):
         self.embed_task = nn.EmbeddingBag(
             self.obs_spaces.lines.nvec[0].sum(), task_embed_size
         )
-        self.task_encoder = (
-            TransformerModel(
-                ntoken=self.ne * self.d_space(),
-                ninp=task_embed_size,
-                nhid=task_embed_size,
-            )
-            if transformer
-            else nn.GRU(
-                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
-            )
-        )
+        if transformer:
+            raise NotImplementedError
+        # self.task_encoder = (
+        #     TransformerModel(
+        #         ntoken=self.ne * self.d_space(),
+        #         ninp=task_embed_size,
+        #         nhid=task_embed_size,
+        #     )
+        #     if transformer
+        #     else nn.GRU(
+        #         task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+        #     )
+        # )
+        self.task_encoder0 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
+        self.task_encoder1 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
 
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
@@ -151,7 +156,7 @@ class Recurrence(nn.Module):
             self.upsilon = nn.GRUCell(z2_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(z2_size, self.ne))
+            self.upsilon = init_(nn.Linear(z2_size, 2 * self.ne))
             in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             out_size = self.ne * self.d_space() if self.no_scan else self.ne
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
@@ -226,7 +231,7 @@ class Recurrence(nn.Module):
         nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(
             (
-                state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
+                state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0]
                 + self.offset
             ).view(-1, self.obs_spaces.lines.nvec[0].size)
         ).view(N, -1, self.task_embed_size)
@@ -237,7 +242,7 @@ class Recurrence(nn.Module):
 
         if self.no_pointer:
             _, G = self.task_encoder(M)
-            return G.transpose(0, 1).reshape(N, -1)
+            P = G.transpose(0, 1).reshape(N, -1)
         if self.no_scan:
             if self.no_roll:
                 H, _ = self.task_encoder(M)
@@ -251,30 +256,7 @@ class Recurrence(nn.Module):
         elif self.transformer:
             P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
         else:
-            if self.no_roll:
-                G, _ = self.task_encoder(M)
-                G = torch.cat(
-                    [
-                        G.unsqueeze(1).expand(-1, nl, -1, -1),
-                        G.unsqueeze(2).expand(-1, -1, nl, -1),
-                    ],
-                    dim=-1,
-                ).transpose(0, 1)
-            else:
-                rolled = torch.cat(
-                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                )
-                G, _ = self.task_encoder(rolled)
-            G = G.view(nl, N, nl, 2, -1)
-            B = self.beta(G).sigmoid()  # [nl, N, nl, 2, ne]
-            # B = (torch.rand(size=B.size()) < 0.5).float()
-            B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
-            B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
-            f, b = B2.unbind(1)  # [nl * N, * ne, nl] x 2
-            scanned = scan(torch.stack([f, b.flip(-1)], dim=0))
-            f1, b1 = scanned.unbind(0)
-            cat = torch.cat([b1.flip(1), f1], dim=1) / (f1 + b1).sum(1, keepdim=True)
-            P = cat.view(nl, N, self.ne, 2 * nl).transpose(-1, -2)
+            P = self.build_P(M, N, nl, state)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
@@ -436,6 +418,42 @@ class Recurrence(nn.Module):
                 l_probs=ll_output.dist.probs,
             )
 
+    def build_P(self, M, N, nl, state):
+        if self.no_roll:
+            G, _ = self.task_encoder(M)
+            G = torch.cat(
+                [
+                    G.unsqueeze(1).expand(-1, nl, -1, -1),
+                    G.unsqueeze(2).expand(-1, -1, nl, -1),
+                ],
+                dim=-1,
+            ).transpose(0, 1)
+        else:
+            rolled = torch.cat(
+                [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+            )
+            M2 = M.flip(1)
+            rolled2 = torch.cat(
+                [torch.roll(M2, shifts=1 + i - nl, dims=1) for i in range(nl)], dim=0
+            )
+            Gf, _ = self.task_encoder0(rolled)
+            Gb, _ = self.task_encoder1(rolled2)
+            G = torch.stack([Gf, Gb], dim=-2)
+        G = G.view(nl, N, nl, 2, -1)  # [nl, N, nl, 2, h]
+        B = self.beta(G).sigmoid()  # [nl, N, nl, 2, ne]
+        # B = (torch.rand(size=B.size()) < 0.5).float()
+        B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
+        B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
+        f, b = B2.unbind(1)  # [nl * N * ne, nl] x 2
+        stack = torch.stack([f, b.flip(-1)], dim=0)  # [2, nl * N * ne, nl]
+        scanned = scan(stack)  # [2, nl * N * ne, nl]
+        padded = F.pad(scanned, [nl, 0])  # [2, nl * N * ne, 2 * nl]
+        f1, b1 = padded.unbind(0)  # [nl * N * ne, 2 * nl] x 2
+        stack2 = torch.stack([b1.flip(1), f1], dim=1)  # [nl * N * ne, 2, 2 * nl]
+        reshaped = stack2.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
+        P = reshaped.transpose(-1, -2)
+        return P
+
     @property
     def gru_in_size(self):
         return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
@@ -449,7 +467,7 @@ class Recurrence(nn.Module):
         if self.olsk or self.no_pointer:
             return np.zeros(1, dtype=int)
         else:
-            return np.array([len(lines.nvec), self.d_space(), self.ne])
+            return np.array([len(lines.nvec), self.d_space(), 2 * self.ne])
 
     def d_space(self):
         if self.olsk:
