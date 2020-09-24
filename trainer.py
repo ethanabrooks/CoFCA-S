@@ -112,8 +112,6 @@ class Trainer:
         render: bool = False,
         use_tune=False,
     ):
-        writer = SummaryWriter(logdir=str(log_dir))
-
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -286,7 +284,7 @@ class Trainer:
                 rollouts.after_update()
 
                 if i % log_interval == 0:
-                    result = dict(
+                    report = dict(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
@@ -294,18 +292,14 @@ class Trainer:
                         **dict(eval_infos.items()),
                         step=i,
                     )
-                    pprint(result)
-                    if writer is not None:
-                        for k, v in k_scalar_pairs(**result):
-                            writer.add_scalar(k, v, i)
-                    #     if (
-                    #         None not in (log_dir, save_interval)
-                    #         and (i + 1) % save_interval == 0
-                    #     ):
-                    #         print("steps until save:", save_interval - i)
-                    #         trainer.save_checkpoint(Path(log_dir, "checkpoint.pt"))
+                    if use_tune:
+                        tune.report(**report)
+                    else:
+                        assert report_iterator is not None
+                        report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
+
         finally:
             train_envs.close()
 
