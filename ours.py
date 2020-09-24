@@ -157,7 +157,9 @@ class Recurrence(nn.Module):
             out_size = self.ne * self.d_space() if self.no_scan else self.ne
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = Categorical(z2_size, 2)
-        self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
+        self.kernel_net = nn.Linear(
+            m_size, conv_hidden_size * self.kernel_size ** 2 * d
+        )
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic = init_(nn.Linear(hidden_size, 1))
         if lower_level_load_path:
