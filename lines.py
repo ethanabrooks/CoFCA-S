@@ -133,7 +133,7 @@ class Loop(Line):
     def generate_types(cls, n: int, remaining_depth: int, **kwargs):
         yield cls
         yield from Line.generate_types(n - 2, remaining_depth - 1, **kwargs)
-        yield cls.end_loop
+        yield cls.end_loop()
 
     @staticmethod
     def transitions(line_index, previous_condition):
