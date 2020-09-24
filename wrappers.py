@@ -1,12 +1,28 @@
+from contextlib import contextmanager
+
 import gym
 from gym import spaces
-from gym.spaces import Box
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
 
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
-from rl_utils import onehot
+
+
+class FlattenObs(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        if isinstance(self.env.observation_space, Box):
+            self.observation_space = Box(
+                low=self.observation_space.low.flatten(),
+                high=self.observation_space.high.flatten(),
+            )
+        else:
+            raise NotImplementedError
+
+    def observation(self, observation):
+        return observation.flatten()
 
 SubtasksActions = namedtuple('SubtasksActions', 'a cr cg g')
 SubtasksObs = namedtuple('SubtasksObs', 'base subtask task next_subtask')
@@ -163,15 +179,19 @@ class VecPyTorch(VecEnvWrapper):
         super(VecPyTorch, self).__init__(venv)
         self.device = "cpu"
         # TODO: Fix data types
+        self.action_bounds = (
+            (torch.tensor(self.action_space.low), torch.tensor(self.action_space.high))
+            if isinstance(self.action_space, Box)
+            else None
+        )
 
-    @staticmethod
-    def extract_numpy(obs):
+    def extract_numpy(self, obs):
         if isinstance(obs, dict):
             # print("VecPyTorch")
             # for k, x in obs.items():
             #     print(k, x.shape)
             return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
-        if not isinstance(obs, (list, tuple)):
+        elif not isinstance(obs, (list, tuple)):
             return obs
         assert len(obs) == 1
         return obs[0]
@@ -181,7 +201,7 @@ class VecPyTorch(VecEnvWrapper):
         return torch.from_numpy(obs).float().to(self.device)
 
     def step_async(self, actions):
-        actions = actions.squeeze(1).cpu().numpy()
+        actions = actions.cpu().numpy()
         self.venv.step_async(actions)
 
     def step_wait(self):
@@ -194,6 +214,8 @@ class VecPyTorch(VecEnvWrapper):
     def to(self, device):
         self.device = device
         self.venv.to(device)
+        if self.action_bounds is not None:
+            self.action_bounds = [t.to(device) for t in self.action_bounds]
 
     def evaluate(self):
         self.venv.evaluate()
@@ -203,6 +225,14 @@ class VecPyTorch(VecEnvWrapper):
 
     def increment_curriculum(self):
         self.venv.increment_curriculum()
+
+    def preprocess(self, action):
+        if self.action_bounds is not None:
+            low, high = self.action_bounds
+            action = torch.min(torch.max(action, low), high)
+        if isinstance(self.action_space, spaces.Discrete):
+            action = action.squeeze(-1)
+        return action
 
 
 class VecNormalize(VecNormalize_):
@@ -290,3 +320,17 @@ def get_vec_normalize(venv):
         return get_vec_normalize(venv.venv)
 
     return None
+
+
+class TupleActionWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.action_space = spaces.MultiDiscrete(
+            np.array([space.n for space in env.action_space.spaces])
+        )
+
+    def action(self, action):
+        return tuple(action)
+
+    def reverse_action(self, action):
+        return np.concatenate(action)
