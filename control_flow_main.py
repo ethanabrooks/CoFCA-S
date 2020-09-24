@@ -13,25 +13,13 @@ from env import Action
 from lower_level import LowerLevel
 from main import add_arguments
 from trainer import Trainer
-from utils import hierarchical_parse_args
 
 
-def main(
-    env_id,
-    log_dir,
-    lower_level,
-    lower_level_load_path,
-    max_eval_lines,
-    min_eval_lines,
-    render,
-    seed,
-    **kwargs,
-):
-    if lower_level_load_path:
-        lower_level = "pre-trained"
-
+def main(**kwargs):
     class ControlFlowTrainer(Trainer):
-        def build_agent(self, envs, debug=False, **agent_args):
+        def build_agent(
+            self, envs, lower_level="train-alone", debug=False, **agent_args
+        ):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
             if lower_level == "train-alone":
@@ -46,26 +34,18 @@ def main(
             return control_flow_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                debug=render and debug,
                 lower_level=lower_level,
-                lower_level_load_path=lower_level_load_path,
+                debug=debug,
                 **agent_args,
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, env_id=None, **kwargs):
-            args = dict(
-                **kwargs,
-                seed=seed + rank,
-                rank=rank,
-            )
-            args["lower_level"] = lower_level
-            args["break_on_fail"] = args["break_on_fail"] and render
+        def make_env(seed, rank, evaluation, lower_level=None, env_id=None, **kwargs):
+            kwargs.update(seed=seed + rank, rank=rank, lower_level=lower_level)
             if not lower_level:
-                args.update(world_size=1)
-                return debug_env.Env(**args)
-            else:
-                return env.Env(**args)
+                kwargs.update(world_size=1)
+                return debug_env.Env(**kwargs)
+            return env.Env(**kwargs)
 
         @classmethod
         def structure_config(cls, **config):
@@ -74,8 +54,8 @@ def main(
             env_args = {}
             gen_args = {}
 
-            # if config["lower_level_load_path"]:
-            #     config["lower_level"] = "pre-trained"
+            if config["lower_level_load_path"]:
+                config["lower_level"] = "pre-trained"
 
             agent_args["eval_lines"] = config["max_eval_lines"]
             agent_args["debug"] = config["render"] or config["render_eval"]
@@ -102,9 +82,8 @@ def main(
             d = dict(env_args=env_args, agent_args=agent_args, **gen_args)
             return d
 
-    ControlFlowTrainer.main(
-        **kwargs, seed=seed, log_dir=log_dir, render=render, env_id="control-flow"
-    )
+    kwargs.update(env_id="control-flow")
+    ControlFlowTrainer.main(**kwargs)
 
 
 def control_flow_args(parser):
