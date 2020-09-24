@@ -618,7 +618,6 @@ class Env(gym.Env):
         action,
         lower_level_action,
         reward,
-        cumulative_reward,
     ):
 
         if action is not None and action < len(self.subtasks):
@@ -630,7 +629,6 @@ class Env(gym.Env):
                 self.lower_level_actions[lower_level_action],
             )
         print("Reward", reward)
-        print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
         _obs = state.obs
@@ -777,8 +775,6 @@ class Env(gym.Env):
 
         state_iterator = self.state_generator(objects, _agent_pos, lines)
         state = next(state_iterator)
-        actions = []
-        program_counter = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -786,10 +782,7 @@ class Env(gym.Env):
         term = False
         action = None
         lower_level_action = None
-        cumulative_reward = 0
         while True:
-            if state.ptr is not None:
-                program_counter.append(state.ptr)
             success = state.ptr is None
             self.success_count += success
 
@@ -798,7 +791,6 @@ class Env(gym.Env):
                 reward = 1 if state.subtask_complete else 0
             else:
                 reward = int(success)
-            cumulative_reward += reward
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -807,10 +799,10 @@ class Env(gym.Env):
                     ipdb.set_trace()
 
                 info.update(
-                    success=success,
-                    cumulative_reward=cumulative_reward,
                     instruction_len=len(lines),
                 )
+                if not use_failure_buf:
+                    info.update(success_without_failure_buf=success)
                 if success:
                     info.update(success_line=len(lines), progress=1)
                 else:
@@ -824,7 +816,6 @@ class Env(gym.Env):
                 )
 
             info.update(
-                regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
             )
 
@@ -841,7 +832,6 @@ class Env(gym.Env):
                     action=action,
                     lower_level_action=lower_level_action,
                     reward=reward,
-                    cumulative_reward=cumulative_reward,
                 )
 
             self._render = render
@@ -877,7 +867,6 @@ class Env(gym.Env):
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
-            actions.extend([int(a) for a in action])
 
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
@@ -889,7 +878,6 @@ class Env(gym.Env):
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
-                successes_per_episode=self.success_count / self.i,
             )
 
             if action == self.num_subtasks:
