@@ -65,13 +65,11 @@ class Env(env.Env):
         action,
         lower_level_action,
         reward,
-        cumulative_reward,
     ):
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
-        print("Cumulative", cumulative_reward)
         for i, subtask in enumerate(self.subtasks):
             print(i, subtask)
 

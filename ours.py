@@ -256,7 +256,7 @@ class Recurrence(nn.Module):
         elif self.transformer:
             P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
         else:
-            P = self.build_P(M, N, nl, state)
+            P, f, b = self.build_P(M, N, nl, state)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
@@ -402,6 +402,13 @@ class Recurrence(nn.Module):
             # try:
             # A[:] = float(input("A:"))
             # except ValueError:
+            # print("t", t)
+            # print(f.shape)
+            self.print("f back", f[t, 0, :, :half])
+            self.print("f", f[t, 0, :, half:])
+            # print(b.shape)
+            self.print("b", b[t, 0, :, :half])
+            self.print("b forward", b[t, 0, :, half:])
             # pass
             yield RecurrentState(
                 a=A[t],
@@ -434,25 +441,28 @@ class Recurrence(nn.Module):
             )
             M2 = M.flip(1)
             rolled2 = torch.cat(
-                [torch.roll(M2, shifts=1 + i - nl, dims=1) for i in range(nl)], dim=0
+                [torch.roll(M2, shifts=1 + i, dims=1) for i in range(nl)], dim=0
             )
             Gf, _ = self.task_encoder0(rolled)
             Gb, _ = self.task_encoder1(rolled2)
             G = torch.stack([Gf, Gb], dim=-2)
+        # print(state.lines.view(11, 4))
+        # print(torch.roll(state.lines.view(11, 4).flip(0), shifts=1 + 4, dims=0))
         G = G.view(nl, N, nl, 2, -1)  # [nl, N, nl, 2, h]
         B = self.beta(G).sigmoid()  # [nl, N, nl, 2, ne]
+        # B[4, :, :, 1, 0] = 0
+        # B[4, :, 2, 1, 0] = 1
+        # B[4, :, 3, 1, 0] = 1
         # B = (torch.rand(size=B.size()) < 0.5).float()
         B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
         B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
-        f, b = B2.unbind(1)  # [nl * N * ne, nl] x 2
-        stack = torch.stack([f, b.flip(-1)], dim=0)  # [2, nl * N * ne, nl]
-        scanned = scan(stack)  # [2, nl * N * ne, nl]
+        scanned = scan(B2)  # [2, nl * N * ne, nl]
         padded = F.pad(scanned, [nl, 0])  # [2, nl * N * ne, 2 * nl]
-        f1, b1 = padded.unbind(0)  # [nl * N * ne, 2 * nl] x 2
-        stack2 = torch.stack([b1.flip(1), f1], dim=1)  # [nl * N * ne, 2, 2 * nl]
-        reshaped = stack2.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
+        f, b = padded.unbind(1)  # [nl * N * ne, 2 * nl] x 2
+        stack = torch.stack([b.flip(1), f], dim=1)  # [nl * N * ne, 2, 2 * nl]
+        reshaped = stack.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
         P = reshaped.transpose(-1, -2)
-        return P
+        return P, f.view(nl, N, self.ne, 2 * nl), b.view(nl, N, self.ne, 2 * nl)
 
     @property
     def gru_in_size(self):

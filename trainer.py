@@ -211,6 +211,7 @@ class Trainer:
             start = 0
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
+            rollouts.obs[0].copy_(train_envs.reset())
 
             for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
