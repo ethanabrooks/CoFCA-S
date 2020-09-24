@@ -242,12 +242,13 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(),
-                                dones=output.done,
+                                reward=output.reward.cpu().numpy(), dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
+                    rollouts.masks[0] = 1
+                    rollouts.recurrent_hidden_states[0] = 0
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -257,8 +258,7 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(),
-                        dones=output.done,
+                        reward=output.reward.cpu().numpy(), dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
