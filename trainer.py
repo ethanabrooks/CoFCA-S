@@ -1,15 +1,13 @@
-import itertools
 import inspect
+import itertools
 import os
 import sys
-from abc import ABC
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 from pathlib import Path
 from pprint import pprint
 from typing import Dict, Optional
 
 import gym
-import numpy as np
 import ray
 import torch
 from ray import tune
@@ -23,7 +21,7 @@ from common.vec_env.util import set_seeds
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import k_scalar_pairs, get_device
+from utils import get_device
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
@@ -258,7 +256,8 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(), dones=output.done,
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
