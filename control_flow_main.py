@@ -40,7 +40,7 @@ def main(**kwargs):
             )
 
         @staticmethod
-        def make_env(seed, rank, evaluation, lower_level=None, env_id=None, **kwargs):
+        def make_env(seed, rank, evaluating, lower_level=None, env_id=None, **kwargs):
             kwargs.update(seed=seed + rank, rank=rank, lower_level=lower_level)
             if not lower_level:
                 kwargs.update(world_size=1)
