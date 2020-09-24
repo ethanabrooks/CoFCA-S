@@ -370,8 +370,6 @@ class Env(gym.Env):
         term = False
         while True:
             term |= not self.evaluating and not time_remaining
-            if term and ptr is not None:
-                self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
 
             def state(terminate):
 
@@ -761,6 +759,8 @@ class Env(gym.Env):
                     _agent_pos, objects = result
                     break
 
+        initial_objects = deepcopy(objects)
+        initial_agent_pos = deepcopy(_agent_pos)
         state_iterator = self.state_generator(objects, _agent_pos, lines)
         state = next(state_iterator)
 
@@ -781,6 +781,10 @@ class Env(gym.Env):
                 reward = int(success)
             subtasks_complete += state.subtask_complete
             if term:
+                if not success:
+                    self.failure_buffer.append(
+                        (lines, initial_objects, initial_agent_pos)
+                    )
                 if not success and self.break_on_fail:
                     import ipdb
 
