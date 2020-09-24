@@ -141,9 +141,7 @@ class Trainer:
         def make_vec_envs(evaluation):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    rank=rank,
-                    evaluation=evaluation,
-                    **env_args,
+                    rank=rank, evaluation=evaluation, **env_args
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -186,33 +184,37 @@ class Trainer:
         # reproducibility
         set_seeds(cuda, cuda_deterministic, seed)
 
-        self.device = get_device(self.name) if cuda else "cpu"
-        print("Using device", self.device)
+        if cuda:
+            device = torch.device("cuda")  # if name else get_device(name)
+        else:
+            device = torch.device("cpu")
+        print("Using device", device)
 
         train_envs = make_vec_envs(evaluation=False)
         try:
-            train_envs.to(self.device)
+            train_envs.to(device)
             agent = self.build_agent(envs=train_envs, **agent_args)
-            start = 0
-            if load_path:
-                start = self.load_checkpoint(load_path)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
-                num_processes=num_processes,
                 obs_space=train_envs.observation_space,
                 action_space=train_envs.action_space,
                 recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
+                num_processes=num_processes,
                 **rollouts_args,
             )
 
             # copy to device
             if cuda:
-                agent.to(self.device)
-                rollouts.to(self.device)
+                agent.to(device)
+                rollouts.to(device)
 
             train_report = SumAcrossEpisode()
             train_infos = InfosAggregator()
             ppo = PPO(agent=agent, **ppo_args)
+
+            start = 0
+            if load_path:
+                start = self.load_checkpoint(load_path, ppo, agent, device)
 
             for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
@@ -224,14 +226,14 @@ class Trainer:
                     #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
                     # self.envs.evaluate()
-                    eval_masks = torch.zeros(num_processes, 1, device=self.device)
+                    eval_masks = torch.zeros(num_processes, 1, device=device)
                     eval_envs = make_vec_envs(evaluation=True)
-                    eval_envs.to(self.device)
+                    eval_envs.to(device)
                     with agent.recurrent_module.evaluating(eval_envs.observation_space):
                         eval_recurrent_hidden_states = torch.zeros(
                             num_processes,
                             agent.recurrent_hidden_state_size,
-                            device=self.device,
+                            device=device,
                         )
 
                         for output in run_epoch(
