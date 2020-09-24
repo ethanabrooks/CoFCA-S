@@ -5,20 +5,16 @@ from pathlib import Path
 
 from torch import nn as nn
 
-from configs import configs
+from configs import configs, default
 from trainer import Trainer
-from utils import hierarchical_parse_args
 
-ACTIVATIONS = dict(
-    selu=nn.SELU(), prelu=nn.PReLU(), leaky=nn.LeakyReLU(), relu=nn.ReLU()
-)
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
 def get_config(name):
     if name is None:
         return {}
-    path = Path("configs", name).with_suffix(".json")
+    path = Path(name)
     if path.exists():
         with path.open() as f:
             return json.load(f)
@@ -26,7 +22,7 @@ def get_config(name):
 
 
 def add_arguments(parser):
-    parser.add_argument("--config", type=get_config)
+    parser.add_argument("--config", type=get_config, default=default)
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
@@ -44,13 +40,11 @@ def add_arguments(parser):
     )
     parser.add_argument("--name")
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--gpus-per-trial", "-g", type=int, default=1)
+    parser.add_argument("--gpus-per-trial", "-g", type=int, default=0.5)
     parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
     parser.add_argument("--num-iterations", type=int)
     parser.add_argument(
-        "--num-processes",
-        type=int,
-        help="how many training CPU processes to use",
+        "--num-processes", type=int, help="how many training CPU processes to use",
     )
     parser.add_argument(
         "--num-samples",
@@ -63,15 +57,10 @@ def add_arguments(parser):
     parser.add_argument("--render-eval", action="store_true")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
-        "--train-steps",
-        type=int,
-        help="number of forward steps in A2C",
+        "--train-steps", type=int, help="number of forward steps in A2C",
     )
     parser.add_argument(
-        "--env",
-        dest="env_id",
-        default="PongNoFrameskip-v4",
-        help="environment to train on",
+        "--env", dest="env_id", help="environment to train on",
     )
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
@@ -84,18 +73,10 @@ def add_arguments(parser):
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument(
-        "--activation",
-        type=lambda s: eval(f"nn.{s}"),
-        default=nn.ReLU(),
+        "--entropy-coef", type=float, help="entropy term coefficient",
     )
     agent_parser.add_argument(
-        "--entropy-coef",
-        type=float,
-        help="entropy term coefficient",
-    )
-    agent_parser.add_argument(
-        "--hidden-size",
-        type=int,
+        "--hidden-size", type=int,
     )
     agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument("--recurrent", action="store_true")
@@ -109,9 +90,7 @@ def add_arguments(parser):
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
     ppo_parser.add_argument(
-        "--learning-rate",
-        type=float,
-        help="",
+        "--learning-rate", type=float, help="",
     )
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
