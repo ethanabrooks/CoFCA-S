@@ -212,8 +212,6 @@ class Trainer:
             if load_path:
                 start = self.load_checkpoint(load_path, ppo, agent, device)
 
-            rollouts.obs[0].copy_(train_envs.reset())
-
             for i in range(start, num_iterations + 1):
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
@@ -242,13 +240,13 @@ class Trainer:
                             num_steps=eval_steps,
                         ):
                             eval_report.update(
-                                reward=output.reward.cpu().numpy(), dones=output.done,
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
-                    rollouts.obs[0].copy_(train_envs.reset())
-                    rollouts.masks[0] = 1
-                    rollouts.recurrent_hidden_states[0] = 0
+
+                rollouts.obs[0].copy_(train_envs.reset())
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -258,7 +256,8 @@ class Trainer:
                     num_steps=train_steps,
                 ):
                     train_report.update(
-                        reward=output.reward.cpu().numpy(), dones=output.done,
+                        reward=output.reward.cpu().numpy(),
+                        dones=output.done,
                     )
                     train_infos.update(*output.infos, dones=output.done)
                     rollouts.insert(
