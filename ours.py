@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
-from torch import Tensor
 
 from distributions import FixedCategorical, Categorical
 from env import Action

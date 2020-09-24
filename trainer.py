@@ -245,9 +245,6 @@ class Trainer:
                             )
                             eval_infos.update(*output.infos, dones=output.done)
                     eval_envs.close()
-                    rollouts.obs[0].copy_(train_envs.reset())
-                    rollouts.masks[0] = 1
-                    rollouts.recurrent_hidden_states[0] = 0
 
                 rollouts.obs[0].copy_(train_envs.reset())
 
