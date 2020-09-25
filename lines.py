@@ -247,6 +247,7 @@ class Padding(Line, ABC):
     pass
 
 
+# Line.types = [Subtask, If, Else, EndIf, While, EndWhile, Loop, EndLoop, Padding]
 Line.types = [
     Subtask,
     If,
@@ -256,11 +257,11 @@ Line.types = [
     EndWhile,
     For,
     EndFor,
+    Padding,
     Some,
     Most,
     ForAWhile,
     EndForAWhile,
     EnoughToBuy,
     EndEnoughToBuy,
-    Padding,
 ]

@@ -41,8 +41,6 @@ class LowerLevel(NNBase):
     ):
         if type(obs_space) is spaces.Dict:
             obs_space = Obs(**obs_space.spaces)
-        else:
-            obs_space = Obs(**obs_space)
         assert num_layers > 0
         H = hidden_size
         super().__init__(
@@ -57,6 +55,11 @@ class LowerLevel(NNBase):
         (d, h, w) = obs_space.obs.shape
         inventory_size = obs_space.inventory.nvec.size
         line_nvec = torch.tensor(obs_space.lines.nvec)
+
+        # TODO: hacks to avoid retraining
+        line_nvec[:, 0] = 9
+        line_nvec[:, -1] = 4
+
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
         self.obs_spaces = obs_space
@@ -133,9 +136,14 @@ class LowerLevel(NNBase):
             upper = torch.clamp(upper, 0, len(self.subtasks) - 1)
             line = self.subtasks[upper.long().flatten()]
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
+
+        line[..., -1] = 0  # TODO: hack to avoid retraining
+
         lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
-        inventory_embed = self.inventory_embed((inputs.inventory > 0).float())  # TODO
+        inventory_embed = self.inventory_embed(
+            (inputs.inventory > 0).float()
+        )  # TODO: hack to avoid retraining
         x = lines_embed * obs_embed * inventory_embed
 
         if self.is_recurrent:

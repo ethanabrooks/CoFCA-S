@@ -70,7 +70,7 @@ default = {
     "synchronous": False,
     "task_embed_size": 64,
     "tau": 0.95,
-    "time_to_waste": 0,
+    "time_limit": 30,
     "train_steps": 30,
     "transformer": False,
     "use_gae": False,

@@ -293,7 +293,4 @@ class MultiEmbeddingBag(nn.Module):
         )
 
     def forward(self, input: Tensor):
-        import ipdb
-
-        ipdb.set_trace()
-        return self.embedding_bag(input + self.offsets)
+        return self.embedding_bag((input + self.offsets).long())
