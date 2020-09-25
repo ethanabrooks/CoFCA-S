@@ -103,20 +103,18 @@ search.update(
 )
 
 debug_search = copy.deepcopy(search)
-debug_search.update(
-    kernel_size=1,
-    stride=1,
-    world_size=1,
-)
+debug_search.update(kernel_size=1, stride=1, world_size=1)
 debug_default = copy.deepcopy(default)
-debug_default.update(
-    kernel_size=1,
-    stride=1,
-    world_size=1,
+debug_default.update(kernel_size=1, stride=1, world_size=1)
+lower_search = copy.deepcopy(search)
+lower_search.update(
+    num_layers=hp.choice("num_layers", [1, 2]),
+    num_conv_layers=hp.choice("num_conv_layers", [1, 2]),
 )
 configs = dict(
     search=search,
     debug_search=debug_search,
+    lower_search=lower_search,
     default=default,
     debug_default=debug_default,
 )
