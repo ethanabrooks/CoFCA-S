@@ -2,7 +2,6 @@ import functools
 import itertools
 from collections import Counter, namedtuple, deque, OrderedDict, defaultdict
 from copy import deepcopy
-from pprint import pprint
 
 import gym
 import numpy as np
@@ -292,12 +291,12 @@ class Env(gym.Env):
             if type(line) is Most:
                 be, ob = line.id
                 initial_count = initial_object_count[ob]
-                if not initial_count:
-                    print("not initial_count")
-                else:
-                    print(
-                        f"behavior_count[be] ({behavior_count[be]}) / initial_count ({initial_count}) >= {(0.6 if domain_type else 0.5)}"
-                    )
+                # if not initial_count:
+                #     print("not initial_count")
+                # else:
+                #     print(
+                #         f"behavior_count[be] ({behavior_count[be]}) / initial_count ({initial_count}) >= {(0.6 if domain_type else 0.5)}"
+                #     )
                 return not initial_count or behavior_count[be] / initial_count >= (
                     0.6 if domain_type else 0.5
                 )
@@ -312,10 +311,10 @@ class Env(gym.Env):
                 if modifier == self.some:
                     evaluation = object_count[ob] > 1 + domain_type
                 elif modifier == self.not_enough:
-                    print(
-                        f"inventory[{ob}] ({inventory[ob]}) < 1 + domain_type",
-                        inventory[ob] < 1 + domain_type,
-                    )
+                    # print(
+                    #     f"inventory[{ob}] ({inventory[ob]}) < 1 + domain_type",
+                    #     inventory[ob] < 1 + domain_type,
+                    # )
                     evaluation = inventory[ob] < 1 + domain_type
                 elif modifier is None:
                     if ob == Env.iron:
@@ -380,12 +379,9 @@ class Env(gym.Env):
                                         for k in self.items
                                     }
                                 )
-                                print(agent_pos)
-                                print(objects)
-                                print(inventory)
-                                import ipdb
-
-                                ipdb.set_trace()
+                                # print(agent_pos)
+                                # print(objects)
+                                # print(inventory)
 
                             while_count = 0
                 done = False
@@ -654,7 +650,6 @@ class Env(gym.Env):
         modifiers = self.random.choice(
             [self.some, self.not_enough, None], size=len(line_types)
         )
-        print(modifiers)
         items = self.random.choice(self.items, size=len(line_types))
         lines = []
         for line_type, modifier, item in zip(line_types, modifiers, items):
