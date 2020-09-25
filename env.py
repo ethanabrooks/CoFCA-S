@@ -78,6 +78,7 @@ class Env(gym.Env):
     agent = "Agent"
     mine = "mine"
     some = "some"
+    not_enough = "not_enough"
     sell = "sell"
     goto = "goto"
     items = [wood, gold, iron]
@@ -283,7 +284,7 @@ class Env(gym.Env):
         for_a_while_timer = None
         behavior_count = Counter()
         initial_object_count = object_count = self.count_objects(objects)
-        while_obj = None
+        while_count = 0
 
         def evaluate_line(line):
             if line is None:
@@ -291,9 +292,12 @@ class Env(gym.Env):
             if type(line) is Most:
                 be, ob = line.id
                 initial_count = initial_object_count[ob]
-                # print(
-                #     f"behavior_count[be] ({behavior_count[be]}) / initial_count ({initial_count})"
-                # )
+                if not initial_count:
+                    print("not initial_count")
+                else:
+                    print(
+                        f"behavior_count[be] ({behavior_count[be]}) / initial_count ({initial_count}) >= {(0.6 if domain_type else 0.5)}"
+                    )
                 return not initial_count or behavior_count[be] / initial_count >= (
                     0.6 if domain_type else 0.5
                 )
@@ -307,6 +311,12 @@ class Env(gym.Env):
                 modifier, ob = line.id
                 if modifier == self.some:
                     evaluation = object_count[ob] > 1 + domain_type
+                elif modifier == self.not_enough:
+                    print(
+                        f"inventory[{ob}] ({inventory[ob]}) < 1 + domain_type",
+                        inventory[ob] < 1 + domain_type,
+                    )
+                    evaluation = inventory[ob] < 1 + domain_type
                 elif modifier is None:
                     if ob == Env.iron:
                         evaluation = object_count[Env.wood] > object_count[Env.iron]
@@ -331,36 +341,69 @@ class Env(gym.Env):
 
         def free_coord():
             coords = list(free_coords())
+            if not coords:
+                counts = self.count_objects(objects)
+                coords = [c for c, o in objects.items() if counts[o] > 1]
             return coords[self.random.choice(len(coords))]
 
         agent_ptr = lower_level_ptr = None
         prev, ptr = 0, next(line_iterator)
-        while ptr is not None and not isinstance(lines[ptr], Subtask):
-            evaluation = evaluate_line(lines[ptr])
-            if isinstance(lines[ptr], ForAWhile):
-                for_a_while_timer = self.for_a_while_time
-            if isinstance(lines[ptr], While):
-                if while_obj is not None:
-                    objects[free_coord()] = while_obj
-                m, o = lines[ptr].id
-                if evaluation and m is None:
-                    while_obj = o
-                else:
-                    while_obj = None
-            prev, ptr = 0, line_iterator.send((evaluation, 0))
-
-        term = done = False
+        term = False
+        done = True
         while True:
+            if done:
+                if for_a_while_timer is not None:
+                    for_a_while_timer -= 1
+                    if for_a_while_timer == 0:
+                        assert ptr is not None
+                        prev, ptr = ptr, ptr + next(
+                            l
+                            for l, line in enumerate(lines[ptr:])
+                            if type(line) is EndForAWhile
+                        )
+                        ptr += 1
+                        for_a_while_timer = None
+
+                while not (ptr is None or isinstance(lines[ptr], Subtask)):
+                    if isinstance(lines[ptr], ForAWhile):
+                        for_a_while_timer = self.for_a_while_time
+                    evaluation = evaluate_line(lines[ptr])
+                    prev, ptr = ptr, line_iterator.send((evaluation, ptr))
+                    if ptr is not None and isinstance(lines[ptr], While):
+                        while_count += 1
+                        if while_count == self.max_while_loops:
+                            while evaluate_line(lines[ptr]):
+                                agent_pos, objects = self.populate_world(lines)
+                                inventory = Counter(
+                                    {
+                                        k: self.random.choice(self.max_inventory)
+                                        for k in self.items
+                                    }
+                                )
+                                print(agent_pos)
+                                print(objects)
+                                print(inventory)
+                                import ipdb
+
+                                ipdb.set_trace()
+
+                            while_count = 0
+                done = False
+
+                if ptr is not None:
+                    if self.train_lower_alone:
+                        time_remaining += self.world_size * 3
+                    if ptr != prev:
+                        behavior_count = Counter()
+                        initial_object_count = self.count_objects(objects)
+
             term |= not time_remaining
             success = ptr is None
             if ptr is not None:
-                line = lines[ptr]
-                if isinstance(line, Subtask):
-                    behavior, item = line.id
-                    if item not in objects.values():
+                existing = set(objects.values())
+                for item in self.items + [self.merchant]:
+                    if item not in existing:
                         objects[free_coord()] = item
-                    if behavior == self.sell and self.merchant not in objects.values():
-                        objects[free_coord()] = self.merchant
 
             world = np.zeros(self.world_shape)
             for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
@@ -399,8 +442,12 @@ class Env(gym.Env):
                                 evaluation = f"count[merchant] ({object_count[self.gold]}) > count[iron] ({object_count[self.wood]})"
                             else:
                                 raise RuntimeError
-                        else:
+                        elif m == self.some:
                             evaluation = f"count[{o}] ({object_count[o]})"
+                        elif m == self.not_enough:
+                            evaluation = f"inventory[{o}] ({inventory[o]})"
+                        else:
+                            raise RuntimeError
                         line_str = f"{line} {evaluation}"
                     else:
                         line_str = str(line)
@@ -465,12 +512,11 @@ class Env(gym.Env):
 
             lower_level_action = self.lower_level_actions[lower_level_ptr]
             time_remaining -= 1
-
+            assert ptr is not None
             tgt_interaction, tgt_obj = lines[ptr].id
 
             if type(lower_level_action) is str:
                 standing_on = objects.get(tuple(agent_pos), None)
-
                 done = (
                     lower_level_action == tgt_interaction
                     and standing_on == objective(*lines[ptr].id)
@@ -506,38 +552,6 @@ class Env(gym.Env):
                     and self.goto in self.term_on
                 ):
                     term = True
-                if done:
-                    if for_a_while_timer is not None:
-                        for_a_while_timer -= 1
-                        if for_a_while_timer == 0:
-                            prev, ptr = ptr, ptr + next(
-                                l
-                                for l, line in enumerate(lines[ptr:])
-                                if type(line) is EndForAWhile
-                            )
-                            ptr += 1
-                    while ptr is not None:
-                        if isinstance(lines[ptr], ForAWhile):
-                            for_a_while_timer = self.for_a_while_time
-                        evaluation = evaluate_line(lines[ptr])
-                        prev, ptr = ptr, line_iterator.send((evaluation, ptr))
-                        if ptr is None or isinstance(lines[ptr], Subtask):
-                            break
-                        if isinstance(lines[ptr], While):
-                            if while_obj is not None:
-                                objects[free_coord()] = while_obj
-                            m, o = lines[ptr].id
-                            if evaluation and m is None:
-                                while_obj = o
-                            else:
-                                while_obj = None
-                    if ptr is not None:
-                        if self.train_lower_alone:
-                            time_remaining += self.world_size * 3
-                        if ptr != prev:
-                            behavior_count = Counter()
-                            initial_object_count = self.count_objects(objects)
-
             elif type(lower_level_action) is np.ndarray:
                 lower_level_action = np.clip(lower_level_action, -1, 1)
                 new_pos = agent_pos + lower_level_action
@@ -553,6 +567,9 @@ class Env(gym.Env):
                         inventory[self.wood] -= 1
             else:
                 assert lower_level_action is None
+            if done:
+                evaluation = evaluate_line(lines[ptr])
+                prev, ptr = ptr, line_iterator.send((evaluation, ptr))
 
     def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
         max_random_objects = self.world_size ** 2 - self.world_size - len(self.items)
@@ -634,7 +651,10 @@ class Env(gym.Env):
         return agent_pos, objects
 
     def assign_line_ids(self, line_types):
-        modifiers = self.random.choice([self.some, None], size=len(line_types))
+        modifiers = self.random.choice(
+            [self.some, self.not_enough, None], size=len(line_types)
+        )
+        print(modifiers)
         items = self.random.choice(self.items, size=len(line_types))
         lines = []
         for line_type, modifier, item in zip(line_types, modifiers, items):
@@ -821,9 +841,7 @@ class Env(gym.Env):
 
                     ipdb.set_trace()
 
-                info.update(
-                    instruction_len=len(lines),
-                )
+                info.update(instruction_len=len(lines))
                 if not use_failure_buf:
                     info.update(success_without_failure_buf=success)
                 if success:
