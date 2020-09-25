@@ -38,6 +38,7 @@ from lines import (
     EnoughToBuy,
     EndForAWhile,
     EndEnoughToBuy,
+    EndLoop,
 )
 
 Coord = Tuple[int, int]
@@ -49,7 +50,7 @@ assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State",
-    "obs prev ptr term subtask_complete time_remaining counts inventory truthy",
+    "obs prev ptr term subtask_complete time_remaining inventory truthy",
 )
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
@@ -76,6 +77,7 @@ class Env(gym.Env):
     wall = "#wall"
     agent = "Agent"
     mine = "mine"
+    some = "some"
     sell = "sell"
     goto = "goto"
     items = [wood, gold, iron]
@@ -117,12 +119,15 @@ class Env(gym.Env):
         train_lower_alone: bool,
         control_flow_types=None,
         evaluating=False,
+        for_a_while_time=3,
         max_nesting_depth=1,
         max_inventory=4,
         seed=0,
         term_on=None,
         world_size=6,
     ):
+        self.world_size = world_size
+        self.for_a_while_time = for_a_while_time
         self.max_inventory = max_inventory
         if control_flow_types is None:
             control_flow_types = [
@@ -130,13 +135,11 @@ class Env(gym.Env):
                 If,
                 While,
                 Else,
-                Some,
                 Most,
                 ForAWhile,
             ]
         if term_on is None:
             term_on = [self.mine, self.sell]
-        self.counts = None
         self.reject_while_prob = reject_while_prob
         self.one_condition = one_condition
         self.max_failure_sample_prob = max_failure_sample_prob
@@ -187,7 +190,6 @@ class Env(gym.Env):
 
         self.possible_lines = list(possible_lines())
         self.long_jump = long_jump and self.evaluating
-        self.world_size = world_size
         self.world_shape = (len(self.world_contents), self.world_size, self.world_size)
 
         def lower_level_actions():
@@ -244,83 +246,21 @@ class Env(gym.Env):
             else:
                 return Env.items.index(item)
 
-        if type(line) in (
-            Else,
-            EndIf,
-            EndWhile,
-            EndFor,
-            Padding,
-            ForAWhile,
-            EndForAWhile,
-            EndEnoughToBuy,
-        ):
-            return [Line.types.index(type(line)), 0, 0, 0]
-        elif type(line) is For:
+        encoded = [0 for _ in range(4)]
+        encoded[0] = Line.types.index(type(line))
+        if type(line) is EnoughToBuy:
             raise NotImplementedError
-        elif type(line) is EnoughToBuy:
-            raise NotImplementedError
-            return [Line.types.index(line), 0, 0, *line.id]
         elif isinstance(line, Subtask):
             i, o = line.id
             i, o = Env.behaviors.index(i), item_index(o)
-            return [Line.types.index(type(line)), i + 1, o + 1, 0]
+            encoded[1] = i + 1
+            encoded[2] = o + 1
         elif type(line) in (While, If):
-            return [Line.types.index(type(line)), 0, item_index(line.id) + 1, 0]
-        else:
-            raise RuntimeError
-
-    def evaluate_line(
-        self,
-        line: Line,
-        counts: Dict[str, int],
-        initial_counts: Dict[str, int],
-        domain_type: int,
-        time_elapsed: int,
-        inventory: Counter,
-    ):
-        if line is None:
-            return None
-        elif type(line) is Some:
-            be, ob = line.id
-            evaluation = initial_counts[ob] - counts[ob] >= 2 + domain_type
-            print(
-                f"initial_counts[{ob}] ({initial_counts[ob]}) - counts[{ob}] ({counts[ob]}) >= 2 + {domain_type} = {evaluation}"
-            )
-            return evaluation
-        elif type(line) is Most:
-            be, ob = line.id
-            evaluation = not counts[ob] or counts[ob] / initial_counts[ob] >= (
-                0.6 if domain_type else 0.5
-            )
-            if not counts[ob]:
-                print(f"Most evaluates to true because counts[{ob}] = 0")
-            else:
-                print(
-                    f"Need {counts[ob]} / {initial_counts[ob]} ({counts[ob] / initial_counts[ob]}) to be >= {0.5 if domain_type else 0.6}"
-                )
-            print(
-                f"not counts[{ob}] ({counts[ob]}) or initial_counts[{ob}] ({initial_counts[ob]}) / counts[{ob}] ({counts[ob]}) >= (0.5 if {domain_type} else 0.6) = {evaluation}"
-            )
-            return evaluation
-        elif type(line) is ForAWhile:
-            return time_elapsed > (2 if domain_type else 1) * self.world_size
-        elif type(line) is EnoughToBuy:
-            item1, item2 = line.id
-            if not item1:
-                return True
-            return inventory[item1] >= counts[item2]
-        elif type(line) in (If, While):
-            if self.one_condition:
-                evaluation = counts[Env.iron] > counts[Env.gold]
-            elif line.id == Env.iron:
-                evaluation = counts[Env.iron] > counts[Env.gold]
-            elif line.id == Env.gold:
-                evaluation = counts[Env.gold] > counts[Env.merchant]
-            elif line.id == Env.wood:
-                evaluation = counts[Env.merchant] > counts[Env.iron]
-            else:
-                raise RuntimeError
-            return evaluation
+            m, o = line.id
+            m, o = int(bool(m)), item_index(o)
+            encoded[3] = m + 1
+            encoded[2] = o + 1
+        return encoded
 
     @staticmethod
     def count_objects(objects):
@@ -329,259 +269,300 @@ class Env(gym.Env):
             counts[o] += 1
         return counts
 
-    def subtask_generator(self, line_iterator, lines, **kwargs):
-        l = next(line_iterator)
-        whiles = 0
-        while True:
-            if l is None:
-                kwargs = yield None
-                l = next(line_iterator)
-            else:
-                line = lines[l]
-                if isinstance(line, Subtask):
-                    kwargs = yield l
-                elif isinstance(line, While):
-                    whiles += 1
-                    if whiles > self.max_while_loops:
-                        kwargs = yield None
-
-                l = line_iterator.send(self.evaluate_line(line, **kwargs))
-
     def state_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line]
     ) -> Generator[State, Tuple[int, int], None]:
-        initial_objects = deepcopy(objects)
-        initial_counts = self.count_objects(initial_objects)
-        domain_type = int(initial_counts[Env.water] > 0)
+        domain_type = self.water in objects.values()
         line_iterator = self.line_generator(lines)
         if self.train_lower_alone:
             time_remaining = self.world_size * 3
         else:
             time_remaining = self.time_limit
         inventory = Counter()
-        time_elapsed = 0
-        counts = self.count_objects(objects)
-        subtask_iterator = self.subtask_generator(
-            line_iterator,
-            lines,
-            counts=counts,
-            initial_counts=initial_counts,
-            domain_type=domain_type,
-            time_elapsed=time_elapsed,
-            inventory=inventory,
-        )
-        agent_ptr = lower_level_ptr = None
-        prev, ptr = 0, next(subtask_iterator)
+        for_a_while_timer = None
+        behavior_count = Counter()
+        initial_object_count = object_count = self.count_objects(objects)
+        while_obj = None
+
+        def evaluate_line(line):
+            if line is None:
+                return None
+            if type(line) is Most:
+                be, ob = line.id
+                initial_count = initial_object_count[ob]
+                print(
+                    f"behavior_count[be] ({behavior_count[be]}) / initial_count ({initial_count})"
+                )
+                return not initial_count or behavior_count[be] / initial_count >= (
+                    0.6 if domain_type else 0.5
+                )
+            elif type(line) is EnoughToBuy:
+                raise NotImplementedError
+                # item1, item2 = line.id
+                # if not item1:
+                #     return True
+                # return inventory[item1] >= counts[item2]
+            elif type(line) in (If, While):
+                modifier, ob = line.id
+                if modifier == self.some:
+                    evaluation = object_count[ob] > 1 + domain_type
+                elif modifier is None:
+                    if ob == Env.iron:
+                        evaluation = object_count[Env.wood] > object_count[Env.iron]
+                    elif ob == Env.gold:
+                        evaluation = object_count[Env.iron] > object_count[Env.gold]
+                    elif ob == Env.wood:
+                        evaluation = object_count[Env.gold] > object_count[Env.wood]
+                    else:
+                        raise RuntimeError
+                else:
+                    raise RuntimeError
+                return evaluation
+            else:
+                return True
 
         def free_coords():
+            not_free = set(objects.keys())
             for i in range(self.world_size):
                 for j in range(self.world_size):
-                    if (i, j) not in objects:
+                    if (i, j) not in not_free:
                         yield i, j
 
         def free_coord():
             coords = list(free_coords())
             return coords[self.random.choice(len(coords))]
 
+        agent_ptr = lower_level_ptr = None
+        prev, ptr = 0, next(line_iterator)
+        while ptr is not None and not isinstance(lines[ptr], Subtask):
+            evaluation = evaluate_line(lines[ptr])
+            if isinstance(lines[ptr], ForAWhile):
+                for_a_while_timer = self.for_a_while_time
+            if isinstance(lines[ptr], While):
+                if while_obj is not None:
+                    objects[free_coord()] = while_obj
+                m, o = lines[ptr].id
+                if evaluation and m is None:
+                    while_obj = o
+                else:
+                    while_obj = None
+            prev, ptr = 0, line_iterator.send((evaluation, 0))
+
         term = done = False
         while True:
-            term |= not time_remaining
-            success = ptr is None
-            if ptr is not None:
-                line = lines[ptr]
-                if isinstance(line, Subtask):
-                    behavior, item = line.id
-                    if item not in objects.values():
-                        objects[free_coord()] = item
-                    if behavior == self.sell and self.merchant not in objects.values():
-                        objects[free_coord()] = self.merchant
-
-            world = np.zeros(self.world_shape)
-            for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
-                p = np.array(p)
-                world[tuple((self.world_contents.index(o), *p))] = 1
-
-            def render():
-                counts = self.count_objects(objects)
-
-                if success:
-                    print(GREEN)
-                elif term:
-                    print(RED)
-                indent = 0
-                for i, line in enumerate(lines):
-                    if i == ptr and i == agent_ptr:
-                        pre = "+ "
-                    elif i == agent_ptr:
-                        pre = "- "
-                    elif i == ptr:
-                        pre = "| "
-                    else:
-                        pre = "  "
-                    indent += line.depth_change[0]
-                    if type(line) in (If, While):
-                        if self.one_condition:
-                            evaluation = f"counts[iron] ({counts[self.iron]}) > counts[gold] ({counts[self.gold]})"
-                        elif line.id == Env.iron:
-                            evaluation = f"counts[iron] ({counts[self.iron]}) > counts[gold] ({counts[self.gold]})"
-                        elif line.id == Env.gold:
-                            evaluation = f"counts[gold] ({counts[self.gold]}) > counts[merchant] ({counts[self.merchant]})"
-                        elif line.id == Env.wood:
-                            evaluation = f"counts[merchant] ({counts[self.merchant]}) > counts[iron] ({counts[self.iron]})"
-                        else:
-                            raise RuntimeError
-                        line_str = f"{line} {evaluation}"
-                    else:
-                        line_str = str(line)
-                    print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
-                    indent += line.depth_change[1]
-                print(RESET)
-
-                if agent_ptr is not None and agent_ptr < len(self.subtasks):
-                    print("Selected:", self.subtasks[agent_ptr])
-                print("Action:", agent_ptr)
-                if lower_level_ptr is not None:
-                    print(
-                        "Lower Level Action:",
-                        self.lower_level_actions[lower_level_ptr],
-                    )
-                print("Time remaining", time_remaining)
-                print("Obs:")
-                _obs = world.transpose(1, 2, 0).astype(int)
-                grid_size = 3  # obs.astype(int).sum(-1).max()  # max objects per grid
-                chars = [" "] + [o for (o, *_) in self.world_contents]
-                print(self.i)
-                print(inventory)
-                for i, row in enumerate(_obs):
-                    colors = []
-                    string = []
-                    for j, channel in enumerate(row):
-                        int_ids = 1 + np.arange(channel.size)
-                        number = channel * int_ids
-                        crop = sorted(number, reverse=True)[:grid_size]
-                        for x in crop:
-                            colors.append(self.colors[self.world_contents[x - 1]])
-                            string.append(chars[x])
-                        colors.append(RESET)
-                        string.append("|")
-                    print(*[c for p in zip(colors, string) for c in p], sep="")
-                    print("-" * len(string))
-
-            self._render = render
-
-            def state(terminate):
-
-                counts = self.count_objects(objects)
-                return State(
-                    obs=world,
-                    prev=prev,
-                    ptr=ptr,
-                    term=terminate,
-                    subtask_complete=done,
-                    time_remaining=time_remaining,
-                    counts=counts,
-                    inventory=inventory,
-                    truthy=[
-                        1  # TODO
-                        # self.evaluate_line(
-                        #     line=l,
-                        #     counts=counts,
-                        #     initial_counts=initial_counts,
-                        #     domain_type=domain_type,
-                        #     time_elapsed=time_elapsed,
-                        #     inventory=inventory,
-                        # )
-                        for l in lines
-                    ],
-                )
-
-            # noinspection PyTupleAssignmentBalance
-            agent_ptr, lower_level_ptr = yield state(term)
-            # for i, a in enumerate(self.lower_level_actions):
-            # print(i, a)
-            # try:
-            # lower_level_index = int(input("go:"))
-            # except ValueError:
-            # pass
-
-            lower_level_action = self.lower_level_actions[lower_level_ptr]
-            time_remaining -= 1
-            time_elapsed += 1
-            tgt_interaction, tgt_obj = lines[ptr].id
-
-            if type(lower_level_action) is str:
-                standing_on = objects.get(tuple(agent_pos), None)
-
-                done = (
-                    lower_level_action == tgt_interaction
-                    and standing_on == objective(*lines[ptr].id)
-                )
-                if lower_level_action == self.mine:
-                    if tuple(agent_pos) in objects:
-                        good_mine = (
-                            done
-                            or (tgt_interaction == self.sell and standing_on == tgt_obj)
-                            or standing_on == self.wood
-                        )
-                        if not good_mine and self.mine in self.term_on:
-                            term = True
+            try:
+                term |= not time_remaining
+                success = ptr is None
+                if ptr is not None:
+                    line = lines[ptr]
+                    if isinstance(line, Subtask):
+                        behavior, item = line.id
+                        if item not in objects.values():
+                            objects[free_coord()] = item
                         if (
-                            standing_on in self.items
-                            and inventory[standing_on] < self.max_inventory
+                            behavior == self.sell
+                            and self.merchant not in objects.values()
                         ):
-                            inventory[standing_on] = 1
-                        del objects[tuple(agent_pos)]
-                elif lower_level_action == self.sell:
-                    done = done and (inventory[tgt_obj] > 0)
-                    if done:
-                        inventory[tgt_obj] -= 1
-                    elif self.sell in self.term_on:
-                        term = True
-                elif (
-                    lower_level_action == self.goto
-                    and not done
-                    and self.goto in self.term_on
-                ):
-                    term = True
-                if done:
-                    prev, ptr = (
-                        ptr,
-                        subtask_iterator.send(
-                            dict(
-                                counts=self.count_objects(objects),
-                                initial_counts=initial_counts,
-                                domain_type=domain_type,
-                                time_elapsed=time_elapsed,
-                                inventory=inventory,
-                            )
-                        ),
-                    )
-                    if ptr is not None:
-                        if self.train_lower_alone:
-                            time_remaining += self.world_size * 3
-                        if ptr != prev:
-                            if isinstance(lines[ptr], Subtask):
-                                be, _ = lines[ptr].id
-                                if be == self.mine:
-                                    initial_counts = self.count_objects(objects)
-                                elif be == self.sell:
-                                    initial_counts = deepcopy(inventory)
+                            objects[free_coord()] = self.merchant
 
-            elif type(lower_level_action) is np.ndarray:
-                lower_level_action = np.clip(lower_level_action, -1, 1)
-                new_pos = agent_pos + lower_level_action
-                moving_into = objects.get(tuple(new_pos), None)
-                if self.world_space.contains(new_pos) and (
-                    moving_into != self.wall
-                    and (moving_into != self.water or inventory[self.wood] > 0)
-                ):
-                    agent_pos = new_pos
-                    if moving_into == self.water:
-                        # build bridge
-                        del objects[tuple(new_pos)]
-                        inventory[self.wood] -= 1
-            else:
-                assert lower_level_action is None
+                world = np.zeros(self.world_shape)
+                for p, o in list(objects.items()) + [(agent_pos, self.agent)]:
+                    p = np.array(p)
+                    world[tuple((self.world_contents.index(o), *p))] = 1
+
+                def render():
+
+                    if success:
+                        print(GREEN)
+                    elif term:
+                        print(RED)
+                    indent = 0
+                    for i, line in enumerate(lines):
+                        if i == ptr and i == agent_ptr:
+                            pre = "+ "
+                        elif i == agent_ptr:
+                            pre = "- "
+                        elif i == ptr:
+                            pre = "| "
+                        else:
+                            pre = "  "
+                        indent += line.depth_change[0]
+                        if type(line) in (If, While):
+                            m, o = line.id
+                            if m is None:
+                                if o == Env.gold:
+                                    evaluation = f"count[iron] ({object_count[self.iron]}) > count[gold] ({object_count[self.gold]})"
+                                elif o == Env.iron:
+                                    evaluation = f"count[gold] ({object_count[self.wood]}) > count[iron] ({object_count[self.iron]})"
+                                elif o == Env.wood:
+                                    evaluation = f"count[merchant] ({object_count[self.gold]}) > count[iron] ({object_count[self.wood]})"
+                                else:
+                                    raise RuntimeError
+                            else:
+                                evaluation = f"count[{o}] ({object_count[o]})"
+                            line_str = f"{line} {evaluation}"
+                        else:
+                            line_str = str(line)
+                        print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
+                        indent += line.depth_change[1]
+                    print(RESET)
+
+                    if agent_ptr is not None and agent_ptr < len(self.subtasks):
+                        print("Selected:", self.subtasks[agent_ptr])
+                    print("Action:", agent_ptr)
+                    if lower_level_ptr is not None:
+                        print(
+                            "Lower Level Action:",
+                            self.lower_level_actions[lower_level_ptr],
+                        )
+                    print("Time remaining", time_remaining)
+                    print("For a while time remaining", for_a_while_timer)
+                    print("Obs:")
+                    _obs = world.transpose(1, 2, 0).astype(int)
+                    grid_size = (
+                        3  # obs.astype(int).sum(-1).max()  # max objects per grid
+                    )
+                    chars = [" "] + [o for (o, *_) in self.world_contents]
+                    print(self.i)
+                    print(inventory)
+                    for i, row in enumerate(_obs):
+                        colors = []
+                        string = []
+                        for j, channel in enumerate(row):
+                            int_ids = 1 + np.arange(channel.size)
+                            number = channel * int_ids
+                            crop = sorted(number, reverse=True)[:grid_size]
+                            for x in crop:
+                                colors.append(self.colors[self.world_contents[x - 1]])
+                                string.append(chars[x])
+                            colors.append(RESET)
+                            string.append("|")
+                        print(*[c for p in zip(colors, string) for c in p], sep="")
+                        print("-" * len(string))
+
+                self._render = render
+
+                def state(terminate):
+
+                    return State(
+                        obs=world,
+                        prev=prev,
+                        ptr=ptr,
+                        term=terminate,
+                        subtask_complete=done,
+                        time_remaining=time_remaining,
+                        inventory=inventory,
+                        truthy=[evaluate_line(l) for l in lines],
+                    )
+
+                # noinspection PyTupleAssignmentBalance
+                agent_ptr, lower_level_ptr = yield state(term)
+                # for i, a in enumerate(self.lower_level_actions):
+                # print(i, a)
+                # try:
+                # lower_level_index = int(input("go:"))
+                # except ValueError:
+                # pass
+
+                lower_level_action = self.lower_level_actions[lower_level_ptr]
+                time_remaining -= 1
+
+                tgt_interaction, tgt_obj = lines[ptr].id
+
+                if type(lower_level_action) is str:
+                    standing_on = objects.get(tuple(agent_pos), None)
+
+                    done = (
+                        lower_level_action == tgt_interaction
+                        and standing_on == objective(*lines[ptr].id)
+                    )
+                    if lower_level_action == self.mine:
+                        if done:
+                            behavior_count[lower_level_action] += 1
+                        if tuple(agent_pos) in objects:
+                            good_mine = (
+                                done
+                                or (
+                                    tgt_interaction == self.sell
+                                    and standing_on == tgt_obj
+                                )
+                                or standing_on == self.wood
+                            )
+                            if not good_mine and self.mine in self.term_on:
+                                term = True
+                            if (
+                                standing_on in self.items
+                                and inventory[standing_on] < self.max_inventory
+                            ):
+                                inventory[standing_on] += 1
+                            del objects[tuple(agent_pos)]
+                    elif lower_level_action == self.sell:
+                        done = done and (inventory[tgt_obj] > 0)
+
+                        if done:
+                            inventory[tgt_obj] -= 1
+                            behavior_count[lower_level_action] += 1
+                        elif self.sell in self.term_on:
+                            term = True
+                    elif (
+                        lower_level_action == self.goto
+                        and not done
+                        and self.goto in self.term_on
+                    ):
+                        term = True
+                    if done:
+                        if for_a_while_timer is not None:
+                            for_a_while_timer -= 1
+                            if for_a_while_timer == 0:
+                                prev, ptr = ptr, ptr + next(
+                                    l
+                                    for l, line in enumerate(lines[ptr:])
+                                    if type(line) is EndForAWhile
+                                )
+                                ptr += 1
+                        while ptr is not None:
+                            if isinstance(lines[ptr], ForAWhile):
+                                for_a_while_timer = self.for_a_while_time
+                            evaluation = evaluate_line(lines[ptr])
+                            prev, ptr = ptr, line_iterator.send((evaluation, ptr))
+                            if ptr is None or isinstance(lines[ptr], Subtask):
+                                break
+                            if isinstance(lines[ptr], While):
+                                if while_obj is not None:
+                                    objects[free_coord()] = while_obj
+                                m, o = lines[ptr].id
+                                if evaluation and m is None:
+                                    while_obj = o
+                                else:
+                                    while_obj = None
+                        if ptr is not None:
+                            if self.train_lower_alone:
+                                time_remaining += self.world_size * 3
+                            if ptr != prev:
+                                behavior_count = Counter()
+                                initial_object_count = self.count_objects(objects)
+
+                elif type(lower_level_action) is np.ndarray:
+                    lower_level_action = np.clip(lower_level_action, -1, 1)
+                    new_pos = agent_pos + lower_level_action
+                    moving_into = objects.get(tuple(new_pos), None)
+                    if self.world_space.contains(new_pos) and (
+                        moving_into != self.wall
+                        and (moving_into != self.water or inventory[self.wood] > 0)
+                    ):
+                        agent_pos = new_pos
+                        if moving_into == self.water:
+                            # build bridge
+                            del objects[tuple(new_pos)]
+                            inventory[self.wood] -= 1
+                else:
+                    assert lower_level_action is None
+            except StopIteration as e:
+                print(e)
+                import ipdb
+
+                ipdb.set_trace()
+                print("shit")
 
     def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
         max_random_objects = self.world_size ** 2 - self.world_size
@@ -663,19 +644,23 @@ class Env(gym.Env):
         return agent_pos, objects
 
     def assign_line_ids(self, line_types):
+        modifiers = self.random.choice([self.some, None], size=len(line_types))
         items = self.random.choice(self.items, size=len(line_types))
         lines = []
-        for line_type, item in zip(line_types, items):
+        for line_type, modifier, item in zip(line_types, modifiers, items):
             if line_type in (Subtask, Most, Some):
-                behavior = self.random.choice(
-                    self.behaviors if line_type is Subtask else [self.mine, self.sell]
-                )
+                if line_type is Subtask:
+                    behavior = self.random.choice(self.behaviors)
+                elif line_type is Most:
+                    behavior = self.random.choice([self.mine, self.sell])
+                else:
+                    raise RuntimeError
                 subtask_id = (behavior, self.random.choice(self.items))
                 lines += [line_type(subtask_id)]
             elif line_type is While:
-                lines += [line_type(item)]
+                lines += [line_type((modifier, item))]
             elif line_type is If:
-                lines += [line_type(item)]
+                lines += [line_type((modifier, item))]
             elif line_type is EndWhile:
                 lines += [EndWhile(0)]
             else:
@@ -943,7 +928,7 @@ class Env(gym.Env):
         i = 0
         if_evaluations = []
         while True:
-            condition_bit = yield None if i >= len(lines) else i
+            condition_bit, i = yield None if i >= len(lines) else i
             if type(lines[i]) is Else:
                 evaluation = not if_evaluations.pop()
             else:
