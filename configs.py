@@ -76,7 +76,7 @@ default = {
     "use_gae": False,
     "use_water": True,
     "value_loss_coef": 0.5,
-    "world_size": 1,
+    "world_size": 6,
 }
 
 search = copy.deepcopy(default)

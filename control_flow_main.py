@@ -7,6 +7,7 @@ from gym import spaces
 import control_flow_agent
 import debug_env
 import env
+import lower_level
 import networks
 import ours
 from env import Action
@@ -21,9 +22,9 @@ def main(**kwargs):
             obs_space = envs.observation_space
             ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
             if train_lower_alone:
-                return networks.Agent(
+                return lower_level.Agent(
                     lower_level=True,
-                    obs_spaces=obs_space,
+                    obs_spaces=obs_space.spaces,
                     action_space=ll_action_space,
                     **agent_args,
                 )
@@ -53,13 +54,14 @@ def main(**kwargs):
                 train_lower_alone=train_lower_alone,
                 evaluating=evaluating,
             )
-            if not lower_level_load_path:
+            if not lower_level_load_path and not train_lower_alone:
                 kwargs.update(world_size=1)
                 return debug_env.Env(**kwargs)
             return env.Env(**kwargs)
 
         @classmethod
         def structure_config(cls, **config):
+            train_lower_alone = config["train_lower_alone"]
             config = super().structure_config(**config)
             agent_args = config.pop("agent_args")
             env_args = {}
@@ -67,6 +69,7 @@ def main(**kwargs):
 
             agent_args["eval_lines"] = config["max_eval_lines"]
             agent_args["debug"] = config["render"] or config["render_eval"]
+            env_args["train_lower_alone"] = train_lower_alone
 
             for k, v in config.items():
                 if (
@@ -79,7 +82,14 @@ def main(**kwargs):
                         else:
                             print("lower_level not specified. Using debug_env")
                     env_args[k] = v
-                if k in inspect.signature(ours.Recurrence.__init__).parameters:
+                if (
+                    k
+                    in inspect.signature(
+                        lower_level.LowerLevel.__init__
+                        if train_lower_alone
+                        else ours.Recurrence.__init__
+                    ).parameters
+                ):
                     agent_args[k] = v
                 if k in inspect.signature(control_flow_agent.Agent.__init__).parameters:
                     agent_args[k] = v
@@ -109,6 +119,7 @@ def control_flow_args(parser):
     parsers.agent.add_argument("--no-scan", action="store_true")
     parsers.agent.add_argument("--no-roll", action="store_true")
     parsers.agent.add_argument("--no-pointer", action="store_true")
+    parsers.agent.add_argument("--num-conv-layers", type=int)
     parsers.agent.add_argument("--olsk", action="store_true")
     parsers.agent.add_argument("--transformer", action="store_true")
     parsers.agent.add_argument("--fuzz", action="store_true")

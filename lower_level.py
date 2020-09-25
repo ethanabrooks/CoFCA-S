@@ -41,6 +41,8 @@ class LowerLevel(NNBase):
     ):
         if type(obs_space) is spaces.Dict:
             obs_space = Obs(**obs_space.spaces)
+        else:
+            obs_space = Obs(**obs_space)
         assert num_layers > 0
         H = hidden_size
         super().__init__(
@@ -89,9 +91,6 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
-        import ipdb
-
-        ipdb.set_trace()
 
         self.line_embed = nn.EmbeddingBag(line_nvec[0].sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
