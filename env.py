@@ -48,8 +48,7 @@ assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
-    "State",
-    "obs prev ptr term subtask_complete time_remaining inventory truthy",
+    "State", "obs prev ptr term subtask_complete time_remaining inventory truthy"
 )
 Action = namedtuple("Action", "upper lower delta dg ptr")
 
@@ -130,14 +129,7 @@ class Env(gym.Env):
         self.for_a_while_time = for_a_while_time
         self.max_inventory = max_inventory
         if control_flow_types is None:
-            control_flow_types = [
-                Subtask,
-                If,
-                While,
-                Else,
-                Most,
-                ForAWhile,
-            ]
+            control_flow_types = [Subtask, If, While, Else, Most, ForAWhile]
         if term_on is None:
             term_on = [self.mine, self.sell]
         self.reject_while_prob = reject_while_prob
@@ -355,12 +347,18 @@ class Env(gym.Env):
                     for_a_while_timer -= 1
                     if for_a_while_timer == 0:
                         assert ptr is not None
-                        prev, ptr = ptr, ptr + next(
-                            l
-                            for l, line in enumerate(lines[ptr:])
-                            if type(line) is EndForAWhile
+                        prev, ptr = (
+                            ptr,
+                            ptr
+                            + next(
+                                l
+                                for l, line in enumerate(lines[ptr:])
+                                if type(line) is EndForAWhile
+                            ),
                         )
                         ptr += 1
+                        if ptr >= len(lines):
+                            ptr = None
                         for_a_while_timer = None
 
                 while not (ptr is None or isinstance(lines[ptr], Subtask)):
@@ -456,8 +454,7 @@ class Env(gym.Env):
                 print("Action:", agent_ptr)
                 if lower_level_ptr is not None:
                     print(
-                        "Lower Level Action:",
-                        self.lower_level_actions[lower_level_ptr],
+                        "Lower Level Action:", self.lower_level_actions[lower_level_ptr]
                     )
                 print("Time remaining", time_remaining)
                 print("For a while time remaining", for_a_while_timer)
@@ -686,22 +683,13 @@ class Env(gym.Env):
     def step(self, action):
         return self.iterator.send(action)
 
-    def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-    ):
+    def render_world(self, state, action, lower_level_action, reward):
 
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         if lower_level_action is not None:
-            print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
-            )
+            print("Lower Level Action:", self.lower_level_actions[lower_level_action])
         print("Reward", reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
@@ -851,9 +839,7 @@ class Env(gym.Env):
                     subtasks_attempted=subtasks_attempted,
                 )
 
-            info.update(
-                subtask_complete=state.subtask_complete,
-            )
+            info.update(subtask_complete=state.subtask_complete)
 
             obs = state.obs
             padded = lines + [Padding(0)] * (self.n_lines - len(lines))

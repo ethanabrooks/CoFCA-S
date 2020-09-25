@@ -284,13 +284,10 @@ class MultiEmbeddingBag(nn.Module):
     def __init__(self, embeddings_nvec: np.ndarray, **kwargs):
         super().__init__()
         offsets = F.pad(torch.tensor(embeddings_nvec[:-1]).cumsum(0), [1, 0])
-        self.register_buffer(
-            "offsets",
-            offsets,
-        )
+        self.register_buffer("offsets", offsets)
         self.embedding_bag = nn.EmbeddingBag(
             num_embeddings=embeddings_nvec.sum(), **kwargs
         )
 
     def forward(self, input: Tensor):
-        return self.embedding_bag((input + self.offsets).long())
+        return self.embedding_bag((input.long() + self.offsets))
