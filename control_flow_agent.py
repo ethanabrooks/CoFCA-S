@@ -18,11 +18,11 @@ class Agent(networks.Agent, NNBase):
         observation_space,
         no_op_coef,
         action_space,
-        lower_level,
+        train_lower_alone,
         **network_args,
     ):
         nn.Module.__init__(self)
-        self.lower_level_type = lower_level
+        self.train_lower_alone = train_lower_alone
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = ours.Recurrence(
@@ -49,20 +49,11 @@ class Agent(networks.Agent, NNBase):
         t = type(rm)
         if t is ours.Recurrence:
             X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
-            ll_type = self.lower_level_type
-            if ll_type == "train-alone":
+            if self.train_lower_alone:
                 probs = Action(
                     upper=None, lower=hx.l_probs, delta=None, dg=None, ptr=None
                 )
-            elif ll_type == "train-with-upper":
-                probs = Action(
-                    upper=hx.a_probs,
-                    lower=hx.l_probs,
-                    delta=hx.d_probs,
-                    dg=hx.dg_probs,
-                    ptr=None,
-                )
-            elif ll_type in ["pre-trained", None]:
+            else:
                 probs = Action(
                     upper=hx.a_probs,
                     lower=None,
@@ -70,8 +61,6 @@ class Agent(networks.Agent, NNBase):
                     dg=hx.dg_probs,
                     ptr=None,
                 )
-            else:
-                raise RuntimeError
         else:
             raise RuntimeError
 

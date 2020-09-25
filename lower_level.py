@@ -53,7 +53,7 @@ class LowerLevel(NNBase):
             ),
         )
         (d, h, w) = obs_space.obs.shape
-        inventory_size = obs_space.inventory.n
+        inventory_size = obs_space.inventory.nvec.size
         line_nvec = torch.tensor(obs_space.lines.nvec)
         offset = F.pad(line_nvec[0, :-1].cumsum(0), [1, 0])
         self.register_buffer("offset", offset)
@@ -89,6 +89,10 @@ class LowerLevel(NNBase):
         self.conv_projection = nn.Sequential(
             init2(nn.Linear(h * w * hidden_size, hidden_size)), activation
         )
+        import ipdb
+
+        ipdb.set_trace()
+
         self.line_embed = nn.EmbeddingBag(line_nvec[0].sum(), hidden_size)
         self.inventory_embed = nn.Sequential(
             init2(nn.Linear(inventory_size, hidden_size)), activation
@@ -132,7 +136,7 @@ class LowerLevel(NNBase):
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(line.long() + self.offset)
         obs_embed = self.conv_projection(self.conv(obs))
-        inventory_embed = self.inventory_embed(inputs.inventory)
+        inventory_embed = self.inventory_embed((inputs.inventory > 0).float())  # TODO
         x = lines_embed * obs_embed * inventory_embed
 
         if self.is_recurrent:

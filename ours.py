@@ -122,7 +122,9 @@ class Recurrence(nn.Module):
             self.action_space_nvec.lower + 1, lower_embed_size
         )
         self.embed_inventory = nn.Sequential(
-            MultiEmbeddingBag(observation_space.inventory),
+            MultiEmbeddingBag(
+                observation_space.inventory.nvec, embedding_dim=inventory_hidden_size
+            ),
             nn.ReLU(),
         )
         m_size = (

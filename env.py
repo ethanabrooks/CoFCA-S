@@ -223,6 +223,7 @@ class Env(gym.Env):
                                 len(Line.types),
                                 1 + len(self.behaviors),
                                 1 + len(self.items),
+                                4,  # mod TODO: should be 3
                             ]
                         ]
                         * self.n_lines

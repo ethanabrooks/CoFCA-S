@@ -43,14 +43,14 @@ def main(**kwargs):
             rank,
             evaluating,
             lower_level_load_path=None,
-            lower_level_alone=False,
+            train_lower_alone=False,
             env_id=None,
             **kwargs
         ):
             kwargs.update(
                 seed=seed + rank,
                 rank=rank,
-                lower_level_alone=lower_level_alone,
+                train_lower_alone=train_lower_alone,
                 evaluating=evaluating,
             )
             if not lower_level_load_path:
@@ -96,7 +96,7 @@ def main(**kwargs):
 
 def control_flow_args(parser):
     parsers = add_arguments(parser)
-    parser = parsers.play
+    parser = parsers.main
     parser.add_argument("--min-eval-lines", type=int)
     parser.add_argument("--max-eval-lines", type=int)
     parser.add_argument("--no-eval", action="store_true")
