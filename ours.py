@@ -108,19 +108,19 @@ class Recurrence(nn.Module):
         )
         if transformer:
             raise NotImplementedError
-        # self.task_encoder = (
-        #     TransformerModel(
-        #         ntoken=self.ne * self.d_space(),
-        #         ninp=task_embed_size,
-        #         nhid=task_embed_size,
-        #     )
-        #     if transformer
-        #     else nn.GRU(
-        #         task_embed_size, task_embed_size, bidirectional=True, batch_first=True
-        #     )
-        # )
-        self.task_encoder0 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
-        self.task_encoder1 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
+        self.task_encoder = (
+            TransformerModel(
+                ntoken=self.ne * self.d_space(),
+                ninp=task_embed_size,
+                nhid=task_embed_size,
+            )
+            if transformer
+            else nn.GRU(
+                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+            )
+        )
+        # self.task_encoder0 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
+        # self.task_encoder1 = nn.GRU(task_embed_size, task_embed_size, batch_first=True)
 
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
@@ -256,7 +256,7 @@ class Recurrence(nn.Module):
         elif self.transformer:
             P = self.task_encoder(M.transpose(0, 1)).view(nl, N, -1, self.ne).softmax(2)
         else:
-            P, f, b = self.build_P(M, N, nl, state)
+            P = self.build_P(M, N, nl, state)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
@@ -404,11 +404,11 @@ class Recurrence(nn.Module):
             # except ValueError:
             # print("t", t)
             # print(f.shape)
-            self.print("f back", f[p, 0, :, :half])
-            self.print("f", f[p, 0, :, half:])
+            # self.print("f back", f[p, 0, :, :half])
+            # self.print("f", f[p, 0, :, half:])
             # print(b.shape)
-            self.print("b backward", b[p, 0, :, :half])
-            self.print("b forward", b[p, 0, :, half:])
+            # self.print("b backward", b[p, 0, :, :half])
+            # self.print("b forward", b[p, 0, :, half:])
             # pass
             yield RecurrentState(
                 a=A[t],
@@ -439,13 +439,15 @@ class Recurrence(nn.Module):
             rolled = torch.cat(
                 [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
             )
-            M2 = M.flip(1)
-            rolled2 = torch.cat(
-                [torch.roll(M2, shifts=i, dims=1) for i in range(nl)], dim=0
-            )
-            Gf, _ = self.task_encoder0(rolled)
-            Gb, _ = self.task_encoder1(rolled2)
-            G = torch.stack([Gf, Gb], dim=-2)
+            G, _ = self.task_encoder(rolled)
+
+            # M2 = M.flip(1)
+            # rolled2 = torch.cat(
+            # [torch.roll(M2, shifts=i, dims=1) for i in range(nl)], dim=0
+            # )
+            # Gf, _ = self.task_encoder0(rolled)
+            # Gb, _ = self.task_encoder1(rolled2)
+            # G = torch.stack([Gf, Gb], dim=-2)
         # print(state.lines.view(11, 4))
         # print(torch.roll(state.lines.view(11, 4).flip(0), shifts=1 + 4, dims=0))
         G = G.view(nl, N, nl, 2, -1)  # [nl, N, nl, 2, h]
@@ -454,17 +456,23 @@ class Recurrence(nn.Module):
         # B[4, :, 2, 1, 0] = 1
         # B[4, :, 3, 1, 0] = 1
         # B = (torch.rand(size=B.size()) < 0.5).float()
-        B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
-        B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
-        scanned = scan(B2)  # [2, nl * N * ne, nl]
-        padded = F.pad(scanned, [nl, 0])  # [2, nl * N * ne, 2 * nl]
-        f, b = padded.unbind(1)  # [nl * N * ne, 2 * nl] x 2
-        stack = torch.stack([b.flip(1), f], dim=1)  # [nl * N * ne, 2, 2 * nl]
-        reshaped = stack.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
-        P = reshaped.transpose(-1, -2)
-        f1 = f.view(nl, N, self.ne, 2 * nl)
-        b1 = b.flip(1).view(nl, N, self.ne, 2 * nl)
-        return P, f1, b1
+        f, b = torch.unbind(B, dim=3)
+        B = torch.stack([f, b.flip(2)], dim=-1)
+
+        last1 = torch.zeros_like(B)
+        last1[:, :, -1] = 1
+        zero_last = B - B * last1
+        B = zero_last + last1
+        # last = self.first.flip(2)
+        # zero_last = (1 - last) * B
+        # B = zero_last + last
+        rolled = torch.roll(zero_last, shifts=1, dims=2)
+        C = torch.cumprod(1 - rolled, dim=2)
+        P = B * C
+        P = F.pad(P, [0, 0, 0, 0, P.size(2), 0])
+        f, b = torch.unbind(P, dim=-1)
+        P = torch.cat([f, b.flip(2)], dim=-1)
+        return P
 
     @property
     def gru_in_size(self):

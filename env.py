@@ -156,7 +156,7 @@ class Env(gym.Env):
             self.n_lines = max_eval_lines
         else:
             self.n_lines = max_lines
-        self.n_lines += 1
+        # self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.evaluating = evaluating
         self.iterator = None
