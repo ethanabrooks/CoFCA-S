@@ -36,7 +36,7 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active inventory lines obs subtask_complete truthy")
+Obs = namedtuple("Obs", "active inventory lines mask obs subtask_complete truthy")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -194,23 +194,26 @@ class Env(gym.Env):
                 )
             )
         )
+        lines_space = spaces.MultiDiscrete(
+            np.array(
+                [
+                    [
+                        len(Line.types),
+                        1 + len(self.behaviors),
+                        1 + len(self.items),
+                        1 + self.max_loops,
+                    ]
+                ]
+                * self.n_lines
+            )
+        )
+        mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         self.observation_space = spaces.Dict(
             Obs(
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
-                lines=spaces.MultiDiscrete(
-                    np.array(
-                        [
-                            [
-                                len(Line.types),
-                                1 + len(self.behaviors),
-                                1 + len(self.items),
-                                1 + self.max_loops,
-                            ]
-                        ]
-                        * self.n_lines
-                    )
-                ),
+                lines=lines_space,
+                mask=mask_space,
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
@@ -836,8 +839,10 @@ class Env(gym.Env):
 
             self._render = render
             obs = state.obs
-            padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+            pads = [Padding(0)] * (self.n_lines - len(lines))
+            padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
+            mask = [int(isinstance(l, Padding)) for l in padded]
             truthy = [
                 self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)
@@ -847,10 +852,13 @@ class Env(gym.Env):
             truthy = [2 if t is None else int(t) for t in truthy]
             truthy += [3] * (self.n_lines - len(truthy))
 
-            obs = self.get_observation(
-                obs,
-                preprocessed_lines=preprocessed_lines,
-                state=state,
+            inventory = self.inventory_representation(state)
+            obs = Obs(
+                obs=obs,
+                lines=preprocessed_lines,
+                mask=mask,
+                active=self.n_lines if state.ptr is None else state.ptr,
+                inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
@@ -892,15 +900,8 @@ class Env(gym.Env):
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
-    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
-        return Obs(
-            obs=obs,
-            lines=preprocessed_lines,
-            active=self.n_lines if state.ptr is None else state.ptr,
-            inventory=np.array([state.inventory[i] for i in self.items]),
-            subtask_complete=subtask_complete,
-            truthy=truthy,
-        )
+    def inventory_representation(self, state):
+        return np.array([state.inventory[i] for i in self.items])
 
     @property
     def eval_condition_size(self):

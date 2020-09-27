@@ -47,6 +47,9 @@ class Env(env.Env):
             condition_bit = self.random.choice(2)
             prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
 
+    def inventory_representation(self, state):
+        return np.array([0])
+
     def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
         return bool(condition_bit)
 
@@ -62,13 +65,11 @@ class Env(env.Env):
         action,
         lower_level_action,
         reward,
-        cumulative_reward,
     ):
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
-        print("Cumulative", cumulative_reward)
         for i, subtask in enumerate(self.subtasks):
             print(i, subtask)
 
@@ -103,16 +104,6 @@ class Env(env.Env):
             indent += line.depth_change[1]
         print("Condition bit:", state.counts)
         print(RESET)
-
-    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
-        return Obs(
-            obs=obs,
-            lines=preprocessed_lines,
-            active=self.n_lines if state.ptr is None else state.ptr,
-            inventory=np.array([0]),
-            subtask_complete=1,
-            truthy=truthy,
-        )
 
 
 def main(env: Env):
