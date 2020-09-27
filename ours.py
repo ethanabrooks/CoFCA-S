@@ -441,7 +441,7 @@ class Recurrence(nn.Module):
             )
             M2 = M.flip(1)
             rolled2 = torch.cat(
-                [torch.roll(M2, shifts=1 + i, dims=1) for i in range(nl)], dim=0
+                [torch.roll(M2, shifts=i, dims=1) for i in range(nl)], dim=0
             )
             Gf, _ = self.task_encoder0(rolled)
             Gb, _ = self.task_encoder1(rolled2)
