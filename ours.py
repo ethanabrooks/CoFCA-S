@@ -104,7 +104,7 @@ class Recurrence(nn.Module):
             if transformer
             else nn.GRU(task_embed_size, task_embed_size, batch_first=True)
         )
-        self.task_encoder1 = (
+        self.task_encoder0 = self.task_encoder1 = (
             TransformerModel(
                 ntoken=self.ne * self.d_space(),
                 ninp=task_embed_size,
