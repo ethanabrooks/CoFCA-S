@@ -94,16 +94,23 @@ class Recurrence(nn.Module):
         self.embed_task = nn.EmbeddingBag(
             self.obs_spaces.lines.nvec[0].sum(), task_embed_size
         )
-        self.task_encoder = (
+        self.task_encoder0 = (
             TransformerModel(
                 ntoken=self.ne * self.d_space(),
                 ninp=task_embed_size,
                 nhid=task_embed_size,
             )
             if transformer
-            else nn.GRU(
-                task_embed_size, task_embed_size, bidirectional=True, batch_first=True
+            else nn.GRU(task_embed_size, task_embed_size, batch_first=True)
+        )
+        self.task_encoder1 = (
+            TransformerModel(
+                ntoken=self.ne * self.d_space(),
+                ninp=task_embed_size,
+                nhid=task_embed_size,
             )
+            if transformer
+            else nn.GRU(task_embed_size, task_embed_size, batch_first=True)
         )
 
         self.actor = Categorical(hidden_size, n_a)
@@ -253,7 +260,9 @@ class Recurrence(nn.Module):
                 rolled = torch.cat(
                     [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
                 )
-                G, _ = self.task_encoder(rolled)
+                G0, _ = self.task_encoder0(rolled)
+                G1, _ = self.task_encoder1(rolled.flip(1))
+                G = torch.stack([G0, G1], dim=2)
             G = G.view(nl, N, nl, 2, -1)
             B = self.beta(G).sigmoid()
             # arange = torch.zeros(6).float()
