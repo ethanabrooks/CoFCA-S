@@ -384,6 +384,7 @@ class Recurrence(nn.Module):
                 self.print("u", u)
                 w = P[p, R]
                 d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
+
                 self.print("dg prob", d_gate.probs[:, 1])
                 self.print("dg", dg)
                 d_dist = gate(dg, d_probs, ones * half)
@@ -456,15 +457,13 @@ class Recurrence(nn.Module):
         B1 = B.transpose(2, 4)  # [nl, N, ne, 2, nl]
         B2 = B1.reshape(-1, 2, nl)  # [nl * N * ne, 2, nl]
         scanned = scan(B2)  # [2, nl * N * ne, nl]
-        padded = F.pad(scanned, [nl - 1, 0])  # [2, nl * N * ne, 2 * nl - 1]
-        f, b = padded.unbind(1)  # [nl * N * ne, 2 * nl - 1] x 2
-        stack = torch.stack([b.flip(1), f], dim=1)  # [nl * N * ne, 2, 2 * nl - 1]
-        reshaped = stack.view(
-            nl, N, 2 * self.ne, 2 * nl - 1
-        )  # [nl, N, ne * 2, 2 * nl - 1]
+        padded = F.pad(scanned, [nl, 0])  # [2, nl * N * ne, 2 * nl]
+        f, b = padded.unbind(1)  # [nl * N * ne, 2 * nl] x 2
+        stack = torch.stack([b.flip(1), f], dim=1)  # [nl * N * ne, 2, 2 * nl]
+        reshaped = stack.view(nl, N, 2 * self.ne, 2 * nl)  # [nl, N, ne * 2, 2 * nl]
         P = reshaped.transpose(-1, -2)
-        f1 = f.view(nl, N, self.ne, 2 * nl - 1)
-        b1 = b.flip(1).view(nl, N, self.ne, 2 * nl - 1)
+        f1 = f.view(nl, N, self.ne, 2 * nl)
+        b1 = b.flip(1).view(nl, N, self.ne, 2 * nl)
         return P, f1, b1
 
     @property
@@ -488,7 +487,7 @@ class Recurrence(nn.Module):
         elif self.transformer or self.no_scan or self.no_pointer:
             return 2 * self.eval_lines
         else:
-            return 2 * self.train_lines - 1
+            return 2 * self.train_lines
 
     # noinspection PyProtectedMember
     @contextmanager
