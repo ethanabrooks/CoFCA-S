@@ -409,6 +409,16 @@ class Env(gym.Env):
             ):
                 term = True
 
+            term = subtask_id != self.subtasks.index(lines[ptr].id)
+            subtask_complete = True
+            prev, ptr = (
+                ptr,
+                subtask_iterator.send(dict(counts=self.count_objects(objects))),
+            )
+            if ptr is not None:
+                time_remaining = update_time()
+            continue
+
             if type(lower_level_action) is str:
                 standing_on = objects.get(tuple(agent_pos), None)
 
