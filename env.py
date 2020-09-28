@@ -36,7 +36,7 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active inventory lines obs subtask_complete truthy")
+Obs = namedtuple("Obs", "active inventory lines mask obs subtask_complete truthy")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -194,23 +194,26 @@ class Env(gym.Env):
                 )
             )
         )
+        lines_space = spaces.MultiDiscrete(
+            np.array(
+                [
+                    [
+                        len(Line.types),
+                        1 + len(self.behaviors),
+                        1 + len(self.items),
+                        1 + self.max_loops,
+                    ]
+                ]
+                * self.n_lines
+            )
+        )
+        mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         self.observation_space = spaces.Dict(
             Obs(
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
-                lines=spaces.MultiDiscrete(
-                    np.array(
-                        [
-                            [
-                                len(Line.types),
-                                1 + len(self.behaviors),
-                                1 + len(self.items),
-                                1 + self.max_loops,
-                            ]
-                        ]
-                        * self.n_lines
-                    )
-                ),
+                lines=lines_space,
+                mask=mask_space,
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
@@ -630,16 +633,22 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self, state, action, lower_level_action, reward, cumulative_reward
+        self,
+        state,
+        action,
+        lower_level_action,
+        reward,
     ):
 
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         if lower_level_action is not None:
-            print("Lower Level Action:", self.lower_level_actions[lower_level_action])
+            print(
+                "Lower Level Action:",
+                self.lower_level_actions[lower_level_action],
+            )
         print("Reward", reward)
-        print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
         _obs = state.obs
@@ -663,7 +672,14 @@ class Env(gym.Env):
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
 
-    def render_instruction(self, term, success, lines, state, agent_ptr):
+    def render_instruction(
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
+    ):
 
         if term:
             print(GREEN if success else RED)
@@ -779,8 +795,6 @@ class Env(gym.Env):
 
         state_iterator = self.state_generator(objects, _agent_pos, lines)
         state = next(state_iterator)
-        actions = []
-        program_counter = []
 
         subtasks_complete = 0
         agent_ptr = 0
@@ -790,8 +804,6 @@ class Env(gym.Env):
         lower_level_action = None
         cumulative_reward = 0
         while True:
-            if state.ptr is not None:
-                program_counter.append(state.ptr)
             success = state.ptr is None
             self.success_count += success
 
@@ -810,9 +822,10 @@ class Env(gym.Env):
 
                 info.update(
                     success=success,
-                    cumulative_reward=cumulative_reward,
                     instruction_len=len(lines),
                 )
+                if not use_failure_buf:
+                    info.update(success_without_failure_buf=success)
                 if success:
                     info.update(success_line=len(lines), progress=1)
                 else:
@@ -826,7 +839,6 @@ class Env(gym.Env):
                 )
 
             info.update(
-                regret=1 if term and not success else 0,
                 subtask_complete=state.subtask_complete,
             )
 
@@ -843,13 +855,14 @@ class Env(gym.Env):
                     action=action,
                     lower_level_action=lower_level_action,
                     reward=reward,
-                    cumulative_reward=cumulative_reward,
                 )
 
             self._render = render
             obs = state.obs
-            padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+            pads = [Padding(0)] * (self.n_lines - len(lines))
+            padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
+            mask = [int(isinstance(l, Padding)) for l in padded]
             truthy = [
                 self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)
@@ -859,10 +872,13 @@ class Env(gym.Env):
             truthy = [2 if t is None else int(t) for t in truthy]
             truthy += [3] * (self.n_lines - len(truthy))
 
-            obs = self.get_observation(
-                obs,
-                preprocessed_lines=preprocessed_lines,
-                state=state,
+            inventory = self.inventory_representation(state)
+            obs = Obs(
+                obs=obs,
+                lines=preprocessed_lines,
+                mask=mask,
+                active=self.n_lines if state.ptr is None else state.ptr,
+                inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
@@ -879,7 +895,6 @@ class Env(gym.Env):
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
-            actions.extend([int(a) for a in action])
 
             action = Action(*action)
             action, lower_level_action, agent_ptr = (
@@ -891,7 +906,6 @@ class Env(gym.Env):
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
-                successes_per_episode=self.success_count / self.i,
             )
 
             if action == self.num_subtasks:
@@ -906,15 +920,8 @@ class Env(gym.Env):
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
-    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
-        return Obs(
-            obs=obs,
-            lines=preprocessed_lines,
-            active=self.n_lines if state.ptr is None else state.ptr,
-            inventory=np.array([state.inventory[i] for i in self.items]),
-            subtask_complete=subtask_complete,
-            truthy=truthy,
-        )
+    def inventory_representation(self, state):
+        return np.array([state.inventory[i] for i in self.items])
 
     @property
     def eval_condition_size(self):
