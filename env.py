@@ -421,12 +421,18 @@ class Env(gym.Env):
 
             term = subtask_id != self.subtasks.index(lines[ptr].id)
             subtask_complete = True
+            while True:
+                result = self.populate_world(lines)
+                if result:
+                    agent_pos, objects = result
+                    break
             prev, ptr = (
                 ptr,
                 subtask_iterator.send(dict(counts=self.count_objects(objects))),
             )
             if ptr is not None:
                 time_remaining = update_time()
+
             continue
 
             if type(lower_level_action) is str:
