@@ -262,6 +262,7 @@ class Env(gym.Env):
             return evaluation
 
     def feasible(self, objects, lines) -> bool:
+        return True
         line_iterator = self.line_generator(lines)
         line = next(line_iterator)
         loops = 0
@@ -629,22 +630,14 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-        cumulative_reward,
+        self, state, action, lower_level_action, reward, cumulative_reward
     ):
 
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         if lower_level_action is not None:
-            print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
-            )
+            print("Lower Level Action:", self.lower_level_actions[lower_level_action])
         print("Reward", reward)
         print("Cumulative", cumulative_reward)
         print("Time remaining", state.time_remaining)
@@ -670,14 +663,7 @@ class Env(gym.Env):
             print(*[c for p in zip(colors, string) for c in p], sep="")
             print("-" * len(string))
 
-    def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
-    ):
+    def render_instruction(self, term, success, lines, state, agent_ptr):
 
         if term:
             print(GREEN if success else RED)
