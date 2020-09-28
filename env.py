@@ -265,6 +265,7 @@ class Env(gym.Env):
             return evaluation
 
     def feasible(self, objects, lines) -> bool:
+        return True
         line_iterator = self.line_generator(lines)
         line = next(line_iterator)
         loops = 0
@@ -421,6 +422,18 @@ class Env(gym.Env):
                 tgt_interaction != Env.sell or inventory[tgt_obj] == 0
             ):
                 term = True
+
+            term = subtask_id != self.subtasks.index(lines[ptr].id)
+            subtask_complete = True
+            agent_pos, objects = self.populate_world(lines)
+            prev, ptr = (
+                ptr,
+                subtask_iterator.send(dict(counts=self.count_objects(objects))),
+            )
+            if ptr is not None:
+                time_remaining = update_time()
+
+            continue
 
             if type(lower_level_action) is str:
                 standing_on = objects.get(tuple(agent_pos), None)
