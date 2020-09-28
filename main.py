@@ -44,7 +44,9 @@ def add_arguments(parser):
     parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
     parser.add_argument("--num-iterations", type=int)
     parser.add_argument(
-        "--num-processes", type=int, help="how many training CPU processes to use",
+        "--num-processes",
+        type=int,
+        help="how many training CPU processes to use",
     )
     parser.add_argument(
         "--num-samples",
@@ -57,10 +59,14 @@ def add_arguments(parser):
     parser.add_argument("--render-eval", action="store_true")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
-        "--train-steps", type=int, help="number of forward steps in A2C",
+        "--train-steps",
+        type=int,
+        help="number of forward steps in A2C",
     )
     parser.add_argument(
-        "--env", dest="env_id", help="environment to train on",
+        "--env",
+        dest="env_id",
+        help="environment to train on",
     )
     parser.add_argument("--load-path", type=Path)
     parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
@@ -73,10 +79,13 @@ def add_arguments(parser):
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument(
-        "--entropy-coef", type=float, help="entropy term coefficient",
+        "--entropy-coef",
+        type=float,
+        help="entropy term coefficient",
     )
     agent_parser.add_argument(
-        "--hidden-size", type=int,
+        "--hidden-size",
+        type=int,
     )
     agent_parser.add_argument("--num-layers", type=int)
     agent_parser.add_argument("--recurrent", action="store_true")
@@ -90,7 +99,9 @@ def add_arguments(parser):
         "--value-loss-coef", type=float, default=0.5, help="value loss coefficient"
     )
     ppo_parser.add_argument(
-        "--learning-rate", type=float, help="",
+        "--learning-rate",
+        type=float,
+        help="",
     )
     ppo_parser.add_argument(
         "--eps", type=float, default=1e-5, help="RMSprop optimizer epsilon"
