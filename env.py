@@ -36,7 +36,7 @@ from lines import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active inventory lines obs subtask_complete truthy")
+Obs = namedtuple("Obs", "active inventory lines mask obs subtask_complete truthy")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -102,7 +102,7 @@ class Env(gym.Env):
         eval_condition_size: int,
         single_control_flow_type: bool,
         no_op_limit: int,
-        time_limit: int,
+        time_to_waste: int,
         subtasks_only: bool,
         break_on_fail: bool,
         max_loops: int,
@@ -146,7 +146,7 @@ class Env(gym.Env):
         self.single_control_flow_type = single_control_flow_type
         self.max_nesting_depth = max_nesting_depth
         self.num_subtasks = num_subtasks
-        self.time_limit = time_limit
+        self.time_to_waste = time_to_waste
         self.i = 0
         self.success_count = 0
 
@@ -194,23 +194,26 @@ class Env(gym.Env):
                 )
             )
         )
+        lines_space = spaces.MultiDiscrete(
+            np.array(
+                [
+                    [
+                        len(Line.types),
+                        1 + len(self.behaviors),
+                        1 + len(self.items),
+                        1 + self.max_loops,
+                    ]
+                ]
+                * self.n_lines
+            )
+        )
+        mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         self.observation_space = spaces.Dict(
             Obs(
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
-                lines=spaces.MultiDiscrete(
-                    np.array(
-                        [
-                            [
-                                len(Line.types),
-                                1 + len(self.behaviors),
-                                1 + len(self.items),
-                                1 + self.max_loops,
-                            ]
-                        ]
-                        * self.n_lines
-                    )
-                ),
+                lines=lines_space,
+                mask=mask_space,
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
@@ -355,18 +358,31 @@ class Env(gym.Env):
         initial_objects = deepcopy(objects)
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
+        if self.lower_level == "train-alone":
+            time_remaining = 0
+        else:
+            time_remaining = 200 if self.evaluating else self.time_to_waste
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
             line_iterator, lines, counts=self.count_objects(objects)
         )
-        time_remaining = self.time_limit
+
+        def update_time():
+            time_delta = 3 * self.world_size
+            return (
+                time_delta + self.time_to_waste
+                if self.lower_level == "train-alone"
+                else time_remaining + time_delta
+            )
 
         prev, ptr = 0, next(subtask_iterator)
+        if ptr is not None:
+            time_remaining = update_time()
 
         term = False
         while True:
-            term |= not self.evaluating and not time_remaining
+            term |= not time_remaining
             if term and ptr is not None:
                 self.failure_buffer.append((lines, initial_objects, initial_agent_pos))
 
@@ -442,6 +458,8 @@ class Env(gym.Env):
                         ptr,
                         subtask_iterator.send(dict(counts=self.count_objects(objects))),
                     )
+                    if ptr is not None:
+                        time_remaining = update_time()
                     subtask_complete = True
 
             elif type(lower_level_action) is np.ndarray:
@@ -821,8 +839,10 @@ class Env(gym.Env):
 
             self._render = render
             obs = state.obs
-            padded = lines + [Padding(0)] * (self.n_lines - len(lines))
+            pads = [Padding(0)] * (self.n_lines - len(lines))
+            padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
+            mask = [int(isinstance(l, Padding)) for l in padded]
             truthy = [
                 self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)
@@ -832,10 +852,13 @@ class Env(gym.Env):
             truthy = [2 if t is None else int(t) for t in truthy]
             truthy += [3] * (self.n_lines - len(truthy))
 
-            obs = self.get_observation(
-                obs,
-                preprocessed_lines=preprocessed_lines,
-                state=state,
+            inventory = self.inventory_representation(state)
+            obs = Obs(
+                obs=obs,
+                lines=preprocessed_lines,
+                mask=mask,
+                active=self.n_lines if state.ptr is None else state.ptr,
+                inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
@@ -877,15 +900,8 @@ class Env(gym.Env):
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send((action, lower_level_action))
 
-    def get_observation(self, obs, preprocessed_lines, state, subtask_complete, truthy):
-        return Obs(
-            obs=obs,
-            lines=preprocessed_lines,
-            active=self.n_lines if state.ptr is None else state.ptr,
-            inventory=np.array([state.inventory[i] for i in self.items]),
-            subtask_complete=subtask_complete,
-            truthy=truthy,
-        )
+    def inventory_representation(self, state):
+        return np.array([state.inventory[i] for i in self.items])
 
     @property
     def eval_condition_size(self):
@@ -933,7 +949,7 @@ def add_arguments(p):
     p.add_argument("--max-nesting-depth", type=int, default=1)
     p.add_argument("--subtasks-only", action="store_true")
     p.add_argument("--break-on-fail", action="store_true")
-    p.add_argument("--time-limit", type=int)
+    p.add_argument("--time-to-waste", type=int)
     p.add_argument(
         "--control-flow-types",
         nargs="*",
