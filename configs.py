@@ -1,9 +1,6 @@
 import copy
-from pathlib import Path
 
 from hyperopt import hp
-
-from lines import Subtask, If, Else, While
 
 default = {
     "break_on_fail": False,
@@ -75,7 +72,6 @@ default = {
     "train_steps": 30,
     "transformer": False,
     "use_gae": False,
-    "use_water": True,
     "value_loss_coef": 0.5,
     "world_size": 1,
 }

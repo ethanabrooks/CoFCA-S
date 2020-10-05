@@ -300,17 +300,7 @@ class Recurrence(nn.Module):
                 self.kernel_size,
             )
 
-            obs = (
-                torch.stack(
-                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
-                    dim=-1,
-                )
-                .unsqueeze(-1)
-                .unsqueeze(-1)
-                if self.debug_obs
-                else state.obs[t]
-            )
-
+            obs = state.obs[t]
             h1 = torch.cat(
                 [
                     F.conv2d(

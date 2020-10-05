@@ -1,10 +1,24 @@
 import functools
 from abc import ABC
-from enum import Enum
-from typing import List, Type, Generator, Tuple
+from enum import Enum, unique, auto
+from typing import List, Type, Generator, Tuple, Optional
 
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
+
+
+@unique
+class Interaction(Enum):
+    COLLECT = auto()
+    REFINE = auto()
+    BUILD = auto()
+
+
+@unique
+class Resource(Enum):
+    WOOD = auto()
+    STONE = auto()
+    IRON = auto()
 
 
 def sample(random, _min, _max, p=0.5):
@@ -217,6 +231,11 @@ class Subtask(Line):
     required_lines = 1
     required_depth = 0
     depth_change = 0, 0
+
+    def __init__(self, interaction: Interaction, resource: Optional[Resource]):
+        self.interaction = interaction
+        self.resource = resource
+        super().__init__(None)
 
     @staticmethod
     def generate_types(n: int, *args, **kwargs):
