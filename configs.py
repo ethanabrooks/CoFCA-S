@@ -94,8 +94,8 @@ default_upper = {
     "room_shape": (3, 4),
 }
 
-search = copy.deepcopy(default_upper)
-search.update(
+upper_search = copy.deepcopy(default_upper)
+upper_search.update(
     conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
     gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
@@ -117,7 +117,25 @@ search.update(
     train_steps=hp.choice("train_steps", [20, 25, 30]),
 )
 
-debug_search = copy.deepcopy(search)
+lower_search = copy.deepcopy(default_lower)
+lower_search.update(
+    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
+    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
+    gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
+    hidden_size=hp.choice("hidden_size", [128, 256, 512]),
+    kernel_size=hp.choice("kernel_size", [1, 2, 3]),
+    learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
+    tgt_success_rate=hp.choice("tgt_success_rate", [0.5, 0.7, 0.8, 0.9, 1]),
+    num_batch=hp.choice("num_batch", [1, 2]),
+    num_conv_layers=hp.choice("num_conv_layers", [1, 2]),
+    num_layers=hp.choice("num_layers", [1, 2]),
+    num_processes=hp.choice("num_processes", [50, 100, 150]),
+    ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
+    stride=hp.choice("stride", [1, 2, 3]),
+    train_steps=hp.choice("train_steps", [20, 25, 30]),
+)
+
+debug_search = copy.deepcopy(upper_search)
 debug_search.update(
     kernel_size=1,
     stride=1,
@@ -130,7 +148,8 @@ debug_default.update(
     world_size=1,
 )
 configs = dict(
-    search=search,
+    lower_search=lower_search,
+    upper_search=upper_search,
     debug_search=debug_search,
     default_upper=default_upper,
     debug_default=debug_default,

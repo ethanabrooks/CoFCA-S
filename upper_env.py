@@ -526,10 +526,10 @@ class Env(gym.Env):
 
     @classmethod
     def add_arguments(cls, p):
-        p.add_argument("--min-lines", type=int, required=True)
-        p.add_argument("--max-lines", type=int, required=True)
-        p.add_argument("--no-op-limit", type=int, required=True)
+        p.add_argument("--min-lines", type=int)
+        p.add_argument("--max-lines", type=int)
+        p.add_argument("--no-op-limit", type=int)
         p.add_argument("--break-on-fail", action="store_true")
-        p.add_argument("--tgt-success-rate", type=float, required=True)
-        p.add_argument("--failure-buffer-size", type=int, required=True)
-        p.add_argument("--room-shape", nargs=2, type=int, required=True)
+        p.add_argument("--tgt-success-rate", type=float)
+        p.add_argument("--failure-buffer-size", type=int)
+        p.add_argument("--room-shape", nargs=2, type=int)
