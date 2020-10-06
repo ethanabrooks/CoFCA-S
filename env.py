@@ -130,9 +130,8 @@ class Env(gym.Env):
                 )
             )
         )
-        lines_space = spaces.MultiDiscrete(
-            np.array([[len(Interaction), len(Resource)]] * self.n_lines)
-        )
+        self.line_space = [1 + len(Interaction), 1 + len(Resource)]
+        lines_space = spaces.MultiDiscrete(np.array([self.line_space] * self.n_lines))
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
 
         self.room_space = spaces.Box(
@@ -314,16 +313,15 @@ class Env(gym.Env):
                     dict(inventory_change())
                 ),
             )
-            prev_inventory = copy.deepcopy(inventory)
 
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
             #     ipdb.set_trace()
             #     self.observation_space.contains(obs)
-            obs = OrderedDict(obs._asdict())
-
+            self.preprocess_obs(OrderedDict(obs._asdict()))
             action = (yield obs, reward, done, info)
+            prev_inventory = copy.deepcopy(inventory)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             action = Action(*action)
@@ -507,6 +505,10 @@ class Env(gym.Env):
 
     def inventory_representation(self, inventory):
         return np.array([inventory[k] for k in InventoryItems])
+
+    def preprocess_obs(self, obs: OrderedDict):
+        del obs["ptr"]
+        return obs
 
     def seed(self, seed=None):
         assert self.seed == seed
