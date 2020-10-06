@@ -445,6 +445,8 @@ class Env(gym.Env):
                 if counts[o] == 0:
                     coord = free_space[self.random.choice(len(free_space))]
                     objects[coord] = o
+                    counts = Counter(objects.values())
+                    free_space = list(get_free_space())
 
     def initialize(self):
         n_lines = (
