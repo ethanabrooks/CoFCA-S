@@ -11,6 +11,8 @@ from trainer import Trainer
 
 
 class UpperTrainer(Trainer):
+    metric = "eval_reward"
+
     def build_agent(self, envs, debug=False, **agent_args):
         obs_space = envs.observation_space
         del agent_args["recurrent"]

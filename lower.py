@@ -1,5 +1,4 @@
 import inspect
-from argparse import ArgumentParser
 
 import lower_agent
 import lower_env
@@ -10,6 +9,8 @@ from upper import UpperTrainer
 
 
 class LowerTrainer(UpperTrainer):
+    metric = "reward"
+
     def build_agent(self, envs, **agent_args):
         return lower_agent.Agent(
             obs_spaces=envs.observation_space,

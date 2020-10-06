@@ -21,13 +21,14 @@ from common.vec_env.util import set_seeds
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import get_device
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 class Trainer:
+    metric = "reward"
+
     @classmethod
     def structure_config(cls, **config):
         agent_args = {}
@@ -362,7 +363,7 @@ class Trainer:
                 kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric="eval_reward"),
+                    search_alg=HyperOptSearch(config, metric=cls.metric),
                     num_samples=num_samples,
                 )
             if log_dir is not None:
