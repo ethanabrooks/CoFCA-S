@@ -181,7 +181,7 @@ class Trainer:
         set_seeds(cuda, cuda_deterministic, seed)
 
         if cuda:
-            device = torch.device("cuda") if name else get_device(name)
+            device = torch.device("cuda") if name is None else get_device(name)
         else:
             device = torch.device("cpu")
         print("Using device", device)
