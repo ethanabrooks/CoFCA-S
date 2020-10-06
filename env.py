@@ -349,8 +349,10 @@ class Env(gym.Env):
                     continue
 
             if self.random.random() < self.bandit_prob:
-                robbed = self.random.choice([k for k, v in inventory.items() if v > 0])
-                inventory[robbed] -= 1
+                possessions = [k for k, v in inventory.items() if v > 0]
+                if possessions:
+                    robbed = self.random.choice(possessions)
+                    inventory[robbed] -= 1
 
             standing_on = objects.get(tuple(agent_pos), None)
             if isinstance(action.lower, np.ndarray):
