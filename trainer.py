@@ -92,7 +92,6 @@ class Trainer:
         env_args: dict,
         log_dir: Optional[str],
         log_interval: int,
-        name: str,
         normalize: float,
         num_iterations: int,
         num_processes: int,
@@ -181,7 +180,7 @@ class Trainer:
         set_seeds(cuda, cuda_deterministic, seed)
 
         if cuda:
-            device = torch.device("cuda") if name is None else get_device(name)
+            device = torch.device("cuda")
         else:
             device = torch.device("cpu")
         print("Using device", device)
@@ -340,7 +339,7 @@ class Trainer:
             if k not in config or v is not None:
                 config[k] = v
 
-        config.update(name=name, log_dir=log_dir)
+        config.update(log_dir=log_dir)
 
         def run(c):
             c = cls.structure_config(**c)
