@@ -7,7 +7,6 @@ from torch.nn import functional as F
 from layers import Flatten
 import networks
 from networks import NNBase
-from lines import Subtask
 from env import Obs, Env, subtasks
 from utils import init_, init, init_normc_
 

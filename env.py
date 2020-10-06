@@ -2,11 +2,11 @@ import copy
 from collections import Counter, namedtuple, deque, OrderedDict
 from itertools import product, zip_longest
 from pprint import pprint
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict
 
-from colored import fg
 import gym
 import numpy as np
+from colored import fg
 from gym import spaces
 from gym.utils import seeding
 
@@ -232,8 +232,6 @@ class Env(gym.Env):
         rooms_complete = 0
         no_op_count = 0
         prev_inventory = inventory
-
-        fail = False
         info = {}
         ptr = 0
         action = None
@@ -489,22 +487,18 @@ class Env(gym.Env):
         def get_objects():
             max_objects = len(coordinates)
             num_objects = self.random.choice(max_objects)
-            print("num_objects", num_objects)
             h, w = self.room_shape
             positions = [
                 coordinates[i]
                 for i in self.random.choice(len(coordinates), size=num_objects)
             ] + [(i, w - 1) for i in range(h)]
-            print("positions", positions)
             limina = copy.deepcopy(self.limina)
             self.random.shuffle(limina)
-            print("limina", self.limina)
             limina = limina[: self.h]
             assert Terrain.WATER in limina
             world_objects = (
                 list(self.random.choice(Necessary, size=num_objects)) + limina
             )
-            print("world objects", world_objects)
             assert len(positions) == len(world_objects)
             return list(zip(positions, world_objects))
 
