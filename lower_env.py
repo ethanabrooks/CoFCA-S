@@ -47,9 +47,9 @@ class Env(upper_env.Env):
             inventory=self.inventory_representation(inventory),
         )
         obs = OrderedDict(obs._asdict())
-        for name, space in self.observation_space.spaces.items():
-            if not space.contains(obs[name]):
-                space.contains(obs[name])
+        # for name, space in self.observation_space.spaces.items():
+        #     if not space.contains(obs[name]):
+        #         space.contains(obs[name])
         reward = bool(subtask_complete)
         return obs, reward, done, info
 

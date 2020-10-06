@@ -10,7 +10,7 @@ from gym import spaces
 
 from distributions import FixedCategorical, Categorical
 from upper_env import Action
-from lower_agent import Agent, get_obs_sections
+from lower_agent import Agent, get_obs_sections, optimal_padding
 from upper_env import Obs
 from networks import MultiEmbeddingBag
 from transformer import TransformerModel
@@ -26,15 +26,6 @@ ParsedInput = namedtuple("ParsedInput", "obs actions")
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
     return FixedCategorical(probs=g * new + (1 - g) * old)
-
-
-def optimal_padding(h, kernel, stride):
-    n = np.ceil((h - kernel) / stride + 1)
-    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
-
-
-def conv_output_dimension(h, padding, kernel, stride, dilation=1):
-    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
 class Recurrence(nn.Module):
@@ -113,7 +104,7 @@ class Recurrence(nn.Module):
         d, h, w = (2, 1, 1) if self.debug_obs else observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
-        self.padding = optimal_padding(h, kernel_size, stride) + 1
+        self.padding = optimal_padding(h, kernel_size, stride)
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
         )

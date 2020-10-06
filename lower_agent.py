@@ -10,6 +10,15 @@ from networks import NNBase
 from utils import init_, init, init_normc_
 
 
+def optimal_padding(h, kernel, stride):
+    n = np.ceil((h - kernel) / stride + 1)
+    return 1 + int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+
+
+def conv_output_dimension(h, padding, kernel, stride, dilation=1):
+    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
+
+
 def get_obs_sections(obs_spaces):
     return [int(np.prod(s.shape)) for s in obs_spaces]
 
@@ -48,7 +57,8 @@ class LowerLevel(NNBase):
         self.obs_sections = get_obs_sections(self.obs_spaces)
 
         (d, h, w) = obs_spaces.obs.shape
-        padding = (kernel_size // 2) % stride
+        self.kernel_size = min(d, kernel_size)
+        padding = optimal_padding(h, kernel_size, stride)
 
         self.conv = nn.Sequential()
         in_size = d
@@ -70,7 +80,8 @@ class LowerLevel(NNBase):
                 ),
             )
             in_size = hidden_size
-            h = w = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
+            # h = w = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
+            h = w = conv_output_dimension(h, padding, kernel_size, stride)
             kernel_size = min(h, kernel_size)
         self.conv.add_module(name="flatten", module=Flatten())
         _init = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))

@@ -33,6 +33,12 @@ Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 
+def delete_nth(d, n):
+    d.rotate(-n)
+    d.popleft()
+    d.rotate(n)
+
+
 def subtasks():
     yield BuildBridge
     for interaction in [Interaction.COLLECT, Interaction.REFINE]:
@@ -62,13 +68,13 @@ class Env(gym.Env):
         no_op_limit: int,
         break_on_fail: bool,
         rank: int,
+        room_shape: tuple,
         bridge_failure_prob=0.25,
         map_discovery_prob=0.02,
         bandit_prob=0.005,
         windfall_prob=0.25,
         evaluating=False,
         seed=0,
-        room_shape=(3, 3),
     ):
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -209,9 +215,9 @@ class Env(gym.Env):
                 inventory_change=self.inventory_representation(dict(inventory_change)),
             )._asdict()
         )
-        # for name, space in self.observation_space.spaces.items():
-        #     if not space.contains(obs[name]):
-        #         space.contains(obs[name])
+        for name, space in self.observation_space.spaces.items():
+            if not space.contains(obs[name]):
+                space.contains(obs[name])
         reward = -0.01
         return obs, reward, done, info
 
@@ -219,7 +225,8 @@ class Env(gym.Env):
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
-            self.random = self.failure_buffer.pop(i)
+            self.random = self.failure_buffer[i]
+            delete_nth(self.failure_buffer, i)
         else:
             self.random = copy.deepcopy(self.non_failure_random)
         initial_random = copy.deepcopy(self.random)
