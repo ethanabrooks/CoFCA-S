@@ -90,7 +90,6 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
-        env_id: str,
         log_dir: Optional[str],
         log_interval: int,
         name: str,
@@ -98,7 +97,6 @@ class Trainer:
         num_iterations: int,
         num_processes: int,
         ppo_args: dict,
-        render_eval: bool,
         rollouts_args: dict,
         seed: int,
         save_interval: int,
@@ -107,9 +105,10 @@ class Trainer:
         use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
-        no_eval: bool = False,
         load_path: Path = None,
+        no_eval: bool = False,
         render: bool = False,
+        render_eval: bool = False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -326,7 +325,7 @@ class Trainer:
         return env
 
     @classmethod
-    def main(
+    def launch(
         cls,
         gpus_per_trial: float,
         cpus_per_trial: float,
@@ -336,6 +335,7 @@ class Trainer:
         config: dict,
         **kwargs,
     ):
+        assert config is not None
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 config[k] = v

@@ -3,9 +3,7 @@ import json
 from collections import namedtuple
 from pathlib import Path
 
-from torch import nn as nn
-
-from configs import configs, default
+from configs import configs, default_upper
 from trainer import Trainer
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
@@ -22,7 +20,7 @@ def get_config(name):
 
 
 def add_arguments(parser):
-    parser.add_argument("--config", type=get_config, default=default)
+    parser.add_argument("--config", type=get_config)
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
@@ -134,4 +132,4 @@ if __name__ == "__main__":
     PARSER.add_argument("--min-eval-lines", type=int)
     PARSER.add_argument("--max-eval-lines", type=int)
     add_arguments(PARSER)
-    Trainer.main(**vars(PARSER))
+    Trainer.launch(**vars(PARSER))

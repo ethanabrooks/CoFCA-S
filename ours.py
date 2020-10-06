@@ -9,9 +9,10 @@ import torch.nn.functional as F
 from gym import spaces
 
 from distributions import FixedCategorical, Categorical
-from env import Action
-from lower_level import Agent, get_obs_sections
-from env import Obs
+from upper_env import Action
+from lower_agent import Agent, get_obs_sections
+from upper_env import Obs
+from networks import MultiEmbeddingBag
 from transformer import TransformerModel
 from utils import init_
 
@@ -43,7 +44,7 @@ class Recurrence(nn.Module):
         conv_hidden_size,
         debug,
         debug_obs,
-        eval_lines,
+        max_eval_lines,
         fuzz,
         kernel_size,
         lower_level_config,
@@ -82,7 +83,7 @@ class Recurrence(nn.Module):
         self.task_embed_size = task_embed_size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.eval_lines = eval_lines
+        self.eval_lines = max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
@@ -91,8 +92,8 @@ class Recurrence(nn.Module):
         self.ne = num_edges
         self.action_space_nvec = Action(*map(int, action_space.nvec))
         self.n_a = n_a = self.action_space_nvec.upper
-        self.embed_task = nn.EmbeddingBag(
-            self.obs_spaces.lines.nvec[0].sum(), task_embed_size
+        self.embed_task = MultiEmbeddingBag(
+            self.obs_spaces.lines.nvec, embedding_dim=task_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -109,10 +110,6 @@ class Recurrence(nn.Module):
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer(
-            "offset",
-            F.pad(torch.tensor(self.obs_spaces.lines.nvec[0, :-1]).cumsum(0), [1, 0]),
-        )
         d, h, w = (2, 1, 1) if self.debug_obs else observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
@@ -214,10 +211,9 @@ class Recurrence(nn.Module):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(
-            (
-                state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-                + self.offset
-            ).view(-1, self.obs_spaces.lines.nvec[0].size)
+            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]).view(
+                -1, self.obs_spaces.lines.nvec[0].size
+            )
         ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)

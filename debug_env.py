@@ -6,12 +6,12 @@ import numpy as np
 from lines import If, While
 from utils import hierarchical_parse_args, RESET, GREEN, RED
 
-import env
+import upper_env
 import keyboard_control
-from env import ObjectMap, Coord, Line, State, Action, Obs
+from upper_env import ObjectMap, Coord, Line, State, Action, Obs
 
 
-class Env(env.Env):
+class Env(upper_env.Env):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.observation_space.spaces.update(
@@ -126,6 +126,6 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("--min-eval-lines", type=int, required=True)
     PARSER.add_argument("--max-eval-lines", type=int, required=True)
-    env.add_arguments(PARSER)
+    upper_env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
     main(Env(rank=0, lower_level=None, **hierarchical_parse_args(PARSER)))

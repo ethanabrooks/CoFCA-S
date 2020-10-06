@@ -10,7 +10,6 @@ from colored import fg
 from gym import spaces
 from gym.utils import seeding
 
-import keyboard_control
 from lines import Subtask
 from objects import (
     Terrain,
@@ -23,21 +22,15 @@ from objects import (
     Resource,
     Symbols,
 )
-from utils import (
-    hierarchical_parse_args,
-    RESET,
-)
+from utils import RESET
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
-
-Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
-assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
-
 Last = namedtuple("Last", "action active reward terminal selected")
 Action = namedtuple("Action", "upper lower delta dg ptr")
-
 BuildBridge = Interaction.BUILD, None
+Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
+assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 
 def subtasks():
@@ -67,10 +60,8 @@ class Env(gym.Env):
         min_lines: int,
         max_lines: int,
         no_op_limit: int,
-        time_to_waste: int,
         break_on_fail: bool,
         rank: int,
-        lower_level: str,
         bridge_failure_prob=0.25,
         map_discovery_prob=0.02,
         bandit_prob=0.005,
@@ -90,12 +81,10 @@ class Env(gym.Env):
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
-        self.lower_level = lower_level
         self.rank = rank
         self.break_on_fail = break_on_fail
         self.no_op_limit = no_op_limit
         self.num_subtasks = num_subtasks
-        self.time_to_waste = time_to_waste
         self.i = 0
         self.success_count = 0
 
@@ -116,7 +105,7 @@ class Env(gym.Env):
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
         self.max_inventory = Counter({k: self.chunk_size for k in InventoryItems})
-        self.limina = [Terrain.WATER] + [Terrain.WATER, Terrain.MOUNTAIN] * self.h
+        self.limina = [Terrain.WATER] + [Terrain.WATER, Terrain.MOUNTAIN] * (self.h - 1)
 
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
@@ -130,7 +119,7 @@ class Env(gym.Env):
                 )
             )
         )
-        self.line_space = [1 + len(Interaction), 1 + len(Resource)]
+        self.line_space = [1 + len(Interaction), 2 + len(Resource)]
         lines_space = spaces.MultiDiscrete(np.array([self.line_space] * self.n_lines))
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
 
@@ -141,7 +130,9 @@ class Env(gym.Env):
         )
 
         def inventory_space(n):
-            return spaces.MultiDiscrete(n * np.ones(len(Resource)))
+            return spaces.MultiDiscrete(
+                n * np.ones(len(Resource) + len(Refined) + 1)  # +1 for map
+            )
 
         self.observation_space = spaces.Dict(
             Obs(
@@ -161,11 +152,13 @@ class Env(gym.Env):
     def reset(self):
         self.i += 1
         self.iterator = self.generator()
-        s, r, t, i = next(self.iterator)
+        s, r, t, i = self.preprocess_state(**next(self.iterator))
         return s
 
-    def step(self, action):
-        return self.iterator.send(action)
+    def step(self, action: np.ndarray):
+        action = Action(*action)
+        action = action._replace(lower=self.lower_level_actions[action.lower])
+        return self.preprocess_state(**self.iterator.send(action))
 
     @staticmethod
     def preprocess_line(line):
@@ -174,10 +167,7 @@ class Env(gym.Env):
                 resource_code = len(Resource)
             else:
                 resource_code = line.resource.value
-            return [
-                1 + line.interaction.value,
-                1 + resource_code,
-            ]
+            return [line.interaction.value, resource_code]
         elif line is None:
             return [0, 0]
         else:
@@ -198,6 +188,33 @@ class Env(gym.Env):
                 yield "|"
             yield "\n" + "-" * 3 * self.w + "\n"
 
+    def preprocess_state(
+        self,
+        room,
+        lines,
+        inventory,
+        inventory_change,
+        done,
+        info,
+        ptr,
+        subtask_complete,
+    ):
+        _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
+        obs = OrderedDict(
+            Obs(
+                obs=room,
+                lines=[self.preprocess_line(l) for l in lines],
+                mask=[p is None for p in padded],
+                inventory=self.inventory_representation(inventory),
+                inventory_change=self.inventory_representation(dict(inventory_change)),
+            )._asdict()
+        )
+        # for name, space in self.observation_space.spaces.items():
+        #     if not space.contains(obs[name]):
+        #         space.contains(obs[name])
+        reward = -0.01
+        return obs, reward, done, info
+
     def generator(self):
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
@@ -212,6 +229,14 @@ class Env(gym.Env):
         assert len(rooms) == len(blobs)
         rooms_iter = iter(rooms)
         blobs_iter = iter(blobs)
+
+        def get_lines():
+            for blob in blobs:
+                for subtask in blob:
+                    yield subtask
+                yield Subtask(*BuildBridge)
+
+        lines = list(get_lines())
 
         def next_required():
             blob = next(blobs_iter, None)
@@ -234,17 +259,9 @@ class Env(gym.Env):
         info = {}
         ptr = 0
         action = None
-
-        def get_lines():
-            for blob in blobs:
-                for subtask in blob:
-                    yield subtask
-                yield Subtask(*BuildBridge)
-
-        lines = list(get_lines())
-        _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
         time_limit = self.n_lines * self.room_shape.sum()
         success = False
+        subtask_complete = False
 
         while True:
             time_limit -= 1
@@ -304,28 +321,21 @@ class Env(gym.Env):
                 for k in InventoryItems:
                     yield k, inventory[k] - prev_inventory[k]
 
-            obs = Obs(
-                obs=rooms,
-                lines=[self.preprocess_line(l) for l in lines],
-                mask=[p is None for p in padded],
-                inventory=self.inventory_representation(inventory),
-                inventory_change=self.inventory_representation(
-                    dict(inventory_change())
-                ),
-            )
+            if subtask_complete:
+                ptr += 1
 
-            # if not self.observation_space.contains(obs):
-            #     import ipdb
-            #
-            #     ipdb.set_trace()
-            #     self.observation_space.contains(obs)
-            self.preprocess_obs(OrderedDict(obs._asdict()))
-            action = (yield obs, reward, done, info)
+            action = yield dict(
+                room=room,
+                lines=lines,
+                inventory=inventory,
+                inventory_change=inventory_change(),
+                done=done,
+                info=info,
+                ptr=ptr,
+                subtask_complete=subtask_complete,
+            )
             prev_inventory = copy.deepcopy(inventory)
-            if action.size == 1:
-                action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
-            action = Action(*action)
-            action = action._replace(lower=self.lower_level_actions[action.lower])
+            subtask_complete = False
 
             info = dict(
                 use_failure_buf=use_failure_buf,
@@ -382,7 +392,7 @@ class Env(gym.Env):
                             inventory[Other.MAP] = 0
                         if next_room():
                             if line.interaction == Interaction.BUILD:
-                                ptr += 1
+                                subtask_complete = True
                             room = next(rooms_iter, None)
                             if room is None:
                                 success = True
@@ -400,7 +410,7 @@ class Env(gym.Env):
                         line.interaction == Interaction.COLLECT
                         and line.resource == standing_on
                     ):
-                        ptr += 1
+                        subtask_complete = True
                     if self.random.random() < self.map_discovery_prob:
                         inventory[Other.MAP] = 1
             elif isinstance(action.lower, Resource):
@@ -409,7 +419,7 @@ class Env(gym.Env):
                         line.interaction == Interaction.REFINE
                         and line.resource == action.lower
                     ):
-                        ptr += 1
+                        subtask_complete = True
                     if inventory[action.lower]:
                         inventory[action.lower] -= 1
                         inventory[Refined(action.lower.value)] += 1
@@ -470,11 +480,11 @@ class Env(gym.Env):
                 yield Subtask(*self.subtasks[i])
 
         def get_blobs():
-            i = n_lines - 1  # for BuildBridge
+            i = n_lines
             while i > 0:
-                chunk = list(get_blob())[:i]
-                yield chunk
-                i -= len(chunk) + 1  # for BuildBridge
+                blob = list(get_blob())[: i - 1]  # for BuildBridge
+                yield blob
+                i -= len(blob) + 1  # for BuildBridge
 
         blobs = list(get_blobs())
         n_rooms = len(blobs)
@@ -506,10 +516,6 @@ class Env(gym.Env):
     def inventory_representation(self, inventory):
         return np.array([inventory[k] for k in InventoryItems])
 
-    def preprocess_obs(self, obs: OrderedDict):
-        del obs["ptr"]
-        return obs
-
     def seed(self, seed=None):
         assert self.seed == seed
 
@@ -518,49 +524,12 @@ class Env(gym.Env):
         if pause:
             input("pause")
 
-
-def add_arguments(p):
-    p.add_argument("--min-lines", type=int, required=True)
-    p.add_argument("--max-lines", type=int, required=True)
-    p.add_argument("--no-op-limit", type=int, required=True)
-    p.add_argument("--break-on-fail", action="store_true")
-    p.add_argument("--time-to-waste", type=int, required=True)
-    p.add_argument("--tgt-success-rate", type=float, required=True)
-    p.add_argument("--failure-buffer-size", type=int, required=True)
-    p.add_argument("--room-shape", nargs=2, type=int, required=True)
-
-
-def main(env):
-    actions = [
-        tuple(x) if isinstance(x, np.ndarray) else x for x in lower_level_actions()
-    ]
-    mapping = dict(
-        w=(-1, 0),
-        s=(1, 0),
-        a=(0, -1),
-        d=(0, 1),
-        c=Interaction.COLLECT,
-        t=Resource.STONE,
-        i=Resource.IRON,
-        o=Resource.WOOD,
-    )
-
-    def action_fn(string):
-        action = mapping.get(string, None)
-        if action is None:
-            return None
-        action = actions.index(action)
-        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ptr=0))
-
-    keyboard_control.run(env, action_fn=action_fn)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int)
-    PARSER.add_argument("--max-eval-lines", type=int)
-    add_arguments(PARSER)
-    PARSER.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))
+    @classmethod
+    def add_arguments(cls, p):
+        p.add_argument("--min-lines", type=int, required=True)
+        p.add_argument("--max-lines", type=int, required=True)
+        p.add_argument("--no-op-limit", type=int, required=True)
+        p.add_argument("--break-on-fail", action="store_true")
+        p.add_argument("--tgt-success-rate", type=float, required=True)
+        p.add_argument("--failure-buffer-size", type=int, required=True)
+        p.add_argument("--room-shape", nargs=2, type=int, required=True)
