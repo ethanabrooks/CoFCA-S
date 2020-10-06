@@ -93,7 +93,7 @@ class Trainer:
         log_dir: Optional[str],
         log_interval: int,
         normalize: float,
-        num_iterations: int,
+        num_frames: int,
         num_processes: int,
         ppo_args: dict,
         rollouts_args: dict,
@@ -206,13 +206,15 @@ class Trainer:
             ppo = PPO(agent=agent, **ppo_args)
             train_report = SumAcrossEpisode()
             train_infos = InfosAggregator()
-            start = 0
             if load_path:
-                start = self.load_checkpoint(load_path, ppo, agent, device)
+                self.load_checkpoint(load_path, ppo, agent, device)
 
             rollouts.obs[0].copy_(train_envs.reset())
 
-            for i in range(start, num_iterations + 1):
+            for i in itertools.count():
+                training_iteration = i * train_steps * num_processes
+                if training_iteration >= num_frames:
+                    break
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
@@ -289,7 +291,7 @@ class Trainer:
                         **dict(train_infos.items()),
                         **dict(eval_report.items()),
                         **dict(eval_infos.items()),
-                        step=i,
+                        training_iteration=training_iteration,
                     )
                     if use_tune:
                         tune.report(**report)
