@@ -39,11 +39,6 @@ Action = namedtuple("Action", "upper lower delta dg ptr")
 
 BuildBridge = Interaction.BUILD, None
 
-"""
-TODO:
-add to failure_buffer
-"""
-
 
 def subtasks():
     yield BuildBridge
@@ -65,7 +60,7 @@ def lower_level_actions():
 class Env(gym.Env):
     def __init__(
         self,
-        max_failure_sample_prob: int,
+        tgt_success_rate: int,
         failure_buffer_size: int,
         min_eval_lines: int,
         max_eval_lines: int,
@@ -89,8 +84,7 @@ class Env(gym.Env):
         self.map_discovery_prob = map_discovery_prob
         self.bridge_failure_prob = bridge_failure_prob
         self.counts = None
-        self.max_failure_sample_prob = max_failure_sample_prob
-        self.failure_buffer = deque(maxlen=failure_buffer_size)
+        self.tgt_success_rate = tgt_success_rate
 
         self.subtasks = list(subtasks())
         num_subtasks = len(self.subtasks)
@@ -113,6 +107,8 @@ class Env(gym.Env):
             self.n_lines = max_lines
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
+        self.failure_buffer = deque(maxlen=failure_buffer_size)
+        self.non_failure_random = copy.deepcopy(self.random)
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
@@ -204,22 +200,19 @@ class Env(gym.Env):
             yield "\n" + "-" * 3 * self.w + "\n"
 
     def generator(self):
-        use_failure_buf = (
-            not self.evaluating
-            and len(self.failure_buffer) > 0
-            and (
-                self.random.random()
-                < self.max_failure_sample_prob * self.success_count / self.i
-            )
-        )
-        blobs, rooms = self.initialize(use_failure_buf)
+        use_failure_buf = self.use_failure_buf()
+        if use_failure_buf:
+            i = self.random.choice(len(self.failure_buffer))
+            self.random = self.failure_buffer.pop(i)
+        else:
+            self.random = copy.deepcopy(self.non_failure_random)
+        initial_random = copy.deepcopy(self.random)
+
+        blobs, rooms = self.initialize()
 
         assert len(rooms) == len(blobs)
         rooms_iter = iter(rooms)
         blobs_iter = iter(blobs)
-
-        def no_op(action_index):
-            return action_index == len(self.subtasks)
 
         def next_required():
             blob = next(blobs_iter, None)
@@ -230,7 +223,7 @@ class Env(gym.Env):
                     elif subtask.interaction == Interaction.REFINE:
                         yield Refined(subtask.resource.value)
                     else:
-                        raise RuntimeError
+                        assert subtask.interaction == Interaction.BUILD
 
         required = Counter(next_required())
         objects = dict(next(rooms_iter))
@@ -251,43 +244,52 @@ class Env(gym.Env):
                     yield subtask
                 yield Subtask(*BuildBridge)
 
-        _, padded = zip(*list(zip_longest(range(self.n_lines), get_lines())))
+        lines = list(get_lines())
+        _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
+        time_limit = self.n_lines * self.room_shape.sum()
+        success = False
 
         while True:
-            self.make_feasible(objects)
-
-            success = objects is None
-            self.success_count += success
+            time_limit -= 1
+            fail = not self.evaluating and time_limit < 0
+            self.success_count += int(success)
 
             done = fail or success
-            reward = float(success)
-            if fail and self.break_on_fail:
-                import ipdb
+            reward = -0.1
+            if fail:
+                self.failure_buffer.append(initial_random)
+                if self.break_on_fail:
+                    import ipdb
 
-                ipdb.set_trace()
+                    ipdb.set_trace()
             if done:
-                info.update(
-                    instruction_len=len(blobs),
-                )
                 if not use_failure_buf:
-                    info.update(success_without_failure_buf=success)
-                if success:
-                    info.update(success_line=len(blobs), progress=1)
+                    # this will allow us to continue the current random seed on the next episode
+                    self.non_failure_random = copy.deepcopy(self.random)
+                info.update(instruction_len=len(lines), success=float(success))
+                if not use_failure_buf:
+                    info.update(success_without_failure_buf=float(success))
+                info.update(
+                    rooms_complete=rooms_complete,
+                    progress=rooms_complete / len(rooms),
+                )
 
-            line_specific_info = {
-                f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
-            }
+            # line_specific_info = {
+            #     f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
+            # }
 
+            self.make_feasible(objects)
             room = self.obs_array(agent_pos, objects)
 
             def render():
                 if done:
                     print(fg("green") if success else fg("red"))
 
-                for i, line in enumerate(get_lines()):
+                for i, line in enumerate(lines):
                     pre = "- " if i == ptr else "  "
                     print("{:2}{}{}{}".format(i, pre, " ", str(line)))
                 print(RESET)
+                print("Time limit:", time_limit)
                 print("Action:", action)
                 print("Reward:", reward)
                 print("Inventory:")
@@ -307,7 +309,7 @@ class Env(gym.Env):
 
             obs = Obs(
                 obs=rooms,
-                lines=[self.preprocess_line(l) for l in get_lines()],
+                lines=[self.preprocess_line(l) for l in lines],
                 mask=[p is None for p in padded],
                 inventory=self.inventory_representation(inventory),
                 inventory_change=self.inventory_representation(
@@ -323,12 +325,7 @@ class Env(gym.Env):
             #     self.observation_space.contains(obs)
             obs = OrderedDict(obs._asdict())
 
-            action = (
-                yield obs,
-                reward,
-                done,
-                dict(**info, **line_specific_info),
-            )
+            action = (yield obs, reward, done, info)
             if action.size == 1:
                 action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
             action = Action(*action)
@@ -339,7 +336,8 @@ class Env(gym.Env):
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            if no_op(action.upper):
+            no_op = action.upper == len(self.subtasks)
+            if no_op:
                 no_op_count += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -386,7 +384,11 @@ class Env(gym.Env):
                         if moving_into == Terrain.MOUNTAIN:
                             inventory[Other.MAP] = 0
                         if next_room():
-                            objects = dict(next(rooms_iter))
+                            room = next(rooms_iter, None)
+                            if room is None:
+                                success = True
+                            else:
+                                objects = dict(room)
                             required = Counter(next_required())
                             rooms_complete += 1
             elif action.lower == Interaction.COLLECT:
@@ -404,6 +406,16 @@ class Env(gym.Env):
                         inventory[Refined(action.lower.value)] += 1
             else:
                 raise NotImplementedError
+
+    def use_failure_buf(self):
+        if self.evaluating or len(self.failure_buffer) == 0:
+            use_failure_buf = False
+        else:
+            success_rate = (1 + self.success_count) / self.i
+            use_failure_prob = 1 - self.tgt_success_rate / success_rate
+            use_failure_prob = max(use_failure_prob, 0)
+            use_failure_buf = self.random.random() < use_failure_prob
+        return use_failure_buf
 
     def obs_array(self, agent_pos, objects):
         room = np.zeros((len(WorldObjects), *self.room_shape))
@@ -434,53 +446,54 @@ class Env(gym.Env):
                     coord = free_space[self.random.choice(len(free_space))]
                     objects[coord] = o
 
-    def initialize(self, use_failure_buf):
-        if use_failure_buf:
-            choice = self.random.choice(len(self.failure_buffer))
-            blobs, rooms = self.failure_buffer.pop(choice)
-        else:
-            n_lines = (
-                self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
-                if self.evaluating
-                else self.random.random_integers(self.min_lines, self.max_lines)
-            )
+    def initialize(self):
+        n_lines = (
+            self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
+            if self.evaluating
+            else self.random.random_integers(self.min_lines, self.max_lines)
+        )
 
-            def get_blob():
-                size = self.random.choice(self.chunk_size)
-                for i in self.random.choice(len(self.subtasks), size=size):
-                    yield Subtask(*self.subtasks[i])
+        def get_blob():
+            size = self.random.choice(self.chunk_size)
+            for i in self.random.choice(len(self.subtasks), size=size):
+                yield Subtask(*self.subtasks[i])
 
-            def get_blobs():
-                i = n_lines - 1  # for BuildBridge
-                while i > 0:
-                    chunk = list(get_blob())[:i]
-                    yield chunk
-                    i -= len(chunk) + 1  # for BuildBridge
+        def get_blobs():
+            i = n_lines - 1  # for BuildBridge
+            while i > 0:
+                chunk = list(get_blob())[:i]
+                yield chunk
+                i -= len(chunk) + 1  # for BuildBridge
 
-            blobs = list(get_blobs())
-            n_rooms = len(blobs)
-            assert n_rooms > 0
+        blobs = list(get_blobs())
+        n_rooms = len(blobs)
+        assert n_rooms > 0
+        h, w = self.room_shape
+        coordinates = list(product(range(h), range(w - 1)))
+
+        def get_objects():
+            max_objects = len(coordinates)
+            num_objects = self.random.choice(max_objects)
+            print("num_objects", num_objects)
             h, w = self.room_shape
-            coordinates = list(product(range(h), range(w - 1)))
+            positions = [
+                coordinates[i]
+                for i in self.random.choice(len(coordinates), size=num_objects)
+            ] + [(i, w - 1) for i in range(h)]
+            print("positions", positions)
+            limina = copy.deepcopy(self.limina)
+            self.random.shuffle(limina)
+            print("limina", self.limina)
+            limina = limina[: self.h]
+            assert Terrain.WATER in limina
+            world_objects = (
+                list(self.random.choice(Necessary, size=num_objects)) + limina
+            )
+            print("world objects", world_objects)
+            assert len(positions) == len(world_objects)
+            return list(zip(positions, world_objects))
 
-            def get_objects():
-                max_objects = len(coordinates)
-                num_objects = self.random.choice(max_objects)
-                h, w = self.room_shape
-                positions = [
-                    coordinates[i]
-                    for i in self.random.choice(len(coordinates), size=num_objects)
-                ] + [(i, w - 1) for i in range(h)]
-                self.random.shuffle(self.limina)
-                limina = self.limina[: self.h]
-                assert Terrain.WATER in limina
-                world_objects = (
-                    list(self.random.choice(Necessary, size=num_objects)) + limina
-                )
-                assert len(positions) == len(world_objects)
-                return list(zip(positions, world_objects))
-
-            rooms = [get_objects() for _ in range(n_rooms)]
+        rooms = [get_objects() for _ in range(n_rooms)]
         return blobs, rooms
 
     def inventory_representation(self, inventory):
@@ -501,7 +514,7 @@ def add_arguments(p):
     p.add_argument("--no-op-limit", type=int, required=True)
     p.add_argument("--break-on-fail", action="store_true")
     p.add_argument("--time-to-waste", type=int, required=True)
-    p.add_argument("--max-failure-sample-prob", type=float, required=True)
+    p.add_argument("--tgt-success-rate", type=float, required=True)
     p.add_argument("--failure-buffer-size", type=int, required=True)
     p.add_argument("--room-shape", nargs=2, type=int, required=True)
 
