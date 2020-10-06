@@ -352,6 +352,7 @@ class Env(gym.Env):
                     robbed = self.random.choice(possessions)
                     inventory[robbed] -= 1
 
+            line = lines[ptr]
             standing_on = objects.get(tuple(agent_pos), None)
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
@@ -384,6 +385,8 @@ class Env(gym.Env):
                         if moving_into == Terrain.MOUNTAIN:
                             inventory[Other.MAP] = 0
                         if next_room():
+                            if line.interaction == Interaction.BUILD:
+                                ptr += 1
                             room = next(rooms_iter, None)
                             if room is None:
                                 success = True
@@ -397,10 +400,20 @@ class Env(gym.Env):
                         self.random.random() < self.windfall_prob
                     )
                     del objects[tuple(agent_pos)]
+                    if (
+                        line.interaction == Interaction.COLLECT
+                        and line.resource == standing_on
+                    ):
+                        ptr += 1
                     if self.random.random() < self.map_discovery_prob:
                         inventory[Other.MAP] = 1
             elif isinstance(action.lower, Resource):
                 if standing_on == Terrain.FACTORY:
+                    if (
+                        line.interaction == Interaction.REFINE
+                        and line.resource == action.lower
+                    ):
+                        ptr += 1
                     if inventory[action.lower]:
                         inventory[action.lower] -= 1
                         inventory[Refined(action.lower.value)] += 1
