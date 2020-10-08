@@ -1,13 +1,12 @@
 from collections import OrderedDict, namedtuple
 
 import numpy as np
-from colored import fg
 from gym import spaces
 
-import keyboard_control
 import upper_env
-from objects import Interaction, Resource
+import keyboard_control
 from upper_env import Action
+from objects import Interaction, Resource
 
 Obs = namedtuple("Obs", "inventory line obs")
 
@@ -36,41 +35,42 @@ class Env(upper_env.Env):
         )
         return self.iterator.send(action)
 
-    def generator(self):
-        iterator = super().generator()
-        action = None
-        time_limit = self.time_per_subtask()
+    def obs_generator(self, lines):
+        iterator = super().obs_generator(lines)
+        state = yield next(iterator)
+
+        def line(ptr, **_):
+            ptr = min(ptr, len(lines) - 1)
+            return self.preprocess_line(lines[ptr])
+
         while True:
-            s, r, t, i = iterator.send(action)
-            time_limit -= 1
-            if time_limit == 0:
-                t = True
-            action = yield s, r, t, i
+            obs, render = iterator.send(state)
+            obs = OrderedDict(
+                Obs(
+                    inventory=obs["inventory"], line=line(**state), obs=obs["obs"]
+                )._asdict()
+            )
+            state = yield obs, render
 
-    def preprocess_state(
-        self, room, lines, inventory, info, done, ptr, subtask_complete, **kwargs
-    ):
-        ptr = min(ptr, len(lines) - 1)
-        obs = OrderedDict(
-            Obs(
-                obs=room,
-                line=self.preprocess_line(lines[ptr]),
-                inventory=self.inventory_representation(inventory),
-            )._asdict()
-        )
-        # for name, space in self.observation_space.spaces.items():
-        #     if not space.contains(obs[name]):
-        #         space.contains(obs[name])
-        if done or subtask_complete:
-            info.update(success=subtask_complete)
+    def done_generator(self, lines):
+        state = yield
+        time_remaining = self.time_per_subtask()
 
-        reward = -0.1
-        return obs, reward, subtask_complete, info
+        while True:
+            done = state["subtask_complete"]
+            if not self.evaluating:
+                time_remaining -= 1
+                done |= time_remaining == 0
+            state = yield done, lambda: print("Time remaining:", time_remaining)
 
-    def _render(self, subtask_complete, **kwargs):
-        if subtask_complete:
-            print(fg("green"))
-        super()._render(**kwargs, subtask_complete=subtask_complete)
+    def info_generator(self, lines, rooms):
+        iterator = super().info_generator(lines, rooms)
+        state = yield next(iterator)
+        while True:
+            info, render = iterator.send(state)
+            if state["done"]:
+                info.update(success=state["subtask_complete"])
+            state = yield info, render
 
     def main(self):
         actions = [

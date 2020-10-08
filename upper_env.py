@@ -2,7 +2,7 @@ import copy
 from collections import Counter, namedtuple, deque, OrderedDict
 from itertools import product, zip_longest
 from pprint import pprint
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Generator
 
 import gym
 import numpy as np
@@ -108,13 +108,13 @@ class Env(gym.Env):
         self.failure_buffer = deque(maxlen=failure_buffer_size)
         self.non_failure_random = self.random.get_state()
         self.evaluating = evaluating
-        self.iterator = None
-        self.render_thunk = None
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
         self.max_inventory = Counter({k: self.chunk_size for k in InventoryItems})
         self.limina = [Terrain.WATER] + [Terrain.WATER, Terrain.MOUNTAIN] * (self.h - 1)
+        self.iterator = None
+        self.render_thunk = None
 
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
@@ -160,72 +160,15 @@ class Env(gym.Env):
 
     def reset(self):
         self.i += 1
-        self.iterator = self.generator()
+        self.iterator = self.failure_buffer_wrapper(self.generator())
         s, r, t, i = next(self.iterator)
         return s
 
     def step(self, action: np.ndarray):
-        action = Action(*action)
-        action = action._replace(lower=self.lower_level_actions[action.lower])
-        return self.iterator.send(action)
+        return self.iterator.send(Action(*action))
 
-    @staticmethod
-    def preprocess_line(line):
-        if isinstance(line, Subtask):
-            if line.resource is None:
-                resource_code = len(Resource)
-            else:
-                resource_code = line.resource.value
-            return [line.interaction.value, resource_code]
-        elif line is None:
-            return [0, 0]
-        else:
-            raise RuntimeError
-
-    def room_strings(self, room):
-        for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
-            for j, channel in enumerate(row):
-                (nonzero,) = channel.nonzero()
-                assert len(nonzero) <= 2
-                for _, i in zip_longest(range(2), nonzero):
-                    if i is None:
-                        yield " "
-                    else:
-                        world_obj = WorldObjects[i]
-                        yield Symbols[world_obj]
-                yield RESET
-                yield "|"
-            yield "\n" + "-" * 3 * self.w + "\n"
-
-    def preprocess_state(
-        self,
-        room,
-        lines,
-        inventory,
-        info,
-        done,
-        ptr,
-        subtask_complete,
-        inventory_change,
-        **kwargs
-    ):
-        _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
-        obs = OrderedDict(
-            Obs(
-                obs=room,
-                lines=[self.preprocess_line(l) for l in lines],
-                mask=[p is None for p in padded],
-                inventory=self.inventory_representation(inventory),
-                inventory_change=self.inventory_representation(dict(inventory_change)),
-            )._asdict()
-        )
-        for name, space in self.observation_space.spaces.items():
-            if not space.contains(obs[name]):
-                space.contains(obs[name])
-        reward = -0.1
-        return obs, reward, done, info
-
-    def generator(self):
+    def failure_buffer_wrapper(self, iterator):
+        initial_random = self.random.get_state()
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
@@ -233,24 +176,23 @@ class Env(gym.Env):
             delete_nth(self.failure_buffer, i)
         else:
             self.random.set_state(self.non_failure_random)
-        state_iterator = self.state_generator()
         action = None
         while True:
-            state = state_iterator.send(action)
-            s, r, t, i = self.preprocess_state(**state)
-            if t and not use_failure_buf:
-                i.update(success_without_failure_buf=float(i["success"]))
-            self.render_thunk = lambda: self._render(**state, reward=r, action=action)
+            s, r, t, i = iterator.send(action)
+            if t:
+                success = i["success"]
+                self.success_count += int(success)
+                if not use_failure_buf:
+                    i.update(success_without_failure_buf=float(success))
+                if not success:
+                    self.failure_buffer.append(initial_random)
             if t:
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def time_per_subtask(self):
-        return 2 * (self.room_shape.sum() - 2)
-
-    def state_generator(self):
-        initial_random = self.random.get_state()
-        blobs, rooms = self.initialize()
+    def generator(self):
+        blobs = self.build_blobs()
+        rooms = self.build_rooms(blobs)
         assert len(rooms) == len(blobs)
         rooms_iter = iter(rooms)
         blobs_iter = iter(blobs)
@@ -262,6 +204,14 @@ class Env(gym.Env):
                 yield BuildBridge
 
         lines = list(get_lines())
+        obs_iterator = self.obs_generator(lines)
+        reward_iterator = self.reward_generator()
+        done_iterator = self.done_generator(lines)
+        info_iterator = self.info_generator(lines, rooms)
+        next(obs_iterator)
+        next(reward_iterator)
+        next(done_iterator)
+        next(info_iterator)
 
         def next_required():
             blob = next(blobs_iter, None)
@@ -278,81 +228,54 @@ class Env(gym.Env):
         objects = dict(next(rooms_iter))
         agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
         inventory = Counter()
-        rooms_complete = 0
-        no_op_count = 0
-        prev_inventory = inventory
-        info = {}
         ptr = 0
-        time_limit = self.n_lines * self.time_per_subtask()
         success = False
+        action = None
         subtask_complete = False
-        done = False
+        room_complete = False
 
         while True:
-            time_limit -= 1
-            fail = not self.evaluating and time_limit < 0
-            self.success_count += int(success)
-
-            done = done or fail or success
-            if fail:
-                self.failure_buffer.append(initial_random)
-                if self.break_on_fail:
-                    import ipdb
-
-                    ipdb.set_trace()
-            if done:
-                info.update(instruction_len=len(lines), success=float(success))
-                info.update(
-                    rooms_complete=rooms_complete,
-                    progress=rooms_complete / len(rooms),
-                    success=float(success),
-                )
-
-            # line_specific_info = {
-            #     f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
-            # }
-
             self.make_feasible(objects)
-            room = self.obs_array(agent_pos, objects)
             inventory = inventory & self.max_inventory
-
-            def inventory_change():
-                for k in InventoryItems:
-                    yield k, inventory[k] - prev_inventory[k]
 
             if subtask_complete:
                 ptr += 1
 
-            action = yield dict(
-                room=room,
-                lines=lines,
+            state = dict(
                 inventory=inventory,
-                inventory_change=inventory_change(),
-                done=done,
-                info=info,
+                agent_pos=agent_pos,
+                objects=objects,
                 ptr=ptr,
-                subtask_complete=subtask_complete,
+                action=action,
                 success=success,
-                time_limit=time_limit,
+                subtask_complete=subtask_complete,
+                room_complete=room_complete,
                 required=required,
             )
-            prev_inventory = copy.deepcopy(inventory)
+
+            s, render_s = obs_iterator.send(state)
+            r, render_r = reward_iterator.send(state)
+            t, render_t = done_iterator.send(state)
+            i, render_i = info_iterator.send(dict(state, done=t))
+
+            def render():
+                if t:
+                    print(fg("green") if success else fg("red"))
+                render_r()
+                render_t()
+                render_i()
+                print("Action:", action)
+                print("Inventory:")
+                pprint(inventory)
+                print("Required:")
+                pprint(required)
+                render_s()
+                print(RESET)
+
+            self.render_thunk = render
+            action = yield s, r, t, i
             subtask_complete = False
-
-            info = dict(
-                len_failure_buffer=len(self.failure_buffer),
-            )
-
-            no_op = action.upper == len(self.subtasks)
-            if no_op:
-                no_op_count += 1
-                no_op_limit = 200 if self.evaluating else self.no_op_limit
-                if self.no_op_limit is not None and self.no_op_limit < 0:
-                    no_op_limit = len(blobs)
-                if no_op_count >= no_op_limit:
-                    done = True
-                    continue
-
+            room_complete = False
             if self.random.random() < self.bandit_prob:
                 possessions = [k for k, v in inventory.items() if v > 0]
                 if possessions:
@@ -394,13 +317,13 @@ class Env(gym.Env):
                         if next_room():
                             if line.interaction == Interaction.BUILD:
                                 subtask_complete = True
+                                room_complete = True
                             room = next(rooms_iter, None)
                             if room is None:
                                 success = True
                             else:
                                 objects = dict(room)
                             required = Counter(next_required())
-                            rooms_complete += 1
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
                     inventory[standing_on] += 1 + int(
@@ -427,6 +350,156 @@ class Env(gym.Env):
             else:
                 raise NotImplementedError
 
+    def obs_generator(self, lines):
+        state = yield
+        inventory = state["inventory"]
+        padded = lines + [None] * (self.n_lines - len(lines))
+
+        def build_array(agent_pos, objects, **_):
+            room = np.zeros((len(WorldObjects), *self.room_shape))
+            for p, o in list(objects.items()):
+                p = np.array(p)
+                room[(WorldObjects.index(o), *p)] = 1
+            room[(WorldObjects.index(Other.AGENT), *agent_pos)] = 1
+            return room
+
+        def inventory_change():
+            for k in InventoryItems:
+                yield k, inventory[k] - prev_inventory[k]
+
+        def render(ptr, **_):
+            for i, line in enumerate(lines):
+                pre = "- " if i == ptr else "  "
+                print("{:2}{}{}{}".format(i, pre, " ", str(line)))
+            print("Obs:")
+            for string in self.room_strings(array):
+                print(string, end="")
+
+        while True:
+            prev_inventory = copy.deepcopy(inventory)
+            array = build_array(**state)
+            obs = OrderedDict(
+                Obs(
+                    obs=array,
+                    lines=[self.preprocess_line(l) for l in lines],
+                    mask=[p is None for p in padded],
+                    inventory=self.inventory_representation(inventory),
+                    inventory_change=self.inventory_representation(
+                        dict(inventory_change())
+                    ),
+                )._asdict()
+            )
+            state = yield obs, lambda: render(**state)  # perform time-step
+            inventory = state["inventory"]
+
+    @staticmethod
+    def reward_generator():
+        reward = -0.1
+        while True:
+            yield reward, lambda: print("Reward:", reward)
+
+    def no_op_remaining_generator(self):
+        no_ops_remaining = self.no_op_limit
+        while True:
+            action = yield no_ops_remaining
+            if action == len(self.subtasks):
+                no_ops_remaining -= 1
+            no_ops_remaining -= 1
+
+    def done_generator(self, lines):
+        state = yield
+        time_remaining = len(lines) * self.time_per_subtask()
+        no_op_remaining_iterator = self.no_op_remaining_generator()
+
+        while True:
+            done = state["success"]
+            if not self.evaluating:
+                time_remaining -= 1
+                no_ops_remaining = no_op_remaining_iterator.send(state["action"])
+                done |= (time_remaining == 0) or (no_ops_remaining == 0)
+                # TODO: this incentivizes no ops
+            state = yield done, lambda: print("Time remaining:", time_remaining)
+
+    def info_generator(self, lines, rooms):
+        state = yield
+        info = dict(len_failure_buffer=len(self.failure_buffer))
+        rooms_complete = 0
+        while True:
+            success = state["success"]
+            rooms_complete += int(state["room_complete"])
+
+            if state["done"]:
+                info.update(instruction_len=len(lines), success=float(success))
+                info.update(
+                    rooms_complete=rooms_complete,
+                    progress=rooms_complete / len(rooms),
+                    success=float(success),
+                )
+            # line_specific_info = {
+            #     f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
+            # }
+            state = yield info, lambda: None
+            info = {}
+
+    def time_per_subtask(self):
+        return 2 * (self.room_shape.sum() - 2)
+
+    @staticmethod
+    def preprocess_line(line):
+        if isinstance(line, Subtask):
+            if line.resource is None:
+                resource_code = len(Resource)
+            else:
+                resource_code = line.resource.value
+            return [line.interaction.value, resource_code]
+        elif line is None:
+            return [0, 0]
+        else:
+            raise RuntimeError
+
+    def room_strings(self, room):
+        for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
+            for j, channel in enumerate(row):
+                (nonzero,) = channel.nonzero()
+                assert len(nonzero) <= 2
+                for _, i in zip_longest(range(2), nonzero):
+                    if i is None:
+                        yield " "
+                    else:
+                        world_obj = WorldObjects[i]
+                        yield Symbols[world_obj]
+                yield RESET
+                yield "|"
+            yield "\n" + "-" * 3 * self.w + "\n"
+
+    # def preprocess_state(
+    #     self,
+    #     room,
+    #     lines,
+    #     inventory,
+    #     info,
+    #     done,
+    #     ptr,
+    #     subtask_complete,
+    #     inventory_change,
+    #     **kwargs
+    # ):
+    #     _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
+    #     obs = OrderedDict(
+    #         Obs(
+    #             obs=room,
+    #             lines=[self.preprocess_line(l) for l in lines],
+    #             mask=[p is None for p in padded],
+    #             inventory=self.inventory_representation(inventory),
+    #             inventory_change=self.inventory_representation(dict(inventory_change)),
+    #         )._asdict()
+    #     )
+    #     for name, space in self.observation_space.spaces.items():
+    #         if not space.contains(obs[name]):
+    #             space.contains(obs[name])
+    #     reward = -0.1
+    #     return obs, reward, done, info
+
     def use_failure_buf(self):
         if self.evaluating or len(self.failure_buffer) == 0:
             use_failure_buf = False
@@ -436,14 +509,6 @@ class Env(gym.Env):
             use_failure_prob = max(use_failure_prob, 0)
             use_failure_buf = self.random.random() < use_failure_prob
         return use_failure_buf
-
-    def obs_array(self, agent_pos, objects):
-        room = np.zeros((len(WorldObjects), *self.room_shape))
-        for p, o in list(objects.items()):
-            p = np.array(p)
-            room[(WorldObjects.index(o), *p)] = 1
-        room[(WorldObjects.index(Other.AGENT), *agent_pos)] = 1
-        return room
 
     def make_feasible(self, objects):
         counts = Counter(objects.values())
@@ -468,23 +533,7 @@ class Env(gym.Env):
                     counts = Counter(objects.values())
                     free_space = list(get_free_space())
 
-    def initialize(self):
-        n_lines = (
-            self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
-            if self.evaluating
-            else self.random.random_integers(self.min_lines, self.max_lines)
-        )
-
-        def get_blobs():
-            i = n_lines
-            while i > 0:
-                size = self.random.choice(self.chunk_size)
-                blob = self.random.choice(self.blob_subtasks, size=size)
-                blob = blob[: i - 1]  # for BuildBridge
-                yield blob
-                i -= len(blob) + 1  # for BuildBridge
-
-        blobs = list(get_blobs())
+    def build_rooms(self, blobs):
         n_rooms = len(blobs)
         assert n_rooms > 0
         h, w = self.room_shape
@@ -509,45 +558,33 @@ class Env(gym.Env):
             return list(zip(positions, world_objects))
 
         rooms = [get_objects() for _ in range(n_rooms)]
-        return blobs, rooms
+        return rooms
 
-    def inventory_representation(self, inventory):
+    def build_blobs(self):
+        n_lines = (
+            self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
+            if self.evaluating
+            else self.random.random_integers(self.min_lines, self.max_lines)
+        )
+
+        def get_blobs():
+            i = n_lines
+            while i > 0:
+                size = self.random.choice(self.chunk_size)
+                blob = self.random.choice(self.blob_subtasks, size=size)
+                blob = blob[: i - 1]  # for BuildBridge
+                yield blob
+                i -= len(blob) + 1  # for BuildBridge
+
+        blobs = list(get_blobs())
+        return blobs
+
+    @staticmethod
+    def inventory_representation(inventory):
         return np.array([inventory[k] for k in InventoryItems])
 
     def seed(self, seed=None):
         assert self.seed == seed
-
-    def _render(
-        self,
-        room,
-        lines,
-        inventory,
-        done,
-        ptr,
-        success,
-        time_limit,
-        action,
-        reward,
-        required,
-        **kwargs
-    ):
-        if done:
-            print(fg("green") if success else fg("red"))
-
-        for i, line in enumerate(lines):
-            pre = "- " if i == ptr else "  "
-            print("{:2}{}{}{}".format(i, pre, " ", str(line)))
-        print(RESET)
-        print("Time limit:", time_limit)
-        print("Action:", action)
-        print("Reward:", reward)
-        print("Inventory:")
-        pprint(inventory)
-        print("Required:")
-        pprint(required)
-        print("Obs:")
-        for string in self.room_strings(room):
-            print(string, end="")
 
     def render(self, mode="human", pause=True):
         self.render_thunk()
