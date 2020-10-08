@@ -110,7 +110,7 @@ class Env(gym.Env):
         self.evaluating = evaluating
         self.iterator = None
         self.render_thunk = None
-        self.h, self.w = self.room_shape = np.array(room_shape)
+        self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
         self.max_inventory = Counter({k: self.chunk_size for k in InventoryItems})
@@ -562,4 +562,4 @@ class Env(gym.Env):
         p.add_argument("--break-on-fail", action="store_true")
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--failure-buffer-size", type=int)
-        p.add_argument("--room-shape", nargs=2, type=int)
+        p.add_argument("--room-side", type=int)

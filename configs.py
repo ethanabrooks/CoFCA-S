@@ -37,7 +37,7 @@ default_lower = {
     "train_steps": 30,
     "use_gae": False,
     "value_loss_coef": 0.5,
-    "room_shape": (4, 4),
+    "room_side": 4,
 }
 
 default_upper = {
@@ -91,7 +91,7 @@ default_upper = {
     "transformer": False,
     "use_gae": False,
     "value_loss_coef": 0.5,
-    "room_shape": (3, 4),
+    "room_side": 4,
 }
 
 upper_search = copy.deepcopy(default_upper)

@@ -57,6 +57,7 @@ class LowerLevel(NNBase):
         self.obs_sections = get_obs_sections(self.obs_spaces)
 
         (d, h, w) = obs_spaces.obs.shape
+        assert h == w
         self.kernel_size = min(d, kernel_size)
         padding = optimal_padding(h, kernel_size, stride)
 
