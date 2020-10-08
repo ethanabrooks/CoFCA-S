@@ -292,6 +292,7 @@ class Trainer:
                         **dict(train_infos.items()),
                         **dict(eval_report.items()),
                         **dict(eval_infos.items()),
+                        _training_iteration=training_iteration,
                         training_iteration=training_iteration,
                     )
                     if use_tune:
