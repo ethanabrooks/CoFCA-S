@@ -14,6 +14,12 @@ Obs = namedtuple("Obs", "inventory line obs")
 
 class Env(upper_env.Env):
     def __init__(self, *args, **kwargs):
+        kwargs.update(
+            bridge_failure_prob=0,
+            map_discovery_prob=0,
+            bandit_prob=0,
+            windfall_prob=0,
+        )
         super().__init__(*args, **kwargs)
         self.observation_space.spaces["line"] = spaces.MultiDiscrete(
             np.array(self.line_space)

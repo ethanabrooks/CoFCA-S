@@ -59,22 +59,22 @@ def lower_level_actions():
 class Env(gym.Env):
     def __init__(
         self,
-        tgt_success_rate: int,
-        failure_buffer_size: int,
-        min_eval_lines: int,
-        max_eval_lines: int,
-        min_lines: int,
-        max_lines: int,
-        no_op_limit: int,
+        bandit_prob: float,
         break_on_fail: bool,
+        bridge_failure_prob: float,
+        failure_buffer_size: int,
+        map_discovery_prob: float,
+        max_eval_lines: int,
+        max_lines: int,
+        min_eval_lines: int,
+        min_lines: int,
+        no_op_limit: int,
         rank: int,
-        room_shape: tuple,
-        bridge_failure_prob=0.25,
-        map_discovery_prob=0.02,
-        bandit_prob=0.005,
-        windfall_prob=0.25,
+        room_side: int,
+        seed: int,
+        tgt_success_rate: int,
+        windfall_prob: float,
         evaluating=False,
-        seed=0,
     ):
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -563,3 +563,7 @@ class Env(gym.Env):
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--failure-buffer-size", type=int)
         p.add_argument("--room-side", type=int)
+        p.add_argument("--bridge-failure-prob", type=float)
+        p.add_argument("--map-discovery-prob", type=float)
+        p.add_argument("--bandit-prob", type=float)
+        p.add_argument("--windfall-prob", type=float)
