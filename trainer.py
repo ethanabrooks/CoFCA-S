@@ -2,7 +2,7 @@ import inspect
 import itertools
 import os
 import sys
-from collections import namedtuple
+from collections import namedtuple, Counter
 from pathlib import Path
 from pprint import pprint
 from typing import Dict, Optional
@@ -211,10 +211,12 @@ class Trainer:
                 self.load_checkpoint(load_path, ppo, agent, device)
 
             rollouts.obs[0].copy_(train_envs.reset())
+            frames_per_update = train_steps * num_processes
+            frames = Counter()
 
             for i in itertools.count():
-                training_iteration = i * train_steps * num_processes
-                if training_iteration >= num_frames:
+                frames.update(so_far=frames_per_update)
+                if frames["so_far"] >= num_frames:
                     break
                 eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
@@ -273,6 +275,8 @@ class Trainer:
                         rewards=output.reward,
                         masks=output.masks,
                     )
+                    frames.update(since_save=num_processes)
+                    frames.update(since_log=num_processes)
 
                 with torch.no_grad():
                     next_value = agent.get_value(
@@ -285,15 +289,15 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                if i % log_interval == 0:
+                if frames["since_log"] > log_interval:
+                    frames["since_log"] = 0
                     report = dict(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
                         **dict(eval_report.items()),
                         **dict(eval_infos.items()),
-                        _training_iteration=training_iteration,
-                        training_iteration=training_iteration,
+                        training_iteration=frames["so_far"],
                     )
                     if use_tune:
                         tune.report(**report)
@@ -302,7 +306,8 @@ class Trainer:
                         report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
-                if save_interval and i % save_interval == 0:
+                if save_interval and frames["since_save"] > save_interval:
+                    frames["since_save"] = 0
                     if use_tune:
                         with tune.checkpoint_dir(i) as _dir:
                             checkpoint_dir = _dir
