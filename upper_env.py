@@ -177,8 +177,11 @@ class Env(gym.Env):
         else:
             self.random.set_state(self.non_failure_random)
         action = None
+        info = dict(use_failure_buf=use_failure_buf)
         while True:
             s, r, t, i = iterator.send(action)
+            i.update(**info)
+            info = {}
             if t:
                 success = i["success"]
                 self.success_count += int(success)

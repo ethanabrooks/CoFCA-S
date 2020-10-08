@@ -66,11 +66,13 @@ class Env(upper_env.Env):
     def info_generator(self, lines, rooms):
         iterator = super().info_generator(lines, rooms)
         state = yield next(iterator)
+        info, render = iterator.send(state)
+        info.update(len_failure_buffer=len(self.failure_buffer))
         while True:
-            info, render = iterator.send(state)
             if state["done"]:
                 info.update(success=state["subtask_complete"])
             state = yield info, render
+            info, render = iterator.send(state)
 
     def main(self):
         actions = [
