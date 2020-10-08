@@ -67,7 +67,6 @@ class Env(upper_env.Env):
         iterator = super().info_generator(lines, rooms)
         state = yield next(iterator)
         info, render = iterator.send(state)
-        info.update(len_failure_buffer=len(self.failure_buffer))
         while True:
             if state["done"]:
                 info.update(success=state["subtask_complete"])

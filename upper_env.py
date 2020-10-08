@@ -432,8 +432,9 @@ class Env(gym.Env):
             rooms_complete += int(state["room_complete"])
 
             if state["done"]:
-                info.update(instruction_len=len(lines), success=float(success))
                 info.update(
+                    instruction_len=len(lines),
+                    len_failure_buffer=len(self.failure_buffer),
                     rooms_complete=rooms_complete,
                     progress=rooms_complete / len(rooms),
                     success=float(success),
