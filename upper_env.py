@@ -28,7 +28,7 @@ Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 Last = namedtuple("Last", "action active reward terminal selected")
 Action = namedtuple("Action", "upper lower delta dg ptr")
-BuildBridge = Interaction.BUILD, None
+BuildBridge = Subtask(Interaction.BUILD, None)
 Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -43,7 +43,7 @@ def subtasks():
     yield BuildBridge
     for interaction in [Interaction.COLLECT, Interaction.REFINE]:
         for resource in Resource:
-            yield interaction, resource
+            yield Subtask(interaction, resource)
 
 
 def lower_level_actions():
@@ -84,6 +84,9 @@ class Env(gym.Env):
         self.tgt_success_rate = tgt_success_rate
 
         self.subtasks = list(subtasks())
+        self.blob_subtasks = [
+            s for s in self.subtasks if s.interaction is not Interaction.BUILD
+        ]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
@@ -103,10 +106,10 @@ class Env(gym.Env):
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.failure_buffer = deque(maxlen=failure_buffer_size)
-        self.non_failure_random = copy.deepcopy(self.random)
+        self.non_failure_random = self.random.get_state()
         self.evaluating = evaluating
         self.iterator = None
-        self._render = None
+        self.render_thunk = None
         self.h, self.w = self.room_shape = np.array(room_shape)
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
@@ -131,7 +134,7 @@ class Env(gym.Env):
 
         self.room_space = spaces.Box(
             low=np.zeros_like(self.room_shape),
-            high=self.room_shape,
+            high=self.room_shape - 1,
             dtype=np.float32,
         )
 
@@ -158,13 +161,13 @@ class Env(gym.Env):
     def reset(self):
         self.i += 1
         self.iterator = self.generator()
-        s, r, t, i = self.preprocess_state(**next(self.iterator))
+        s, r, t, i = next(self.iterator)
         return s
 
     def step(self, action: np.ndarray):
         action = Action(*action)
         action = action._replace(lower=self.lower_level_actions[action.lower])
-        return self.preprocess_state(**self.iterator.send(action))
+        return self.iterator.send(action)
 
     @staticmethod
     def preprocess_line(line):
@@ -199,11 +202,12 @@ class Env(gym.Env):
         room,
         lines,
         inventory,
-        inventory_change,
-        done,
         info,
+        done,
         ptr,
         subtask_complete,
+        inventory_change,
+        **kwargs
     ):
         _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
         obs = OrderedDict(
@@ -218,21 +222,35 @@ class Env(gym.Env):
         for name, space in self.observation_space.spaces.items():
             if not space.contains(obs[name]):
                 space.contains(obs[name])
-        reward = -0.01
+        reward = -0.1
         return obs, reward, done, info
 
     def generator(self):
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
-            self.random = self.failure_buffer[i]
+            self.random.use_state(self.failure_buffer[i])
             delete_nth(self.failure_buffer, i)
         else:
-            self.random = copy.deepcopy(self.non_failure_random)
-        initial_random = copy.deepcopy(self.random)
+            self.random.set_state(self.non_failure_random)
+        state_iterator = self.state_generator()
+        action = None
+        while True:
+            state = state_iterator.send(action)
+            s, r, t, i = self.preprocess_state(**state)
+            if t and not use_failure_buf:
+                i.update(success_without_failure_buf=float(i["success"]))
+            self.render_thunk = lambda: self._render(**state, reward=r, action=action)
+            if t:
+                self.non_failure_random = self.random.get_state()
+            action = yield s, r, t, i
 
+    def time_per_subtask(self):
+        return 2 * (self.room_shape.sum() - 2)
+
+    def state_generator(self):
+        initial_random = self.random.get_state()
         blobs, rooms = self.initialize()
-
         assert len(rooms) == len(blobs)
         rooms_iter = iter(rooms)
         blobs_iter = iter(blobs)
@@ -241,7 +259,7 @@ class Env(gym.Env):
             for blob in blobs:
                 for subtask in blob:
                     yield subtask
-                yield Subtask(*BuildBridge)
+                yield BuildBridge
 
         lines = list(get_lines())
 
@@ -265,18 +283,17 @@ class Env(gym.Env):
         prev_inventory = inventory
         info = {}
         ptr = 0
-        action = None
-        time_limit = self.n_lines * self.room_shape.sum()
+        time_limit = self.n_lines * self.time_per_subtask()
         success = False
         subtask_complete = False
+        done = False
 
         while True:
             time_limit -= 1
             fail = not self.evaluating and time_limit < 0
             self.success_count += int(success)
 
-            done = fail or success
-            reward = -0.1
+            done = done or fail or success
             if fail:
                 self.failure_buffer.append(initial_random)
                 if self.break_on_fail:
@@ -284,15 +301,11 @@ class Env(gym.Env):
 
                     ipdb.set_trace()
             if done:
-                if not use_failure_buf:
-                    # this will allow us to continue the current random seed on the next episode
-                    self.non_failure_random = copy.deepcopy(self.random)
                 info.update(instruction_len=len(lines), success=float(success))
-                if not use_failure_buf:
-                    info.update(success_without_failure_buf=float(success))
                 info.update(
                     rooms_complete=rooms_complete,
                     progress=rooms_complete / len(rooms),
+                    success=float(success),
                 )
 
             # line_specific_info = {
@@ -301,27 +314,6 @@ class Env(gym.Env):
 
             self.make_feasible(objects)
             room = self.obs_array(agent_pos, objects)
-
-            def render():
-                if done:
-                    print(fg("green") if success else fg("red"))
-
-                for i, line in enumerate(lines):
-                    pre = "- " if i == ptr else "  "
-                    print("{:2}{}{}{}".format(i, pre, " ", str(line)))
-                print(RESET)
-                print("Time limit:", time_limit)
-                print("Action:", action)
-                print("Reward:", reward)
-                print("Inventory:")
-                pprint(inventory)
-                print("Required:")
-                pprint(required)
-                print("Obs:")
-                for string in self.room_strings(room):
-                    print(string, end="")
-
-            self._render = render
             inventory = inventory & self.max_inventory
 
             def inventory_change():
@@ -340,12 +332,14 @@ class Env(gym.Env):
                 info=info,
                 ptr=ptr,
                 subtask_complete=subtask_complete,
+                success=success,
+                time_limit=time_limit,
+                required=required,
             )
             prev_inventory = copy.deepcopy(inventory)
             subtask_complete = False
 
             info = dict(
-                use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
             )
 
@@ -481,15 +475,12 @@ class Env(gym.Env):
             else self.random.random_integers(self.min_lines, self.max_lines)
         )
 
-        def get_blob():
-            size = self.random.choice(self.chunk_size)
-            for i in self.random.choice(len(self.subtasks), size=size):
-                yield Subtask(*self.subtasks[i])
-
         def get_blobs():
             i = n_lines
             while i > 0:
-                blob = list(get_blob())[: i - 1]  # for BuildBridge
+                size = self.random.choice(self.chunk_size)
+                blob = self.random.choice(self.blob_subtasks, size=size)
+                blob = blob[: i - 1]  # for BuildBridge
                 yield blob
                 i -= len(blob) + 1  # for BuildBridge
 
@@ -526,8 +517,40 @@ class Env(gym.Env):
     def seed(self, seed=None):
         assert self.seed == seed
 
+    def _render(
+        self,
+        room,
+        lines,
+        inventory,
+        done,
+        ptr,
+        success,
+        time_limit,
+        action,
+        reward,
+        required,
+        **kwargs
+    ):
+        if done:
+            print(fg("green") if success else fg("red"))
+
+        for i, line in enumerate(lines):
+            pre = "- " if i == ptr else "  "
+            print("{:2}{}{}{}".format(i, pre, " ", str(line)))
+        print(RESET)
+        print("Time limit:", time_limit)
+        print("Action:", action)
+        print("Reward:", reward)
+        print("Inventory:")
+        pprint(inventory)
+        print("Required:")
+        pprint(required)
+        print("Obs:")
+        for string in self.room_strings(room):
+            print(string, end="")
+
     def render(self, mode="human", pause=True):
-        self._render()
+        self.render_thunk()
         if pause:
             input("pause")
 

@@ -1,12 +1,13 @@
 from collections import OrderedDict, namedtuple
 
 import numpy as np
+from colored import fg
 from gym import spaces
 
 import keyboard_control
 import upper_env
-from upper_env import lower_level_actions, Action
 from objects import Interaction, Resource
+from upper_env import Action
 
 Obs = namedtuple("Obs", "inventory line obs")
 
@@ -27,31 +28,43 @@ class Env(upper_env.Env):
         action = Action(
             upper=0, lower=self.lower_level_actions[action], delta=0, dg=0, ptr=0
         )
-        return self.preprocess_state(**self.iterator.send(action))
+        return self.iterator.send(action)
+
+    def generator(self):
+        iterator = super().generator()
+        action = None
+        time_limit = self.time_per_subtask()
+        while True:
+            s, r, t, i = iterator.send(action)
+            time_limit -= 1
+            if time_limit == 0:
+                t = True
+            action = yield s, r, t, i
 
     def preprocess_state(
-        self,
-        room,
-        lines,
-        inventory,
-        inventory_change,
-        done,
-        info,
-        ptr,
-        subtask_complete,
+        self, room, lines, inventory, info, done, ptr, subtask_complete, **kwargs
     ):
         ptr = min(ptr, len(lines) - 1)
-        obs = Obs(
-            obs=room,
-            line=self.preprocess_line(lines[ptr]),
-            inventory=self.inventory_representation(inventory),
+        obs = OrderedDict(
+            Obs(
+                obs=room,
+                line=self.preprocess_line(lines[ptr]),
+                inventory=self.inventory_representation(inventory),
+            )._asdict()
         )
-        obs = OrderedDict(obs._asdict())
         # for name, space in self.observation_space.spaces.items():
         #     if not space.contains(obs[name]):
         #         space.contains(obs[name])
-        reward = bool(subtask_complete)
-        return obs, reward, done, info
+        if done or subtask_complete:
+            info.update(success=subtask_complete)
+
+        reward = -0.1
+        return obs, reward, subtask_complete, info
+
+    def _render(self, subtask_complete, **kwargs):
+        if subtask_complete:
+            print(fg("green"))
+        super()._render(**kwargs, subtask_complete=subtask_complete)
 
     def main(self):
         actions = [
@@ -73,8 +86,7 @@ class Env(upper_env.Env):
             action = mapping.get(string, None)
             if action is None:
                 return None
-            action = actions.index(action)
-            return np.array(Action(upper=0, lower=action, delta=0, dg=0, ptr=0))
+            return actions.index(action)
 
         keyboard_control.run(self, action_fn=action_fn)
 
