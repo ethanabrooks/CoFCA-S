@@ -119,6 +119,7 @@ upper_search.update(
     stride=hp.choice("stride", [1, 2, 3]),
     task_embed_size=hp.choice("task_embed_size", [32, 64, 128]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
+    use_gau=hp.choice("use_gae", [True, False]),
 )
 
 lower_search = copy.deepcopy(default_lower)
@@ -137,6 +138,7 @@ lower_search.update(
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
     stride=hp.choice("stride", [1, 2, 3]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
+    use_gau=hp.choice("use_gae", [True, False]),
 )
 
 debug_search = copy.deepcopy(upper_search)
