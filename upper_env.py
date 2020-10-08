@@ -172,7 +172,7 @@ class Env(gym.Env):
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
-            self.random.use_state(self.failure_buffer[i])
+            self.random.set_state(self.failure_buffer[i])
             delete_nth(self.failure_buffer, i)
         else:
             self.random.set_state(self.non_failure_random)
