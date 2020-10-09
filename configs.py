@@ -119,7 +119,7 @@ upper_search.update(
     stride=hp.choice("stride", [1, 2, 3]),
     task_embed_size=hp.choice("task_embed_size", [32, 64, 128]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
-    use_gau=hp.choice("use_gae", [True, False]),
+    use_gae=hp.choice("use_gae", [True, False]),
 )
 
 lower_search = copy.deepcopy(default_lower)
@@ -136,9 +136,9 @@ lower_search.update(
     num_layers=hp.choice("num_layers", [1, 2]),
     num_processes=hp.choice("num_processes", [50, 100, 150]),
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
-    stride=hp.choice("stride", [1, 2, 3]),
+    stride=hp.choice("stride", [1, 2]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
-    use_gau=hp.choice("use_gae", [True, False]),
+    use_gae=hp.choice("use_gae", [True, False]),
 )
 
 debug_search = copy.deepcopy(upper_search)
