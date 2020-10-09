@@ -2,6 +2,7 @@ import inspect
 import itertools
 import os
 import sys
+import time
 from collections import namedtuple, Counter
 from pathlib import Path
 from pprint import pprint
@@ -213,6 +214,7 @@ class Trainer:
             rollouts.obs[0].copy_(train_envs.reset())
             frames_per_update = train_steps * num_processes
             frames = Counter()
+            time_spent = Counter()
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
@@ -290,6 +292,7 @@ class Trainer:
                 rollouts.after_update()
 
                 if frames["since_log"] > log_interval:
+                    tick = time.time()
                     frames["since_log"] = 0
                     report = dict(
                         **train_results,
@@ -297,6 +300,8 @@ class Trainer:
                         **dict(train_infos.items()),
                         **dict(eval_report.items()),
                         **dict(eval_infos.items()),
+                        time_logging=time_spent["logging"],
+                        time_saving=time_spent["saving"],
                         training_iteration=frames["so_far"],
                     )
                     if use_tune:
@@ -306,7 +311,10 @@ class Trainer:
                         report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
+                    time_spent["logging"] += time.time() - tick
+
                 if save_interval and frames["since_save"] > save_interval:
+                    tick = time.time()
                     frames["since_save"] = 0
                     if use_tune:
                         with tune.checkpoint_dir(0) as _dir:
@@ -318,6 +326,7 @@ class Trainer:
                         self.save_checkpoint(
                             checkpoint_dir, ppo=ppo, agent=agent, step=i
                         )
+                    time_spent["saving"] += time.time() - tick
 
         finally:
             train_envs.close()
