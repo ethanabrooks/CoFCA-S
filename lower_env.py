@@ -44,21 +44,28 @@ class Env(upper_env.Env):
     def obs_generator(self, lines):
         iterator = super().obs_generator(lines)
         state = yield next(iterator)
+        found_map = False
 
-        def line(ptr, **_):
+        def get_line(ptr, **_):
             ptr = min(ptr, len(lines) - 1)
-            return self.preprocess_line(lines[ptr])
+            return lines[ptr]
 
         while True:
-            obs, render = iterator.send(state)
-            discovered_map = bool(state["inventory"][Other.MAP])
+            obs, _render = iterator.send(state)
+            found_map |= bool(state["inventory"][Other.MAP])
+            line = get_line(**state)
             obs = OrderedDict(
                 Obs(
                     inventory=obs["inventory"],
-                    line=self.line_space if discovered_map else line(**state),
+                    line=(self.line_space if found_map else self.preprocess_line(line)),
                     obs=obs["obs"],
                 )._asdict()
             )
+
+            def render():
+                print("Line:", "Cross Mountain" if found_map else str(line))
+                _render()
+
             state = yield obs, render
 
     def done_generator(self, lines):
