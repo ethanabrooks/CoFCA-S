@@ -61,10 +61,14 @@ default_upper = {
     "use_gae": False,
     "value_loss_coef": 0.5,
     "room_side": 4,
-    "bridge_failure_prob": 0.25,
-    "map_discovery_prob": 0.02,
-    "bandit_prob": 0.005,
-    "windfall_prob": 0.25,
+    "bridge_failure_prob": 0,
+    "map_discovery_prob": 0,
+    "bandit_prob": 0,
+    "windfall_prob": 0,
+    # "bridge_failure_prob": 0.25,
+    # "map_discovery_prob": 0.02,
+    # "bandit_prob": 0.005,
+    # "windfall_prob": 0.25,
 }
 
 upper_search = copy.deepcopy(default_upper)
