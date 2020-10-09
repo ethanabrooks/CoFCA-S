@@ -165,7 +165,10 @@ class Env(gym.Env):
         return s
 
     def step(self, action: np.ndarray):
-        return self.iterator.send(Action(*action))
+        action = Action(*action)
+        return self.iterator.send(
+            action._replace(lower=self.lower_level_actions[int(action.lower)])
+        )
 
     def failure_buffer_wrapper(self, iterator):
         initial_random = self.random.get_state()
@@ -391,7 +394,7 @@ class Env(gym.Env):
             obs = OrderedDict(
                 Obs(
                     obs=array,
-                    lines=[self.preprocess_line(l) for l in lines],
+                    lines=[self.preprocess_line(l) for l in padded],
                     mask=[p is None for p in padded],
                     inventory=self.inventory_representation(inventory),
                     inventory_change=self.inventory_representation(

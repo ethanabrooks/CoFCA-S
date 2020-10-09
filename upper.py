@@ -14,11 +14,10 @@ class UpperTrainer(Trainer):
     metric = "eval_reward"
 
     def build_agent(self, envs, debug=False, **agent_args):
-        obs_space = envs.observation_space
         del agent_args["recurrent"]
         del agent_args["num_layers"]
         return upper_agent.Agent(
-            observation_space=obs_space,
+            observation_space=envs.observation_space,
             action_space=envs.action_space,
             debug=debug,
             **agent_args,
@@ -71,7 +70,7 @@ class UpperTrainer(Trainer):
     @classmethod
     def add_agent_arguments(cls, parser):
         parser.add_argument("--lower-level-config", type=Path)
-        parser.add_argument("--no-debug", dest="debug", action="store_false")
+        parser.add_argument("--debug", action="store_true")
         parser.add_argument("--debug-obs", action="store_true")
         parser.add_argument("--no-scan", action="store_true")
         parser.add_argument("--no-roll", action="store_true")

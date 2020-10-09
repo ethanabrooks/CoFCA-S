@@ -3,9 +3,7 @@ import json
 
 from hyperopt import hp
 
-import upper_env
-
-with open('lower.json') as f:
+with open("lower.json") as f:
     default_lower = json.load(f)
 
 default_upper = {
@@ -29,20 +27,23 @@ default_upper = {
     "learning_rate": 0.003,
     "load_path": None,
     "log_interval": 10,
-    "lower_level_config": "checkpoint/lower.json",
-    "lower_level_load_path": "checkpoint/lower.pt",
+    "lower_embed_size": 64,
+    "lower_level_config": "lower.json",
+    "lower_level_load_path": "lower.pt",
     "max_eval_lines": 50,
     "tgt_success_rate": 0.8,
     "max_grad_norm": 0.5,
     "max_lines": 10,
     "min_eval_lines": 1,
     "min_lines": 1,
+    "no_op_coef": 0,
     "no_op_limit": 40,
     "no_pointer": False,
     "no_roll": False,
     "no_scan": False,
     "normalize": False,
     "num_batch": 1,
+    "num_edges": 2,
     "num_frames": 200,
     "num_layers": 0,
     "num_processes": 150,
