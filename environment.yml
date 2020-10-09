@@ -1,8 +1,8 @@
-name: teacher
+name: ppo
 channels:
   - pytorch
-  - conda-forge
   - anaconda
+  - conda-forge
   - defaults
 dependencies:
   - _libgcc_mutex=0.1=main
@@ -105,6 +105,7 @@ dependencies:
     - chardet==3.0.4
     - click==7.1.2
     - colorama==0.4.3
+    - colored==1.4.2
     - colorful==0.5.4
     - filelock==3.0.12
     - google==3.0.0
@@ -138,6 +139,7 @@ dependencies:
     - pygments==2.6.1
     - pyrsistent==0.16.0
     - pyyaml==5.3.1
+    - ray==0.9.0.dev0
     - redis==3.4.1
     - requests==2.24.0
     - rsa==4.6
@@ -147,4 +149,4 @@ dependencies:
     - urllib3==1.25.10
     - wcwidth==0.2.5
     - yarl==1.5.1
-prefix: /opt/conda/envs/teacher
+prefix: /opt/conda/envs/ppo
