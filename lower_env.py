@@ -6,7 +6,7 @@ from gym import spaces
 import upper_env
 import keyboard_control
 from upper_env import Action
-from enums import Interaction, Resource, Other
+from enums import Interaction, Resource, Other, Terrain
 
 Obs = namedtuple("Obs", "inventory line obs")
 action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
@@ -50,21 +50,29 @@ class Env(upper_env.Env):
             ptr = min(ptr, len(lines) - 1)
             return lines[ptr]
 
+        def can_cross_mountain(objects, **_):
+            return found_map and Terrain.MOUNTAIN in objects.values()
+
         while True:
             obs, _render = iterator.send(state)
             found_map |= bool(state["inventory"][Other.MAP])
             line = get_line(**state)
+            cross_mountain = can_cross_mountain(**state)
             obs = OrderedDict(
                 Obs(
                     inventory=obs["inventory"],
-                    line=(self.line_space if found_map else self.preprocess_line(line)),
+                    line=(
+                        self.line_space
+                        if cross_mountain
+                        else self.preprocess_line(line)
+                    ),
                     obs=obs["obs"],
                 )._asdict()
             )
 
             def render():
-                print("Line:", "Cross Mountain" if found_map else str(line))
                 _render()
+                print("Line:", "Cross Mountain" if cross_mountain else str(line))
 
             state = yield obs, render
 
