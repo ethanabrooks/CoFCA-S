@@ -429,8 +429,7 @@ class Env(gym.Env):
             if not self.evaluating:
                 time_remaining -= 1
                 no_ops_remaining = no_op_remaining_iterator.send(state["action"])
-                done |= (time_remaining == 0) or (no_ops_remaining == 0)
-                # TODO: this incentivizes no ops
+                done |= time_remaining == 0
             state = yield done, lambda: print("Time remaining:", time_remaining)
 
     def info_generator(self, lines, rooms):
