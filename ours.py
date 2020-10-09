@@ -307,7 +307,6 @@ class Recurrence(nn.Module):
             z1 = F.relu(self.zeta1(zeta1_input))
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)
-            a = A[t]
             self.print("a_probs", a_dist.probs)
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)

@@ -1,8 +1,9 @@
 import copy
+import json
 from collections import Counter, namedtuple, deque, OrderedDict
 from itertools import product, zip_longest
 from pprint import pprint
-from typing import Tuple, Dict, Generator
+from typing import Tuple, Dict, Generator, Union
 
 import gym
 import numpy as np
@@ -10,6 +11,7 @@ from colored import fg
 from gym import spaces
 from gym.utils import seeding
 
+import keyboard_control
 from lines import Subtask
 from enums import (
     Terrain,
@@ -164,7 +166,7 @@ class Env(gym.Env):
         s, r, t, i = next(self.iterator)
         return s
 
-    def step(self, action: np.ndarray):
+    def step(self, action: Union[np.ndarray, Action]):
         action = Action(*action)
         return self.iterator.send(
             action._replace(lower=self.lower_level_actions[int(action.lower)])
@@ -352,12 +354,12 @@ class Env(gym.Env):
                         inventory[Other.MAP] = 1
             elif isinstance(action.lower, Resource):
                 if standing_on == Terrain.FACTORY:
-                    if (
-                        line.interaction == Interaction.REFINE
-                        and line.resource == action.lower
-                        and inventory[action.lower]
-                    ):
-                        subtask_complete = True
+                    if inventory[action.lower]:
+                        if (
+                            line.interaction == Interaction.REFINE
+                            and line.resource == action.lower
+                        ):
+                            subtask_complete = True
                         inventory[action.lower] -= 1
                         inventory[Refined(action.lower.value)] += 1
             else:
@@ -428,7 +430,7 @@ class Env(gym.Env):
             done = state["success"]
             if not self.evaluating:
                 time_remaining -= 1
-                no_ops_remaining = no_op_remaining_iterator.send(state["action"])
+                # no_ops_remaining = no_op_remaining_iterator.send(state["action"])
                 done |= time_remaining == 0
             state = yield done, lambda: print("Time remaining:", time_remaining)
 
@@ -576,6 +578,78 @@ class Env(gym.Env):
         if pause:
             input("pause")
 
+    def main(self, lower_level_config, lower_level_load_path):
+        import lower_env
+        from lower_agent import Agent
+        import torch
+        import time
+
+        lower_level_params = dict(
+            hidden_size=128,
+            kernel_size=1,
+            num_conv_layers=1,
+            stride=1,
+            recurrent=False,
+            concat=False,
+        )
+        if lower_level_config:
+            with open(lower_level_config) as f:
+                params = json.load(f)
+                lower_level_params = {
+                    k: v for k, v in params.items() if k in lower_level_params.keys()
+                }
+        lower_level = Agent(
+            obs_spaces=lower_env.Env.observation_space_from_upper(
+                self.observation_space
+            ),
+            entropy_coef=0,
+            action_space=spaces.Discrete(Action(*self.action_space.nvec).lower),
+            num_layers=1,
+            **lower_level_params,
+        )
+        state_dict = torch.load(lower_level_load_path, map_location="cpu")
+        lower_level.load_state_dict(state_dict["agent"])
+        print(f"Loaded lower_level from {lower_level_load_path}.")
+        subtask_list = list(subtasks())
+
+        def action_fn(string):
+            try:
+                return int(string)
+            except ValueError:
+                return
+
+        s = self.reset()
+        while True:
+            s = Obs(**s)
+            self.render(pause=False)
+            upper = None
+            while upper is None:
+                for i, subtask in enumerate(subtasks()):
+                    print(i, str(subtask))
+                upper = action_fn(input("act:"))
+            lower = lower_level(
+                lower_env.Obs(
+                    inventory=torch.from_numpy(s.inventory).float().unsqueeze(0),
+                    obs=torch.from_numpy(s.obs).float().unsqueeze(0),
+                    line=torch.Tensor(self.preprocess_line(subtask_list[upper]))
+                    .float()
+                    .unsqueeze(0),
+                ),
+                None,
+                None,
+            ).action
+            print(lower)
+            action = Action(upper=upper, lower=lower, delta=0, dg=0, ptr=0)
+
+            s, r, t, i = self.step(action)
+            print("reward", r)
+            if t:
+                self.render(pause=False)
+                print("resetting")
+                time.sleep(0.5)
+                self.reset()
+                print()
+
     @classmethod
     def add_arguments(cls, p):
         p.add_argument("--min-lines", type=int)
@@ -589,3 +663,21 @@ class Env(gym.Env):
         p.add_argument("--map-discovery-prob", type=float)
         p.add_argument("--bandit-prob", type=float)
         p.add_argument("--windfall-prob", type=float)
+
+
+def main(lower_level_load_path, lower_level_config, **kwargs):
+    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **kwargs).main(
+        lower_level_load_path=lower_level_load_path,
+        lower_level_config=lower_level_config,
+    )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    PARSER = argparse.ArgumentParser()
+    Env.add_arguments(PARSER)
+    PARSER.add_argument("--seed", default=0, type=int)
+    PARSER.add_argument("--lower-level-config", default="lower.json")
+    PARSER.add_argument("--lower-level-load-path", default="lower.pt")
+    main(**vars(PARSER.parse_args()))

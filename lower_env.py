@@ -126,8 +126,6 @@ if __name__ == "__main__":
     import argparse
 
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int)
-    PARSER.add_argument("--max-eval-lines", type=int)
     Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    Env(rank=0, **vars(PARSER.parse_args())).main()
+    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **vars(PARSER.parse_args())).main()
