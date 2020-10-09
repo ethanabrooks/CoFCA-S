@@ -6,7 +6,7 @@ from gym import spaces
 import upper_env
 import keyboard_control
 from upper_env import Action
-from objects import Interaction, Resource
+from enums import Interaction, Resource, Other
 
 Obs = namedtuple("Obs", "inventory line obs")
 

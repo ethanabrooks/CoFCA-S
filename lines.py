@@ -4,7 +4,7 @@ from typing import List, Type, Generator, Optional
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
 
-from objects import Interaction, Resource
+from enums import Interaction, Resource
 
 
 def sample(random, _min, _max, p=0.5):

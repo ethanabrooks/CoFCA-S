@@ -11,7 +11,7 @@ from gym import spaces
 from gym.utils import seeding
 
 from lines import Subtask
-from objects import (
+from enums import (
     Terrain,
     Other,
     Refined,
