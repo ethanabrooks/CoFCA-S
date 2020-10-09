@@ -126,9 +126,8 @@ lower_search = copy.deepcopy(default_lower)
 lower_search.update(
     conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
-    gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
     hidden_size=hp.choice("hidden_size", [128, 256, 512]),
-    kernel_size=hp.choice("kernel_size", [1, 2, 3]),
+    kernel_size=hp.choice("kernel_size", [2, 3]),
     learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
     tgt_success_rate=hp.choice("tgt_success_rate", [0.5, 0.7, 0.8, 0.9, 1]),
     num_batch=hp.choice("num_batch", [1, 2]),
