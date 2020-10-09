@@ -278,6 +278,12 @@ class Env(gym.Env):
                 print(RESET)
 
             self.render_thunk = render
+            # for name, space in self.observation_space.spaces.items():
+            #     if not space.contains(s[name]):
+            #         import ipdb
+            #
+            #         ipdb.set_trace()
+            #         space.contains(s[name])
             action = yield s, r, t, i
             subtask_complete = False
             room_complete = False
@@ -476,34 +482,6 @@ class Env(gym.Env):
                 yield RESET
                 yield "|"
             yield "\n" + "-" * 3 * self.w + "\n"
-
-    # def preprocess_state(
-    #     self,
-    #     room,
-    #     lines,
-    #     inventory,
-    #     info,
-    #     done,
-    #     ptr,
-    #     subtask_complete,
-    #     inventory_change,
-    #     **kwargs
-    # ):
-    #     _, padded = zip(*list(zip_longest(range(self.n_lines), lines)))
-    #     obs = OrderedDict(
-    #         Obs(
-    #             obs=room,
-    #             lines=[self.preprocess_line(l) for l in lines],
-    #             mask=[p is None for p in padded],
-    #             inventory=self.inventory_representation(inventory),
-    #             inventory_change=self.inventory_representation(dict(inventory_change)),
-    #         )._asdict()
-    #     )
-    #     for name, space in self.observation_space.spaces.items():
-    #         if not space.contains(obs[name]):
-    #             space.contains(obs[name])
-    #     reward = -0.1
-    #     return obs, reward, done, info
 
     def use_failure_buf(self):
         if self.evaluating or len(self.failure_buffer) == 0:
