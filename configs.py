@@ -2,6 +2,8 @@ import copy
 
 from hyperopt import hp
 
+import upper_env
+
 default_lower = {
     "break_on_fail": False,
     "clip_param": 0.2,
@@ -12,6 +14,7 @@ default_lower = {
     "env_id": "control-flow",
     "eps": 1e-5,
     "failure_buffer_size": 500,
+    "map_discovery_prob": 1 / len(list(upper_env.subtasks())),
     "gamma": 0.99,
     "hidden_size": 256,
     "kernel_size": 1,

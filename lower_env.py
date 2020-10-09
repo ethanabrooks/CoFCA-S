@@ -9,25 +9,31 @@ from upper_env import Action
 from enums import Interaction, Resource, Other
 
 Obs = namedtuple("Obs", "inventory line obs")
+action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
 
 
 class Env(upper_env.Env):
     def __init__(self, *args, **kwargs):
         kwargs.update(
             bridge_failure_prob=0,
-            map_discovery_prob=0,
             bandit_prob=0,
             windfall_prob=0,
         )
         super().__init__(*args, **kwargs)
-        self.observation_space.spaces["line"] = spaces.MultiDiscrete(
-            np.array(self.line_space)
+        self.observation_space = self.observation_space_from_upper(
+            self.observation_space
         )
-        self.observation_space = spaces.Dict(
-            {k: v for k, v in self.observation_space.spaces.items() if k in Obs._fields}
-        )
+        self.action_space = action_space
 
-        self.action_space = spaces.Discrete(len(self.lower_level_actions))
+    @staticmethod
+    def observation_space_from_upper(observation_space):
+        line_space = observation_space.spaces["lines"].nvec[0]
+        return spaces.Dict(
+            dict(
+                {k: v for k, v in observation_space.spaces.items() if k in Obs._fields},
+                line=spaces.MultiDiscrete(line_space + 1),  # + 1 for cross mountain
+            )
+        )
 
     def step(self, action: int):
         action = Action(
@@ -45,9 +51,12 @@ class Env(upper_env.Env):
 
         while True:
             obs, render = iterator.send(state)
+            discovered_map = bool(state["inventory"][Other.MAP])
             obs = OrderedDict(
                 Obs(
-                    inventory=obs["inventory"], line=line(**state), obs=obs["obs"]
+                    inventory=obs["inventory"],
+                    line=self.line_space if discovered_map else line(**state),
+                    obs=obs["obs"],
                 )._asdict()
             )
             state = yield obs, render
