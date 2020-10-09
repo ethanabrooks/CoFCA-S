@@ -182,10 +182,12 @@ class Env(gym.Env):
             if t:
                 success = i["success"]
                 self.success_count += int(success)
+                i.update(
+                    use_failure_buf=use_failure_buf,
+                )
                 if not use_failure_buf:
                     i.update(
                         success_without_failure_buf=float(success),
-                        use_failure_buf=use_failure_buf,
                     )
                 if not success:
                     self.failure_buffer.append(initial_random)
