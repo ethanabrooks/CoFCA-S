@@ -1,47 +1,12 @@
 import copy
+import json
 
 from hyperopt import hp
 
 import upper_env
 
-default_lower = {
-    "break_on_fail": False,
-    "clip_param": 0.2,
-    "conv_hidden_size": 64,
-    "cuda": True,
-    "cuda_deterministic": False,
-    "entropy_coef": 0.01,
-    "env_id": "control-flow",
-    "eps": 1e-5,
-    "failure_buffer_size": 500,
-    "map_discovery_prob": 1 / len(list(upper_env.subtasks())),
-    "gamma": 0.99,
-    "hidden_size": 256,
-    "kernel_size": 1,
-    "load_path": None,
-    "learning_rate": 0.003,
-    "log_interval": 10,
-    "tgt_success_rate": 0.8,
-    "max_grad_norm": 0.5,
-    "max_lines": 10,
-    "min_lines": 1,
-    "normalize": False,
-    "num_batch": 1,
-    "num_frames": 2000,
-    "num_layers": 1,
-    "num_processes": 150,
-    "ppo_epoch": 3,
-    "recurrent": False,
-    "save_interval": None,
-    "seed": 0,
-    "stride": 1,
-    "synchronous": False,
-    "tau": 0.95,
-    "train_steps": 30,
-    "use_gae": False,
-    "value_loss_coef": 0.5,
-    "room_side": 4,
-}
+with open('lower.json') as f:
+    default_lower = json.load(f)
 
 default_upper = {
     "break_on_fail": False,
