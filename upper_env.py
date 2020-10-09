@@ -263,7 +263,7 @@ class Env(gym.Env):
 
             def render():
                 if t:
-                    print(fg("green") if success else fg("red"))
+                    print(fg("green") if subtask_complete else fg("red"))
                 render_r()
                 render_t()
                 render_i()
@@ -318,10 +318,9 @@ class Env(gym.Env):
                         if moving_into == Terrain.MOUNTAIN:
                             inventory[Other.MAP] = 0
                         if next_room():
-                            if line.interaction == Interaction.BUILD:
-                                subtask_complete = True
-                                room_complete = True
                             room = next(rooms_iter, None)
+                            room_complete = True
+                            subtask_complete = True
                             if room is None:
                                 success = True
                             else:
@@ -345,9 +344,9 @@ class Env(gym.Env):
                     if (
                         line.interaction == Interaction.REFINE
                         and line.resource == action.lower
+                        and inventory[action.lower]
                     ):
                         subtask_complete = True
-                    if inventory[action.lower]:
                         inventory[action.lower] -= 1
                         inventory[Refined(action.lower.value)] += 1
             else:
