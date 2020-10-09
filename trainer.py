@@ -309,7 +309,7 @@ class Trainer:
                 if save_interval and frames["since_save"] > save_interval:
                     frames["since_save"] = 0
                     if use_tune:
-                        with tune.checkpoint_dir(i) as _dir:
+                        with tune.checkpoint_dir(0) as _dir:
                             checkpoint_dir = _dir
                     else:
                         checkpoint_dir = Path(log_dir) if log_dir else None
