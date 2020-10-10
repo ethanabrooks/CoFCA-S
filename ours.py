@@ -208,8 +208,7 @@ class Recurrence(nn.Module):
         ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        for _x in hx:
-            _x.squeeze_(0)
+        hx = RecurrentState(*[x.squeeze(0) for x in hx])
 
         if self.no_pointer:
             _, G = self.task_encoder(M)
