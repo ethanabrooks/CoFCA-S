@@ -135,9 +135,8 @@ class Env(gym.Env):
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
 
         self.room_space = spaces.Box(
-            low=np.zeros_like(self.room_shape),
-            high=self.room_shape - 1,
-            dtype=np.float32,
+            low=np.zeros_like(self.room_shape, dtype=np.float32),
+            high=(self.room_shape - 1).astype(np.float32),
         )
 
         def inventory_space(n):
@@ -145,18 +144,18 @@ class Env(gym.Env):
                 n * np.ones(len(Resource) + len(Refined) + 1)  # +1 for map
             )
 
+        shape = (len(Resource) + len(Terrain) + 1, *self.room_shape)
+        obs_space = spaces.Box(
+            low=np.zeros(shape, dtype=np.float32),
+            high=np.ones(shape, dtype=np.float32),
+        )
         self.observation_space = spaces.Dict(
             Obs(
                 inventory=inventory_space(self.chunk_size),
                 inventory_change=inventory_space(self.chunk_size + 1),
                 lines=lines_space,
                 mask=mask_space,
-                obs=spaces.Box(
-                    low=0,
-                    high=1,
-                    shape=(len(Resource) + len(Terrain) + 1, *self.room_shape),
-                    dtype=np.float32,
-                ),
+                obs=obs_space,
             )._asdict()
         )
 
