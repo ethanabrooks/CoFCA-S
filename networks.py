@@ -28,7 +28,7 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         self.recurrent_module = self.build_recurrent_module(
-            hidden_size, network_args, obs_spaces, recurrent
+            hidden_size, obs_spaces, recurrent, **network_args
         )
 
         if isinstance(action_space, Discrete):
@@ -41,7 +41,9 @@ class Agent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
-    def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
+    def build_recurrent_module(
+        self, hidden_size, obs_spaces, recurrent, **network_args
+    ):
         if len(obs_spaces) == 3:
             return CNNBase(
                 *obs_spaces,

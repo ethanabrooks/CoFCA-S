@@ -24,7 +24,9 @@ def get_obs_sections(obs_spaces):
 
 
 class Agent(networks.Agent):
-    def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
+    def build_recurrent_module(
+        self, hidden_size, obs_spaces, recurrent, **network_args
+    ):
         return LowerLevel(
             obs_spaces=obs_spaces,
             recurrent=recurrent,
@@ -43,8 +45,10 @@ class LowerLevel(NNBase):
         num_conv_layers,
         kernel_size,
         stride,
+        sum_or_max,
         activation=nn.ReLU(),
     ):
+        self.sum_or_max = sum_or_max
         if type(obs_spaces) is spaces.Dict:
             obs_spaces = Obs(**obs_spaces.spaces)
         assert num_layers > 0
@@ -84,12 +88,8 @@ class LowerLevel(NNBase):
             # h = w = (h + (2 * padding) - (kernel_size - 1) - 1) // stride + 1
             h = w = conv_output_dimension(h, padding, kernel_size, stride)
             kernel_size = min(h, kernel_size)
-        self.conv.add_module(name="flatten", module=Flatten())
         _init = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
-        self.conv_projection = nn.Sequential(
-            _init(nn.Linear(h * w * hidden_size, hidden_size)), activation
-        )
         self.line_embed = networks.MultiEmbeddingBag(
             obs_spaces.line.nvec, embedding_dim=hidden_size
         )
@@ -125,7 +125,12 @@ class LowerLevel(NNBase):
         N = inputs.obs.size(0)
         obs = inputs.obs.reshape(N, *self.obs_spaces.obs.shape)
         lines_embed = self.line_embed(inputs.line.long())
-        obs_embed = self.conv_projection(self.conv(obs))
+        obs_embed = self.conv(obs)
+        obs_embed = (
+            obs_embed.sum(-1).sum(-1)
+            if self.sum_or_max == "sum"
+            else obs_embed.max(-1).values.max(-1).values
+        )
         inventory_embed = self.inventory_embed(inputs.inventory.long())
         x = lines_embed + obs_embed + inventory_embed
 

@@ -62,6 +62,7 @@ class LowerTrainer(UpperTrainer):
         parser.add_argument("--num-conv-layers", type=int)
         parser.add_argument("--kernel-size", type=int)
         parser.add_argument("--stride", type=int)
+        parser.add_argument("--sum-or-max")
 
 
 if __name__ == "__main__":
