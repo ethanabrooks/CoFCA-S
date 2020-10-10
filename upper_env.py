@@ -113,7 +113,7 @@ class Env(gym.Env):
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
-        self.max_inventory = Counter({k: self.chunk_size for k in InventoryItems})
+        self.max_inventory = Counter({k: self.chunk_size - 1 for k in InventoryItems})
         self.limina = [Terrain.WATER] + [Terrain.WATER, Terrain.MOUNTAIN] * (self.h - 1)
         self.iterator = None
         self.render_thunk = None
