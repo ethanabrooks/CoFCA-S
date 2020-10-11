@@ -28,8 +28,6 @@ default_upper = {
     "load_path": None,
     "log_interval": 10,
     "lower_embed_size": 64,
-    "lower_level_config": "lower.json",
-    "lower_level_load_path": "lower.pt",
     "max_eval_lines": 50,
     "tgt_success_rate": 0.8,
     "max_grad_norm": 0.5,

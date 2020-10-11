@@ -135,21 +135,31 @@ class Recurrence(nn.Module):
         self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic = init_(nn.Linear(hidden_size, 1))
+        assert lower_level_load_path
         lower_level_params = dict(
             hidden_size=128,
-            kernel_size=1,
+            kernel_size=3,
             num_conv_layers=1,
-            stride=1,
+            num_layers=1,
+            stride=2,
+            sum_or_max="sum",
             recurrent=False,
-            concat=False,
         )
-        if lower_level_load_path:
+        if lower_level_config:
             with open(lower_level_config) as f:
                 params = json.load(f)
-                lower_level_params = {
-                    k: v for k, v in params.items() if k in lower_level_params.keys()
-                }
+            lower_level_params = {
+                k: v
+                for k, v in params.items()
+                if k in lower_level_params.keys()
+            }
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
+        self.lower_level = Agent(
+            obs_spaces=lower_env.Env.observation_space_from_upper(observation_space),
+            entropy_coef=0,
+            action_space=ll_action_space,
+            **lower_level_params,
+        )
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=n_a,
@@ -163,13 +173,6 @@ class Recurrence(nn.Module):
             l=1,
             l_probs=ll_action_space.n,
             lh=lower_level_params["hidden_size"],
-        )
-        self.lower_level = Agent(
-            obs_spaces=lower_env.Env.observation_space_from_upper(observation_space),
-            entropy_coef=0,
-            action_space=ll_action_space,
-            num_layers=1,
-            **lower_level_params,
         )
         if lower_level_load_path is not None:
             state_dict = torch.load(lower_level_load_path, map_location="cpu")
