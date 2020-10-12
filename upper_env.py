@@ -173,7 +173,6 @@ class Env(gym.Env):
         )
 
     def failure_buffer_wrapper(self, iterator):
-        initial_random = self.random.get_state()
         use_failure_buf = self.use_failure_buf()
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
@@ -181,6 +180,7 @@ class Env(gym.Env):
             delete_nth(self.failure_buffer, i)
         else:
             self.random.set_state(self.non_failure_random)
+        initial_random = self.random.get_state()
         action = None
         while True:
             s, r, t, i = iterator.send(action)
@@ -196,6 +196,7 @@ class Env(gym.Env):
                     )
                 if not success:
                     self.failure_buffer.append(initial_random)
+
             if t:
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
