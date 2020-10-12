@@ -3,7 +3,7 @@ import json
 from collections import Counter, namedtuple, deque, OrderedDict
 from itertools import product, zip_longest
 from pprint import pprint
-from typing import Tuple, Dict, Generator, Union
+from typing import Tuple, Dict, Union
 
 import gym
 import numpy as np
@@ -11,8 +11,6 @@ from colored import fg
 from gym import spaces
 from gym.utils import seeding
 
-import keyboard_control
-from lines import Subtask
 from enums import (
     Terrain,
     Other,
@@ -24,13 +22,15 @@ from enums import (
     Resource,
     Symbols,
 )
+from lines import Subtask
 from utils import RESET
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 Last = namedtuple("Last", "action active reward terminal selected")
 Action = namedtuple("Action", "upper lower delta dg ptr")
-BuildBridge = Subtask(Interaction.BUILD, None)
+CrossWater = Subtask(Interaction.CROSS, Terrain.WATER)
+CrossMountain = Subtask(Interaction.CROSS, Terrain.MOUNTAIN)
 Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -42,7 +42,8 @@ def delete_nth(d, n):
 
 
 def subtasks():
-    yield BuildBridge
+    yield CrossWater
+    yield CrossMountain
     for interaction in [Interaction.COLLECT, Interaction.REFINE]:
         for resource in Resource:
             yield Subtask(interaction, resource)
@@ -87,7 +88,7 @@ class Env(gym.Env):
 
         self.subtasks = list(subtasks())
         self.blob_subtasks = [
-            s for s in self.subtasks if s.interaction is not Interaction.BUILD
+            s for s in self.subtasks if s.interaction is not Interaction.CROSS
         ]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
@@ -210,7 +211,7 @@ class Env(gym.Env):
             for blob in blobs:
                 for subtask in blob:
                     yield subtask
-                yield BuildBridge
+                yield CrossWater
 
         lines = list(get_lines())
         obs_iterator = self.obs_generator(lines)
@@ -589,9 +590,9 @@ class Env(gym.Env):
             while i > 0:
                 size = self.random.choice(self.chunk_size)
                 blob = self.random.choice(self.blob_subtasks, size=size)
-                blob = blob[: i - 1]  # for BuildBridge
+                blob = blob[: i - 1]  # for CrossWater
                 yield blob
-                i -= len(blob) + 1  # for BuildBridge
+                i -= len(blob) + 1  # for CrossWater
 
         blobs = list(get_blobs())
         return blobs

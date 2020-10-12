@@ -1,10 +1,10 @@
 from abc import ABC
-from typing import List, Type, Generator, Optional
+from typing import List, Type, Generator, Union
 
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
 
-from enums import Interaction, Resource
+from enums import Interaction, Resource, Terrain
 
 
 def sample(random, _min, _max, p=0.5):
@@ -218,7 +218,7 @@ class Subtask(Line):
     required_depth = 0
     depth_change = 0, 0
 
-    def __init__(self, interaction: Interaction, resource: Optional[Resource]):
+    def __init__(self, interaction: Interaction, resource: Union[Resource, Terrain]):
         self.interaction = interaction
         self.resource = resource
         super().__init__(None)

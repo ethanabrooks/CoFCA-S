@@ -46,4 +46,4 @@ Necessary = list(Resource) + [Terrain.FACTORY]
 class Interaction(Enum):
     COLLECT = auto()
     REFINE = auto()
-    BUILD = auto()
+    CROSS = auto()
