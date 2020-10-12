@@ -111,6 +111,9 @@ class Recurrence(nn.Module):
         self.embed_inventory = MultiEmbeddingBag(
             self.obs_spaces.inventory.nvec, embedding_dim=inventory_hidden_size
         )
+        self.embed_inventory_change = MultiEmbeddingBag(
+            self.obs_spaces.inventory_change.nvec, embedding_dim=inventory_hidden_size
+        )
         m_size = (
             2 * self.task_embed_size + hidden_size
             if self.no_pointer
@@ -149,9 +152,7 @@ class Recurrence(nn.Module):
             with open(lower_level_config) as f:
                 params = json.load(f)
             lower_level_params = {
-                k: v
-                for k, v in params.items()
-                if k in lower_level_params.keys()
+                k: v for k, v in params.items() if k in lower_level_params.keys()
             }
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
         self.lower_level = Agent(
@@ -305,7 +306,12 @@ class Recurrence(nn.Module):
             ).relu()
             h1 = h1.sum(-1).sum(-1)
             inventory = state.inventory[t].long()
-            zeta1_input = torch.cat([m, h1, self.embed_inventory(inventory)], dim=-1)
+            inventory_change = state.inventory_change[t].long()
+            embedded_inventory_change = self.embed_inventory_change(inventory_change)
+            embedded_inventory = self.embed_inventory(inventory)
+            zeta1_input = torch.cat(
+                [m, h1, embedded_inventory + embedded_inventory_change], dim=-1
+            )
             z1 = F.relu(self.zeta1(zeta1_input))
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)
