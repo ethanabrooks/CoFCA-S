@@ -118,22 +118,13 @@ class Trainer:
         os.environ["OMP_NUM_THREADS"] = "1"
 
         if use_tune:
-            report_iterator = None
+            report = tune.report
         else:
+            writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
 
-            def report_generator():
-                writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
-
-                for i in itertools.count():
-                    if i % log_interval == 0:
-                        values = yield
-                        pprint(values)
-                        if writer:
-                            for k, v in values.items():
-                                writer.add_scalar(k, v, i)
-
-            report_iterator = report_generator()
-            next(report_iterator)
+            def report(training_iteration, **kwargs):
+                for k, v in kwargs.items():
+                    writer.add_scalar(k, v, global_step=training_iteration)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -294,7 +285,7 @@ class Trainer:
                 if frames["since_log"] > log_interval:
                     tick = time.time()
                     frames["since_log"] = 0
-                    report = dict(
+                    report(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
@@ -304,11 +295,6 @@ class Trainer:
                         time_saving=time_spent["saving"],
                         training_iteration=frames["so_far"],
                     )
-                    if use_tune:
-                        tune.report(**report)
-                    else:
-                        assert report_iterator is not None
-                        report_iterator.send(report)
                     train_report = SumAcrossEpisode()
                     train_infos = InfosAggregator()
                     time_spent["logging"] += time.time() - tick
@@ -382,7 +368,7 @@ class Trainer:
                     num_samples=num_samples,
                 )
             if log_dir is not None:
-                kwargs.update(local_dir=log_dir)
+                kwargs.update(log_dir=log_dir)
 
             tune.run(
                 run,
