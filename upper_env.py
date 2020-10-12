@@ -236,7 +236,7 @@ class Env(gym.Env):
         required = Counter(next_required())
         objects = dict(next(rooms_iter))
         agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
-        inventory = Counter()
+        inventory = self.initialize_inventory()
         ptr = 0
         success = False
         action = None
@@ -379,6 +379,10 @@ class Env(gym.Env):
                         inventory[Refined(action.lower.value)] += 1
             else:
                 raise NotImplementedError
+
+    @staticmethod
+    def initialize_inventory():
+        return Counter()
 
     def obs_generator(self, lines):
         state = yield

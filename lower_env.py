@@ -1,4 +1,4 @@
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict, namedtuple, Counter
 
 import numpy as np
 from gym import spaces
@@ -6,7 +6,7 @@ from gym import spaces
 import upper_env
 import keyboard_control
 from upper_env import Action
-from enums import Interaction, Resource, Other, Terrain
+from enums import Interaction, Resource, Other, Terrain, InventoryItems
 
 Obs = namedtuple("Obs", "inventory line obs")
 action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
@@ -40,6 +40,15 @@ class Env(upper_env.Env):
             upper=0, lower=self.lower_level_actions[action], delta=0, dg=0, ptr=0
         )
         return self.iterator.send(action)
+
+    def initialize_inventory(self):
+        return Counter(
+            {
+                k: self.random.choice(self.chunk_size)
+                for k in InventoryItems
+                if k != Other.MAP
+            }
+        )
 
     def obs_generator(self, lines):
         iterator = super().obs_generator(lines)
@@ -97,6 +106,7 @@ class Env(upper_env.Env):
             state = yield info, render
             info, render = iterator.send(state)
 
+    # noinspection PyMethodOverriding
     def main(self):
         actions = [
             tuple(x) if isinstance(x, np.ndarray) else x
