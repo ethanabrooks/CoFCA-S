@@ -243,6 +243,9 @@ class Env(gym.Env):
         subtask_complete = False
         room_complete = False
 
+        def no_op(upper):
+            return upper == len(self.subtasks)
+
         while True:
             self.make_feasible(objects)
             inventory = inventory & self.max_inventory
@@ -267,13 +270,24 @@ class Env(gym.Env):
             t, render_t = done_iterator.send(state)
             i, render_i = info_iterator.send(dict(state, done=t))
 
+            if self.break_on_fail and t and not success:
+                import ipdb
+
+                ipdb.set_trace()
+
             def render():
                 if t:
                     print(fg("green") if subtask_complete else fg("red"))
                 render_r()
                 render_t()
                 render_i()
-                print("Action:", action)
+                print("Action:", end=" ")
+                if action is None:
+                    print(None)
+                elif no_op(action.upper):
+                    print("No op")
+                else:
+                    print(action._replace(upper=self.subtasks[int(action.upper)]))
                 print("Inventory:")
                 pprint(inventory)
                 print("Required:")
@@ -291,6 +305,8 @@ class Env(gym.Env):
             action = yield s, r, t, i
             subtask_complete = False
             room_complete = False
+            if no_op(action.upper):
+                continue
             if self.random.random() < self.bandit_prob:
                 possessions = [k for k, v in inventory.items() if v > 0]
                 if possessions:
@@ -381,9 +397,17 @@ class Env(gym.Env):
             for k in InventoryItems:
                 yield k, inventory[k] - prev_inventory[k]
 
-        def render(ptr, **_):
+        def render(ptr, action, **_):
             for i, line in enumerate(lines):
-                pre = "- " if i == ptr else "  "
+                agent_ptr = None if action is None else action.ptr
+                if i == ptr == agent_ptr:
+                    pre = "+ "
+                elif i == ptr:
+                    pre = "| "
+                elif i == agent_ptr:
+                    pre = "- "
+                else:
+                    pre = "  "
                 print("{:2}{}{}{}".format(i, pre, " ", str(line)))
             print("Obs:")
             for string in self.room_strings(array):
