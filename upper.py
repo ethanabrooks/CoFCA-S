@@ -1,5 +1,7 @@
 import inspect
+import pickle
 from argparse import ArgumentParser
+from collections import Collection
 from pathlib import Path
 
 import ours
@@ -8,10 +10,48 @@ import upper_env
 import main
 from configs import default_upper
 from trainer import Trainer
+from aggregator import InfosAggregator
+
+
+class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
+    def __init__(self):
+        super().__init__()
+        self.failure_buffers = {}
+
+    def update(self, *infos: dict, dones):
+        for i, info in enumerate(infos):
+            try:
+                self.failure_buffers[i] = info.pop("failure_buffer")
+            except KeyError:
+                pass
+
+        super().update(*infos, dones=dones)
+
+    def items(self):
+        yield "failure_buffer", [
+            x for buff in self.failure_buffers.values() for x in buff
+        ]
+        yield from super().items()
 
 
 class UpperTrainer(Trainer):
     metric = "eval_reward"
+
+    def build_infos_aggregator(self):
+        return InfosAggregatorWithFailureBufferWriter()
+
+    def report_generator(self, use_tune, log_dir):
+        reporter = super().report_generator(use_tune, log_dir)
+        next(reporter)
+
+        def report(failure_buffer, **kwargs):
+            with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
+                pickle.dump(failure_buffer, f)
+            reporter.send(kwargs)
+
+        while True:
+            msg = yield
+            report(**msg)
 
     def build_agent(self, envs, debug=False, **agent_args):
         del agent_args["recurrent"]

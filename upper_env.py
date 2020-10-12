@@ -189,6 +189,7 @@ class Env(gym.Env):
                 self.success_count += int(success)
                 i.update(
                     use_failure_buf=use_failure_buf,
+                    failure_buffer=self.failure_buffer,
                 )
                 if not use_failure_buf:
                     i.update(

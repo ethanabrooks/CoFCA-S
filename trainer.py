@@ -118,13 +118,11 @@ class Trainer:
         os.environ["OMP_NUM_THREADS"] = "1"
 
         if use_tune:
-            report = tune.report
-        else:
-            writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
+            with tune.checkpoint_dir(0) as _dir:
+                log_dir = str(Path(_dir).parent)
 
-            def report(training_iteration, **kwargs):
-                for k, v in kwargs.items():
-                    writer.add_scalar(k, v, global_step=training_iteration)
+        reporter = self.report_generator(use_tune, log_dir)
+        next(reporter)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -198,7 +196,7 @@ class Trainer:
 
             ppo = PPO(agent=agent, **ppo_args)
             train_report = SumAcrossEpisode()
-            train_infos = InfosAggregator()
+            train_infos = self.build_infos_aggregator()
             if load_path:
                 self.load_checkpoint(load_path, ppo, agent, device)
 
@@ -212,7 +210,7 @@ class Trainer:
                 if frames["so_far"] >= num_frames:
                     break
                 eval_report = EvalWrapper(SumAcrossEpisode())
-                eval_infos = EvalWrapper(InfosAggregator())
+                eval_infos = EvalWrapper(self.build_infos_aggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
@@ -285,37 +283,51 @@ class Trainer:
                 if frames["since_log"] > log_interval:
                     tick = time.time()
                     frames["since_log"] = 0
-                    report(
-                        **train_results,
-                        **dict(train_report.items()),
-                        **dict(train_infos.items()),
-                        **dict(eval_report.items()),
-                        **dict(eval_infos.items()),
-                        time_logging=time_spent["logging"],
-                        time_saving=time_spent["saving"],
-                        training_iteration=frames["so_far"],
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
                     )
                     train_report = SumAcrossEpisode()
-                    train_infos = InfosAggregator()
+                    train_infos = self.build_infos_aggregator()
                     time_spent["logging"] += time.time() - tick
 
                 if save_interval and frames["since_save"] > save_interval:
                     tick = time.time()
                     frames["since_save"] = 0
-                    if use_tune:
-                        with tune.checkpoint_dir(0) as _dir:
-                            checkpoint_dir = str(Path(_dir).parent)
-                    else:
-                        checkpoint_dir = Path(log_dir) if log_dir else None
-
-                    if checkpoint_dir:
-                        self.save_checkpoint(
-                            checkpoint_dir, ppo=ppo, agent=agent, step=i
-                        )
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
                     time_spent["saving"] += time.time() - tick
 
         finally:
             train_envs.close()
+
+    @staticmethod
+    def report_generator(use_tune: bool, log_dir: Optional[str]):
+
+        if use_tune:
+            report = tune.report
+        else:
+            writer = SummaryWriter(logdir=log_dir) if log_dir else None
+
+            def report(training_iteration, **args):
+                if writer:
+                    for k, v in args.items():
+                        writer.add_scalar(k, v, global_step=training_iteration)
+
+        while True:
+            kwargs = yield
+            report(**kwargs)
+
+    def build_infos_aggregator(self):
+        return InfosAggregator()
 
     @staticmethod
     def build_agent(envs, **agent_args):
@@ -368,7 +380,7 @@ class Trainer:
                     num_samples=num_samples,
                 )
             if log_dir is not None:
-                kwargs.update(log_dir=log_dir)
+                kwargs.update(local_dir=log_dir)
 
             tune.run(
                 run,
