@@ -281,17 +281,17 @@ class Env(gym.Env):
                 render_r()
                 render_t()
                 render_i()
+                print("Inventory:")
+                pprint(inventory)
+                print("Required:")
+                pprint(required)
                 print("Action:", end=" ")
                 if action is None:
                     print(None)
                 elif no_op(action.upper):
                     print("No op")
                 else:
-                    print(action._replace(upper=self.subtasks[int(action.upper)]))
-                print("Inventory:")
-                pprint(inventory)
-                print("Required:")
-                pprint(required)
+                    print(action._replace(upper=str(self.subtasks[int(action.upper)])))
                 render_s()
                 print(RESET)
 
