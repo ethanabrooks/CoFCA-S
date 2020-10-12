@@ -408,7 +408,10 @@ class Env(gym.Env):
                     pre = "- "
                 else:
                     pre = "  "
-                print("{:2}{}{}{}".format(i, pre, " ", str(line)))
+                index = [(s.interaction, s.resource) for s in self.subtasks].index(
+                    (line.interaction, line.resource)
+                )
+                print("{:2}{}{} ({}) {}".format(i, pre, " ", index, str(line)))
             print("Obs:")
             for string in self.room_strings(array):
                 print(string, end="")

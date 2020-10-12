@@ -4,7 +4,6 @@ from gym import spaces
 from torch import nn as nn
 
 import networks
-from layers import Flatten
 from lower_env import Obs
 from networks import NNBase
 from utils import init_, init, init_normc_

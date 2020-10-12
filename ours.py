@@ -12,7 +12,7 @@ import lower_env
 from distributions import FixedCategorical, Categorical
 from upper_env import Action
 from lower_agent import Agent, get_obs_sections, optimal_padding
-from upper_env import Obs
+from upper_env import Obs, Env, subtasks
 from networks import MultiEmbeddingBag
 from transformer import TransformerModel
 from utils import init_
@@ -100,6 +100,10 @@ class Recurrence(nn.Module):
 
         self.actor = Categorical(hidden_size, n_a)
         self.conv_hidden_size = conv_hidden_size
+        self.register_buffer(
+            "subtasks",
+            torch.Tensor([Env.preprocess_line(l) for l in subtasks()]),
+        )
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         d, h, w = (2, 1, 1) if self.debug_obs else self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -316,10 +320,18 @@ class Recurrence(nn.Module):
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
+
+            # while True:
+            #     try:
+            #         A[:] = float(input("A:"))
+            #         assert torch.all(A < self.n_a)
+            #         break
+            #     except (ValueError, AssertionError):
+            #         pass
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
 
-            line = lines[t][R, p]  # TODO: what about cross mountain?
+            line = self.subtasks[A[t].clamp(0, len(self.subtasks) - 1)]
             ll_output = self.lower_level(
                 lower_env.Obs(inventory=inventory, line=line, obs=obs),
                 hx.lh,
@@ -400,11 +412,6 @@ class Recurrence(nn.Module):
             p = p + delta
             self.print("new p", p)
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
-
-            # try:
-            # A[:] = float(input("A:"))
-            # except ValueError:
-            # pass
             yield RecurrentState(
                 a=A[t],
                 l=L[t].detach(),
