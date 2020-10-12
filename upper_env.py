@@ -272,7 +272,7 @@ class Env(gym.Env):
             t, render_t = done_iterator.send(state)
             i, render_i = info_iterator.send(dict(state, done=t))
 
-            if self.break_on_fail and t and not success:
+            if self.break_on_fail and t and not i["success"]:
                 import ipdb
 
                 ipdb.set_trace()
