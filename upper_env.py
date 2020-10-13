@@ -209,7 +209,6 @@ class Env(gym.Env):
                 self.success_avg += self.alpha * (success - self.success_avg)
 
                 i.update(
-                    success_avg=self.success_avg,
                     use_failure_buf=use_failure_buf,
                     failure_buffer=list(self.failure_buffer)[:2],
                 )
