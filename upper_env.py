@@ -98,7 +98,8 @@ class Env(gym.Env):
         self.no_op_limit = no_op_limit
         self.num_subtasks = num_subtasks
         self.i = 0
-        self.success_count = 0
+        self.success_avg = 0.5
+        self.alpha = 0.05
 
         self.min_lines = min_lines
         self.max_lines = max_lines
@@ -186,7 +187,8 @@ class Env(gym.Env):
             s, r, t, i = iterator.send(action)
             if t:
                 success = i["success"]
-                self.success_count += int(success)
+                self.success_avg += self.alpha * (success - self.success_avg)
+
                 i.update(
                     use_failure_buf=use_failure_buf,
                     failure_buffer=self.failure_buffer,
@@ -524,7 +526,7 @@ class Env(gym.Env):
         if self.evaluating or len(self.failure_buffer) == 0:
             use_failure_buf = False
         else:
-            success_rate = (1 + self.success_count) / self.i
+            success_rate = (1 + self.success_avg) / self.i
             use_failure_prob = 1 - self.tgt_success_rate / success_rate
             use_failure_prob = max(use_failure_prob, 0)
             use_failure_buf = self.random.random() < use_failure_prob
