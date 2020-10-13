@@ -16,6 +16,8 @@ setup(
     packages=find_packages(),
     scripts=[
         "bin/load",
+        "bin/upper",
+        "bin/lower",
         "bin/load1",
         "bin/new-run",
         "bin/from-json",

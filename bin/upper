@@ -1,0 +1,8 @@
+#!/usr/bin/env zsh
+
+checkpoints=(.runs/logdir/$1/$1/*_$2_*/checkpoint.pt)
+params=(.runs/logdir/$1/$1/*_$2_*/params.json)
+
+cmd="python upper.py --config ${params} --load ${checkpoints} ${@:3}"
+echo "$cmd\n"
+eval "$cmd"
