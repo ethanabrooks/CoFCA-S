@@ -116,6 +116,9 @@ class Env(gym.Env):
         if failure_buffer_load_path:
             with failure_buffer_load_path.open("rb") as f:
                 self.failure_buffer.extend(pickle.load(f))
+                print(
+                    f"Loaded failure buffer of length {len(self.failure_buffer)} from {failure_buffer_load_path}"
+                )
         self.non_failure_random = self.random.get_state()
         self.evaluating = evaluating
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
