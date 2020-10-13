@@ -42,7 +42,7 @@ class UpperTrainer(Trainer):
     metric = "eval_reward"
 
     def build_infos_aggregator(self):
-        return InfosAggregatorWithFailureBufferWriter()
+        return InfosAggregator()
 
     def report_generator(self, use_tune, log_dir):
         reporter = super().report_generator(use_tune, log_dir)
@@ -55,7 +55,7 @@ class UpperTrainer(Trainer):
 
         while True:
             msg = yield
-            report(**msg)
+            reporter.send(msg)
 
     def build_agent(self, envs, debug=False, **agent_args):
         del agent_args["recurrent"]
