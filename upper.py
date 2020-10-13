@@ -3,6 +3,7 @@ import pickle
 from argparse import ArgumentParser
 from collections import Collection
 from pathlib import Path
+from itertools import islice
 
 import ours
 import upper_agent
@@ -27,10 +28,13 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
 
         super().update(*infos, dones=dones)
 
+    def concat_buffers(self):
+        for buffer in self.failure_buffers.values():
+            yield from buffer
+
     def items(self):
-        yield "failure_buffer", [
-            x for buff in self.failure_buffers.values() for x in buff
-        ]
+        failure_buffer = list(islice(self.concat_buffers(), 100))
+        yield "failure_buffer", failure_buffer
         yield from super().items()
 
 
