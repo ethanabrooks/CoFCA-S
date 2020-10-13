@@ -1,8 +1,5 @@
 #!/usr/bin/env zsh
 
-checkpoints=(.runs/logdir/$1/$1/*_$2_*/checkpoint.pt)
-params=(.runs/logdir/$1/$1/*_$2_*/params.json)
-
-cmd="python lower.py --config ${params} --load ${checkpoints} ${@:3}"
+cmd="python lower.py --config $(${0:a:h}/search ${@[1, 2]} params.json) --load $(${0:a:h}/search ${@[1, 2]} checkpoint.pt)"
 echo "$cmd\n"
 eval "$cmd"

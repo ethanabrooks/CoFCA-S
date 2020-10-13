@@ -15,6 +15,7 @@ setup(
     author_email="ethanabrooks@gmail.com",
     packages=find_packages(),
     scripts=[
+        "bin/search",
         "bin/load",
         "bin/upper",
         "bin/lower",
