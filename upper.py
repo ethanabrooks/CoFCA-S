@@ -33,7 +33,7 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
             yield from buffer
 
     def items(self):
-        failure_buffer = list(islice(self.concat_buffers(), 100))
+        failure_buffer = list(islice(self.concat_buffers(), 50))
         yield "failure_buffer", failure_buffer
         yield from super().items()
 

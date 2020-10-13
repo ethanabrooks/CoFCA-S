@@ -191,7 +191,7 @@ class Env(gym.Env):
 
                 i.update(
                     use_failure_buf=use_failure_buf,
-                    failure_buffer=self.failure_buffer,
+                    failure_buffer=list(self.failure_buffer)[:2],
                 )
                 if not use_failure_buf:
                     i.update(
