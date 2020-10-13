@@ -23,6 +23,7 @@ from enums import (
     Interaction,
     Resource,
     Symbols,
+    ResourceInteractions,
 )
 from lines import Subtask
 from utils import RESET
@@ -46,7 +47,7 @@ def delete_nth(d, n):
 def subtasks():
     yield CrossWater
     yield CrossMountain
-    for interaction in [Interaction.COLLECT, Interaction.REFINE]:
+    for interaction in ResourceInteractions:
         for resource in Resource:
             yield Subtask(interaction, resource)
 
@@ -91,7 +92,7 @@ class Env(gym.Env):
 
         self.subtasks = list(subtasks())
         self.blob_subtasks = [
-            s for s in self.subtasks if s.interaction is not Interaction.CROSS
+            s for s in self.subtasks if s.interaction in ResourceInteractions
         ]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
@@ -274,6 +275,7 @@ class Env(gym.Env):
         action = None
         subtask_complete = False
         room_complete = False
+        should_cross_mountain = False
 
         def no_op(upper):
             return upper == len(self.subtasks)
@@ -295,11 +297,12 @@ class Env(gym.Env):
                 subtask_complete=subtask_complete,
                 room_complete=room_complete,
                 required=required,
+                should_cross_mountain=should_cross_mountain,
             )
 
             s, render_s = obs_iterator.send(state)
             r, render_r = reward_iterator.send(state)
-            t, render_t = done_iterator.send(state)
+            t, render_t = done_iterator.send(dict(state))
             i, render_i = info_iterator.send(dict(state, done=t))
 
             if self.break_on_fail and t and not i["success"]:
@@ -380,8 +383,8 @@ class Env(gym.Env):
                         if next_room():
                             room = next(rooms_iter, None)
                             room_complete = True
-                            if line.interaction == Interaction.CROSS:
-                                subtask_complete = True
+                            subtask_complete = True
+                            should_cross_mountain = False
                             if room is None:
                                 success = True
                             else:
@@ -399,6 +402,7 @@ class Env(gym.Env):
                     ):
                         subtask_complete = True
                     if self.random.random() < self.map_discovery_prob:
+                        should_cross_mountain = True
                         inventory[Other.MAP] = 1
             elif isinstance(action.lower, Resource):
                 if standing_on == Terrain.FACTORY:

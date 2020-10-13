@@ -52,37 +52,31 @@ class Env(upper_env.Env):
     def obs_generator(self, lines):
         iterator = super().obs_generator(lines)
         state = yield next(iterator)
-        found_map = False
 
         def get_line(ptr, **_):
             ptr = min(ptr, len(lines) - 1)
             return lines[ptr]
 
-        def can_cross_mountain(objects, **_):
-            return found_map and Terrain.MOUNTAIN in objects.values()
+        def build_obs(inventory, obs, **_):
+            return Obs(
+                inventory=inventory,
+                line=(
+                    self.line_space if cross_mountain else self.preprocess_line(line)
+                ),
+                obs=obs,
+            )
 
         while True:
-            obs, _render = iterator.send(state)
-            found_map |= bool(state["inventory"][Other.MAP])
+            cross_mountain = state["should_cross_mountain"]
+            _obs, _render = iterator.send(state)
             line = get_line(**state)
-            cross_mountain = can_cross_mountain(**state)
-            obs = OrderedDict(
-                Obs(
-                    inventory=obs["inventory"],
-                    line=(
-                        self.line_space
-                        if cross_mountain
-                        else self.preprocess_line(line)
-                    ),
-                    obs=obs["obs"],
-                )._asdict()
-            )
+            _obs = OrderedDict(build_obs(**_obs)._asdict())
 
             def render():
                 _render()
                 print("Line:", "Cross Mountain" if cross_mountain else str(line))
 
-            state = yield obs, render
+            state = yield _obs, render
 
     def done_generator(self, lines):
         state = yield
