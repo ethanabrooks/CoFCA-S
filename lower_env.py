@@ -42,13 +42,12 @@ class Env(upper_env.Env):
         return self.iterator.send(action)
 
     def initialize_inventory(self, required):
-        return Counter(
-            {
-                k: self.random.choice(required[k]) if required[k] else 0
-                for k in InventoryItems
-                if k != Other.MAP
-            }
-        )
+        inventory = {
+            k: self.random.choice(required[k]) if required[k] else 0
+            for k in InventoryItems
+        }
+        inventory[Other.MAP] = int(self.random.random() < 1 / len(self.subtasks))
+        return Counter(inventory)
 
     def obs_generator(self, lines):
         iterator = super().obs_generator(lines)
