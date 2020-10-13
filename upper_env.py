@@ -174,7 +174,13 @@ class Env(gym.Env):
         )
 
     def failure_buffer_wrapper(self, iterator):
-        use_failure_buf = self.use_failure_buf()
+        if self.evaluating or len(self.failure_buffer) == 0:
+            buf = False
+        else:
+            use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
+            use_failure_prob = max(use_failure_prob, 0)
+            buf = self.random.random() < use_failure_prob
+        use_failure_buf = buf
         if use_failure_buf:
             i = self.random.choice(len(self.failure_buffer))
             self.random.set_state(self.failure_buffer[i])
@@ -190,6 +196,7 @@ class Env(gym.Env):
                 self.success_avg += self.alpha * (success - self.success_avg)
 
                 i.update(
+                    success_avg=self.success_avg,
                     use_failure_buf=use_failure_buf,
                     failure_buffer=list(self.failure_buffer)[:2],
                 )
@@ -520,16 +527,6 @@ class Env(gym.Env):
                 yield RESET
                 yield "|"
             yield "\n" + "-" * 3 * self.w + "\n"
-
-    def use_failure_buf(self):
-        if self.evaluating or len(self.failure_buffer) == 0:
-            use_failure_buf = False
-        else:
-            success_rate = (1 + self.success_avg) / self.i
-            use_failure_prob = 1 - self.tgt_success_rate / success_rate
-            use_failure_prob = max(use_failure_prob, 0)
-            use_failure_buf = self.random.random() < use_failure_prob
-        return use_failure_buf
 
     def make_feasible(self, objects):
         counts = Counter(objects.values())
