@@ -380,7 +380,6 @@ class Env(gym.Env):
                             and line.resource == action.lower
                         ):
                             subtask_complete = True
-                        inventory[action.lower] -= 1
                         inventory[Refined(action.lower.value)] += 1
             else:
                 raise NotImplementedError
