@@ -199,8 +199,19 @@ class Env(gym.Env):
             self.random.set_state(self.non_failure_random)
         initial_random = self.random.get_state()
         action = None
+        render_thunk = lambda: None
+
+        def render():
+            render_thunk()
+            if use_failure_buf:
+                print(fg("red"), "Used failure buffer", RESET)
+            else:
+                print(fg("blue"), "Did not use failure buffer", RESET)
+
         while True:
             s, r, t, i = iterator.send(action)
+            render_thunk = self.render_thunk
+            self.render_thunk = render
             if not use_failure_buf:
                 i.update(reward_without_failure_buf=r)
             if t:
