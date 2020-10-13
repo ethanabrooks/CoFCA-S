@@ -369,7 +369,8 @@ class Env(gym.Env):
                         if next_room():
                             room = next(rooms_iter, None)
                             room_complete = True
-                            subtask_complete = True
+                            if line.interaction == Interaction.CROSS:
+                                subtask_complete = True
                             if room is None:
                                 success = True
                             else:
@@ -474,13 +475,11 @@ class Env(gym.Env):
     def done_generator(self, lines):
         state = yield
         time_remaining = len(lines) * self.time_per_subtask()
-        no_op_remaining_iterator = self.no_op_remaining_generator()
 
         while True:
             done = state["success"]
             if not self.evaluating:
                 time_remaining -= 1
-                # no_ops_remaining = no_op_remaining_iterator.send(state["action"])
                 done |= time_remaining == 0
             state = yield done, lambda: print("Time remaining:", time_remaining)
 
@@ -488,11 +487,9 @@ class Env(gym.Env):
         state = yield
         info = dict(len_failure_buffer=len(self.failure_buffer))
         rooms_complete = 0
-        while True:
-            success = state["success"]
-            rooms_complete += int(state["room_complete"])
 
-            if state["done"]:
+        def update_info(success, done, **_):
+            if done:
                 info.update(
                     instruction_len=len(lines),
                     len_failure_buffer=len(self.failure_buffer),
@@ -500,6 +497,10 @@ class Env(gym.Env):
                     progress=rooms_complete / len(rooms),
                     success=float(success),
                 )
+
+        while True:
+            rooms_complete += int(state["room_complete"])
+            update_info(**state)
             # line_specific_info = {
             #     f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
             # }

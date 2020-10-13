@@ -88,20 +88,27 @@ class Env(upper_env.Env):
         state = yield
         time_remaining = self.time_per_subtask()
 
+        def done(subtask_complete, success, **_):
+            return subtask_complete or success or time_remaining == 0
+
         while True:
-            done = state["subtask_complete"]
             if not self.evaluating:
                 time_remaining -= 1
-                done |= time_remaining == 0
-            state = yield done, lambda: print("Time remaining:", time_remaining)
+            state = yield done(**state), lambda: print(
+                "Time remaining:", time_remaining
+            )
 
     def info_generator(self, lines, rooms):
         iterator = super().info_generator(lines, rooms)
         state = yield next(iterator)
         info, render = iterator.send(state)
+
+        def update_info(done, subtask_complete, **_):
+            if done:
+                info.update(success=subtask_complete)
+
         while True:
-            if state["done"]:
-                info.update(success=state["subtask_complete"])
+            update_info(**state)
             state = yield info, render
             info, render = iterator.send(state)
 
