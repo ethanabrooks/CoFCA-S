@@ -41,10 +41,10 @@ class Env(upper_env.Env):
         )
         return self.iterator.send(action)
 
-    def initialize_inventory(self):
+    def initialize_inventory(self, required):
         return Counter(
             {
-                k: self.random.choice(self.chunk_size)
+                k: self.random.choice(required[k]) if required[k] else 0
                 for k in InventoryItems
                 if k != Other.MAP
             }

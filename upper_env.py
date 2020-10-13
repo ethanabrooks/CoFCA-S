@@ -241,7 +241,7 @@ class Env(gym.Env):
         required = Counter(next_required())
         objects = dict(next(rooms_iter))
         agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
-        inventory = self.initialize_inventory()
+        inventory = self.initialize_inventory(required)
         ptr = 0
         success = False
         action = None
@@ -386,7 +386,7 @@ class Env(gym.Env):
                 raise NotImplementedError
 
     @staticmethod
-    def initialize_inventory():
+    def initialize_inventory(required):
         return Counter()
 
     def obs_generator(self, lines):
