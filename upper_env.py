@@ -1,7 +1,9 @@
 import copy
 import json
+import pickle
 from collections import Counter, namedtuple, deque, OrderedDict
 from itertools import product, zip_longest
+from pathlib import Path
 from pprint import pprint
 from typing import Tuple, Dict, Union
 
@@ -65,6 +67,7 @@ class Env(gym.Env):
         bandit_prob: float,
         break_on_fail: bool,
         bridge_failure_prob: float,
+        failure_buffer_load_path: Path,
         failure_buffer_size: int,
         map_discovery_prob: float,
         max_eval_lines: int,
@@ -110,6 +113,9 @@ class Env(gym.Env):
         self.n_lines += 1
         self.random, self.seed = seeding.np_random(seed)
         self.failure_buffer = deque(maxlen=failure_buffer_size)
+        if failure_buffer_load_path:
+            with failure_buffer_load_path.open("rb") as f:
+                self.failure_buffer.extend(pickle.load(f))
         self.non_failure_random = self.random.get_state()
         self.evaluating = evaluating
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
@@ -695,6 +701,7 @@ class Env(gym.Env):
         p.add_argument("--map-discovery-prob", type=float)
         p.add_argument("--bandit-prob", type=float)
         p.add_argument("--windfall-prob", type=float)
+        p.add_argument("--failure-buffer-load-path", type=Path, default=None)
 
 
 def main(lower_level_load_path, lower_level_config, **kwargs):
