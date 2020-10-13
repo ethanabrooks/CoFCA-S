@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 
-checkpoints=(.runs/logdir/$1/$1/*_$2_*/checkpoint.pt)
-params=(.runs/logdir/$1/$1/*_$2_*/params.json)
-
-cmd="python upper.py --config ${params} --load ${checkpoints} ${@:3}"
+config=$(${0:a:h}/search ${@[2, 3]} params.json)
+load=$(${0:a:h}/search ${@[2, 3]} checkpoint.pt)
+failure_buffer_load_path=$(${0:a:h}/search ${@[2, 3]} failure_buffer.pkl)
+cmd="python $1 --config $config --load $load --failure-buffer-load-path $failure_buffer_load_path ${@:4}"
 echo "$cmd\n"
 eval "$cmd"

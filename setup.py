@@ -17,8 +17,6 @@ setup(
     scripts=[
         "bin/search",
         "bin/load",
-        "bin/upper",
-        "bin/lower",
         "bin/load1",
         "bin/new-run",
         "bin/from-json",

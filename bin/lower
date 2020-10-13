@@ -1,5 +1,0 @@
-#!/usr/bin/env zsh
-
-cmd="python lower.py --config $(${0:a:h}/search ${@[1, 2]} params.json) --load $(${0:a:h}/search ${@[1, 2]} checkpoint.pt)"
-echo "$cmd\n"
-eval "$cmd"
