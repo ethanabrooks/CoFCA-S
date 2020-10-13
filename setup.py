@@ -31,11 +31,4 @@ setup(
         "bin/wtf.zsh",
         "bin/remove-log.zsh",
     ],
-    install_requires=[
-        "tensorboardX==1.8",
-        "tensorflow>=1.15",
-        "opencv-python==4.1.0.25",
-        "psutil>=5.6.6",
-        "requests==2.22.0",
-    ],
 )

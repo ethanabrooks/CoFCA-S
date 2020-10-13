@@ -1,4 +1,8 @@
 #!/usr/bin/env zsh
-cmd="$(${0:a:h}/lookup-command.zsh "$@" | ${0:a:h}/log-to-load.zsh)"
+
+checkpoints=(.runs/logdir/$1/$1/*_$2_*/checkpoint.pt)
+params=(.runs/logdir/$1/$1/*_$2_*/params.json)
+
+cmd="python upper.py --config ${params} --load ${checkpoints} ${@:3}"
 echo "$cmd\n"
 eval "$cmd"
