@@ -376,7 +376,7 @@ class Trainer:
                 kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric=cls.metric),
+                    search_alg=HyperOptSearch(config, metric=cls.metric, mode="max"),
                     num_samples=num_samples,
                 )
             if log_dir is not None:
