@@ -26,6 +26,13 @@ class Resource(Enum):
     IRON = auto()
 
 
+@unique
+class Interaction(Enum):
+    COLLECT = auto()
+    REFINE = auto()
+    CROSS = auto()
+
+
 Symbols = {
     Resource.WOOD: fg("green") + "w",
     Resource.STONE: fg("light_slate_grey") + "s",
@@ -37,13 +44,7 @@ Symbols = {
     Other.AGENT: fg("yellow") + "A",
 }
 Refined = Enum(value="Refined", names=[x.name for x in Resource])
-InventoryItems = [Other.MAP] + list(Resource) + list(Refined)
-WorldObjects = [Other.AGENT] + list(Resource) + list(Terrain)
-Necessary = list(Resource) + [Terrain.FACTORY]
-
-
-@unique
-class Interaction(Enum):
-    COLLECT = auto()
-    REFINE = auto()
-    CROSS = auto()
+InventoryItems = [Other.MAP] + list(Resource) + list(Refined)  # defines inventory
+WorldObjects = [Other.AGENT] + list(Resource) + list(Terrain)  # defines channels
+Necessary = list(Resource) + [Terrain.FACTORY]  # things which spawn
+ResourceInteractions = [Interaction.REFINE, Interaction.COLLECT]

@@ -23,6 +23,7 @@ from enums import (
     Interaction,
     Resource,
     Symbols,
+    ResourceInteractions,
 )
 from lines import Subtask
 from utils import RESET
@@ -46,7 +47,7 @@ def delete_nth(d, n):
 def subtasks():
     yield CrossWater
     yield CrossMountain
-    for interaction in [Interaction.COLLECT, Interaction.REFINE]:
+    for interaction in ResourceInteractions:
         for resource in Resource:
             yield Subtask(interaction, resource)
 
@@ -91,7 +92,7 @@ class Env(gym.Env):
 
         self.subtasks = list(subtasks())
         self.blob_subtasks = [
-            s for s in self.subtasks if s.interaction is not Interaction.CROSS
+            s for s in self.subtasks if s.interaction in ResourceInteractions
         ]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
