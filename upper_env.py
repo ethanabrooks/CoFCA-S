@@ -191,8 +191,12 @@ class Env(gym.Env):
         action = None
         while True:
             s, r, t, i = iterator.send(action)
+            if not use_failure_buf:
+                i.update(reward_without_failure_buf=r)
             if t:
                 success = i["success"]
+                if not use_failure_buf:
+                    i.update(success_without_failure_buf=float(success))
                 self.success_avg += self.alpha * (success - self.success_avg)
 
                 i.update(
@@ -200,10 +204,7 @@ class Env(gym.Env):
                     use_failure_buf=use_failure_buf,
                     failure_buffer=list(self.failure_buffer)[:2],
                 )
-                if not use_failure_buf:
-                    i.update(
-                        success_without_failure_buf=float(success),
-                    )
+
                 if not success:
                     self.failure_buffer.append(initial_random)
 
