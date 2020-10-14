@@ -91,7 +91,7 @@ class Env(gym.Env):
         self.tgt_success_rate = tgt_success_rate
 
         self.subtasks = list(subtasks())
-        self.blob_subtasks = [
+        self.block_subtasks = [
             s for s in self.subtasks if s.interaction in ResourceInteractions
         ]
         num_subtasks = len(self.subtasks)
@@ -233,15 +233,15 @@ class Env(gym.Env):
             action = yield s, r, t, i
 
     def generator(self):
-        blobs = self.build_blobs()
-        rooms = self.build_rooms(blobs)
-        assert len(rooms) == len(blobs)
+        blocks = self.build_blocks()
+        rooms = self.build_rooms(blocks)
+        assert len(rooms) == len(blocks)
         rooms_iter = iter(rooms)
-        blobs_iter = iter(blobs)
+        blocks_iter = iter(blocks)
 
         def get_lines():
-            for blob in blobs:
-                for subtask in blob:
+            for block in blocks:
+                for subtask in block:
                     yield subtask
                 yield CrossWater
 
@@ -256,9 +256,9 @@ class Env(gym.Env):
         next(info_iterator)
 
         def next_required():
-            blob = next(blobs_iter, None)
-            if blob is not None:
-                for subtask in blob:
+            block = next(blocks_iter, None)
+            if block is not None:
+                for subtask in block:
                     if subtask.interaction == Interaction.COLLECT:
                         yield subtask.resource
                     elif subtask.interaction == Interaction.REFINE:
@@ -517,7 +517,7 @@ class Env(gym.Env):
             rooms_complete += int(state["room_complete"])
             update_info(**state)
             # line_specific_info = {
-            #     f"{k}_{10 * (len(blobs) // 10)}": v for k, v in info.items()
+            #     f"{k}_{10 * (len(blocks) // 10)}": v for k, v in info.items()
             # }
             state = yield info, lambda: None
             info = {}
@@ -576,8 +576,8 @@ class Env(gym.Env):
                     counts = Counter(objects.values())
                     free_space = list(get_free_space())
 
-    def build_rooms(self, blobs):
-        n_rooms = len(blobs)
+    def build_rooms(self, blocks):
+        n_rooms = len(blocks)
         assert n_rooms > 0
         h, w = self.room_shape
         coordinates = list(product(range(h), range(w - 1)))
@@ -603,24 +603,24 @@ class Env(gym.Env):
         rooms = [get_objects() for _ in range(n_rooms)]
         return rooms
 
-    def build_blobs(self):
+    def build_blocks(self):
         n_lines = (
             self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
             if self.evaluating
             else self.random.random_integers(self.min_lines, self.max_lines)
         )
 
-        def get_blobs():
+        def get_blocks():
             i = n_lines
             while i > 0:
                 size = self.random.choice(self.chunk_size)
-                blob = self.random.choice(self.blob_subtasks, size=size)
-                blob = blob[: i - 1]  # for CrossWater
-                yield blob
-                i -= len(blob) + 1  # for CrossWater
+                block = self.random.choice(self.block_subtasks, size=size)
+                block = block[: i - 1]  # for CrossWater
+                yield block
+                i -= len(block) + 1  # for CrossWater
 
-        blobs = list(get_blobs())
-        return blobs
+        blocks = list(get_blocks())
+        return blocks
 
     @staticmethod
     def inventory_representation(inventory):
