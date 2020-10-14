@@ -218,6 +218,12 @@ class Subtask(Line):
     required_depth = 0
     depth_change = 0, 0
 
+    def __hash__(self):
+        return hash((self.interaction, self.resource))
+
+    def __eq__(self, other):
+        return self.interaction == other.interaction and self.resource == other.resource
+
     def __init__(self, interaction: Interaction, resource: Union[Resource, Terrain]):
         self.interaction = interaction
         self.resource = resource
