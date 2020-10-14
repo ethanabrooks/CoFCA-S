@@ -18,6 +18,7 @@ class Env(upper_env.Env):
             bridge_failure_prob=0,
             bandit_prob=0,
             windfall_prob=0,
+            map_discovery_prob=0,
         )
         super().__init__(*args, **kwargs)
         self.observation_space = self.observation_space_from_upper(
@@ -45,6 +46,12 @@ class Env(upper_env.Env):
         inventory = super().initialize_inventory()
         if self.random.random() < 1 / len(self.subtasks):
             inventory.add(Other.MAP)
+
+            # random inventory
+            prob = 1 / len(InventoryItems)
+            for item in InventoryItems:
+                if self.random.random() < prob:
+                    inventory.add(item)
         return inventory
 
     def state_generator(self, *blocks):
