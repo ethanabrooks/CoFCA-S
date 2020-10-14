@@ -210,7 +210,7 @@ class Trainer:
                 if frames["so_far"] >= num_frames:
                     break
                 eval_report = EvalWrapper(SumAcrossEpisode())
-                eval_infos = EvalWrapper(self.build_infos_aggregator())
+                eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:

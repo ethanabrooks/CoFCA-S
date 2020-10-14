@@ -112,11 +112,9 @@ class Recurrence(nn.Module):
         self.embed_lower = nn.Embedding(
             self.action_space_nvec.lower + 1, lower_embed_size
         )
-        self.embed_inventory = MultiEmbeddingBag(
-            self.obs_spaces.inventory.nvec, embedding_dim=inventory_hidden_size
-        )
-        self.embed_inventory_change = MultiEmbeddingBag(
-            self.obs_spaces.inventory_change.nvec, embedding_dim=inventory_hidden_size
+        self.embed_inventory = nn.Sequential(
+            init_(nn.Linear(self.obs_spaces.inventory.n, inventory_hidden_size)),
+            nn.ReLU(),
         )
         m_size = (
             2 * self.task_embed_size + hidden_size
@@ -210,7 +208,7 @@ class Recurrence(nn.Module):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(
-            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]).view(
+            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0]).view(
                 -1, self.obs_spaces.lines.nvec[0].size
             )
         ).view(N, -1, self.task_embed_size)
@@ -309,13 +307,9 @@ class Recurrence(nn.Module):
                 dim=0,
             ).relu()
             h1 = h1.sum(-1).sum(-1)
-            inventory = state.inventory[t].long()
-            inventory_change = state.inventory_change[t].long()
-            embedded_inventory_change = self.embed_inventory_change(inventory_change)
+            inventory = state.inventory[t]
             embedded_inventory = self.embed_inventory(inventory)
-            zeta1_input = torch.cat(
-                [m, h1, embedded_inventory + embedded_inventory_change], dim=-1
-            )
+            zeta1_input = torch.cat([m, h1, embedded_inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)

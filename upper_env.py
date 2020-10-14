@@ -34,7 +34,7 @@ Last = namedtuple("Last", "action active reward terminal selected")
 Action = namedtuple("Action", "upper lower delta dg ptr")
 CrossWater = Subtask(Interaction.CROSS, Terrain.WATER)
 CrossMountain = Subtask(Interaction.CROSS, Terrain.MOUNTAIN)
-Obs = namedtuple("Obs", "inventory inventory_change lines mask obs")
+Obs = namedtuple("Obs", "inventory lines mask obs")
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 
@@ -125,8 +125,7 @@ class Env(gym.Env):
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
         self.chunk_size = self.room_size - self.h - 1
-        self.max_inventory = Counter({k: self.chunk_size for k in InventoryItems})
-        self.limina = [Terrain.WATER] + [Terrain.WATER, Terrain.MOUNTAIN] * (self.h - 1)
+        self.limina = [Terrain.WATER] + [Terrain.MOUNTAIN] * (self.h - 1)
         self.iterator = None
         self.render_thunk = None
 
@@ -151,11 +150,7 @@ class Env(gym.Env):
             high=(self.room_shape - 1).astype(np.float32),
         )
 
-        def inventory_space(n):
-            return spaces.MultiDiscrete(
-                n * np.ones(len(Resource) + len(Refined) + 1)  # +1 for map
-            )
-
+        inventory_space = spaces.MultiBinary(len(InventoryItems))
         shape = (len(Resource) + len(Terrain) + 1, *self.room_shape)
         obs_space = spaces.Box(
             low=np.zeros(shape, dtype=np.float32),
@@ -163,8 +158,7 @@ class Env(gym.Env):
         )
         self.observation_space = spaces.Dict(
             Obs(
-                inventory=inventory_space(self.chunk_size + 1),
-                inventory_change=inventory_space(self.chunk_size + 2),
+                inventory=inventory_space,
                 lines=lines_space,
                 mask=mask_space,
                 obs=obs_space,
@@ -173,7 +167,7 @@ class Env(gym.Env):
 
     def reset(self):
         self.i += 1
-        self.iterator = self.failure_buffer_wrapper(self.generator())
+        self.iterator = self.failure_buffer_wrapper(self.srti_generator())
         s, r, t, i = next(self.iterator)
         return s
 
@@ -222,8 +216,9 @@ class Env(gym.Env):
 
                 i.update(
                     use_failure_buf=use_failure_buf,
-                    failure_buffer=list(self.failure_buffer)[:2],
                 )
+                if not self.evaluating:
+                    i.update(failure_buffer=list(self.failure_buffer)[:2])
 
                 if not success:
                     self.failure_buffer.append(initial_random)
@@ -232,28 +227,74 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def generator(self):
+    @staticmethod
+    def get_lines(*blocks):
+        for block in blocks:
+            for subtask in block:
+                yield subtask
+            yield CrossWater
+
+    def srti_generator(self):
         blocks = self.build_blocks()
-        rooms = self.build_rooms(blocks)
+        rooms = self.build_rooms(*blocks)
         assert len(rooms) == len(blocks)
-        rooms_iter = iter(rooms)
-        blocks_iter = iter(blocks)
 
-        def get_lines():
-            for block in blocks:
-                for subtask in block:
-                    yield subtask
-                yield CrossWater
-
-        lines = list(get_lines())
-        obs_iterator = self.obs_generator(lines)
+        lines = list(self.get_lines(*blocks))
+        obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
-        done_iterator = self.done_generator(lines)
+        done_iterator = self.done_generator(*lines)
         info_iterator = self.info_generator(lines, rooms)
+        state_iterator = self.state_generator(*blocks)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
         next(info_iterator)
+        action = None
+
+        def no_op():
+            return action is not None and action.upper == len(self.subtasks)
+
+        def render():
+            if t:
+                print(fg("green") if i["success"] else fg("red"))
+            render_r()
+            render_t()
+            render_i()
+            render_state()
+            print("Action:", end=" ")
+            if action is None:
+                print(None)
+            elif no_op():
+                print("No op")
+            else:
+                # noinspection PyProtectedMember
+                print(action._replace(upper=str(self.subtasks[int(action.upper)])))
+            render_s()
+            print(RESET)
+
+        while True:
+            if no_op():
+                continue
+            state, render_state = state_iterator.send(action)
+            s, render_s = obs_iterator.send(state)
+            r, render_r = reward_iterator.send(state)
+            t, render_t = done_iterator.send(dict(state))
+            i, render_i = info_iterator.send(dict(state, done=t))
+
+            if self.break_on_fail and t and not i["success"]:
+                import ipdb
+
+                ipdb.set_trace()
+
+            self.render_thunk = render
+
+            action = yield s, r, t, i
+
+    def state_generator(self, *blocks):
+        rooms = self.build_rooms(*blocks)
+        assert len(rooms) == len(blocks)
+        rooms_iter = iter(rooms)
+        blocks_iter = iter(blocks)
 
         def next_required():
             block = next(blocks_iter, None)
@@ -269,66 +310,34 @@ class Env(gym.Env):
         required = Counter(next_required())
         objects = dict(next(rooms_iter))
         agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
-        inventory = self.initialize_inventory(required)
-        ptr = 0
+        build_supplies = Counter()
+        inventory = self.initialize_inventory()
         success = False
         action = None
-        subtask_complete = False
+        subtasks_completed = set()
         room_complete = False
         should_cross_mountain = False
 
-        def no_op(upper):
-            return upper == len(self.subtasks)
-
         while True:
             self.make_feasible(objects)
-            inventory = inventory & self.max_inventory
-
-            if subtask_complete:
-                ptr += 1
 
             state = dict(
                 inventory=inventory,
                 agent_pos=agent_pos,
                 objects=objects,
-                ptr=ptr,
                 action=action,
                 success=success,
-                subtask_complete=subtask_complete,
+                subtasks_completed=subtasks_completed,
                 room_complete=room_complete,
                 required=required,
                 should_cross_mountain=should_cross_mountain,
             )
 
-            s, render_s = obs_iterator.send(state)
-            r, render_r = reward_iterator.send(state)
-            t, render_t = done_iterator.send(dict(state))
-            i, render_i = info_iterator.send(dict(state, done=t))
-
-            if self.break_on_fail and t and not i["success"]:
-                import ipdb
-
-                ipdb.set_trace()
-
             def render():
-                if t:
-                    print(fg("green") if subtask_complete else fg("red"))
-                render_r()
-                render_t()
-                render_i()
                 print("Inventory:")
                 pprint(inventory)
                 print("Required:")
                 pprint(required)
-                print("Action:", end=" ")
-                if action is None:
-                    print(None)
-                elif no_op(action.upper):
-                    print("No op")
-                else:
-                    print(action._replace(upper=str(self.subtasks[int(action.upper)])))
-                render_s()
-                print(RESET)
 
             self.render_thunk = render
             # for name, space in self.observation_space.spaces.items():
@@ -337,22 +346,28 @@ class Env(gym.Env):
             #
             #         ipdb.set_trace()
             #         space.contains(s[name])
-            action = yield s, r, t, i
-            subtask_complete = False
+            action = yield state, render
+            subtasks_completed = set()
             room_complete = False
-            if no_op(action.upper):
-                continue
             if self.random.random() < self.bandit_prob:
-                possessions = [k for k, v in inventory.items() if v > 0]
+                possessions = [k for k, v in build_supplies.items() if v > 0]
                 if possessions:
                     robbed = self.random.choice(possessions)
-                    inventory[robbed] -= 1
+                    build_supplies[robbed] -= 1
 
-            line = lines[ptr]
             standing_on = objects.get(tuple(agent_pos), None)
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
                 moving_into = objects.get(tuple(new_pos), None)
+
+                if moving_into == Terrain.WATER:
+                    for item in inventory:
+                        if isinstance(item, Resource):
+                            subtasks_completed.add(Subtask(Interaction.COLLECT, item))
+                        if isinstance(item, Refined):
+                            subtasks_completed.add(Subtask(Interaction.REFINE, item))
+                    build_supplies.update(inventory)
+                    inventory = set()
 
                 def next_room():
                     h, w = new_pos
@@ -364,22 +379,24 @@ class Env(gym.Env):
                     if moving_into == Terrain.WALL:
                         return False
                     if moving_into == Terrain.WATER:
-                        return not (required - inventory)
+                        return not (required - build_supplies)
                         # inventory dominates required
                     if moving_into == Terrain.MOUNTAIN:
-                        return bool(inventory[Other.MAP])
+                        return Other.MAP in inventory
                     return True
 
                 if valid_new_pos():
                     if moving_into == Terrain.WATER:
-                        inventory -= required  # build bridge
+                        build_supplies -= required  # build bridge
                         if self.random.random() > self.bridge_failure_prob:
                             agent_pos = new_pos  # check for "flash flood"
+                        subtasks_completed.add(CrossWater)
                         # else bridge failed
                     else:
                         agent_pos = new_pos % np.array(self.room_shape)
                         if moving_into == Terrain.MOUNTAIN:
-                            inventory[Other.MAP] = 0
+                            inventory.remove(Other.MAP)
+                            subtasks_completed.add(CrossWater)
                         if next_room():
                             room = next(rooms_iter, None)
                             room_complete = True
@@ -392,38 +409,26 @@ class Env(gym.Env):
                             required = Counter(next_required())
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
-                    inventory[standing_on] += 1 + int(
-                        self.random.random() < self.windfall_prob
-                    )
+                    inventory.add(standing_on)
                     del objects[tuple(agent_pos)]
-                    if (
-                        line.interaction == Interaction.COLLECT
-                        and line.resource == standing_on
-                    ):
-                        subtask_complete = True
                     if self.random.random() < self.map_discovery_prob:
                         should_cross_mountain = True
-                        inventory[Other.MAP] = 1
+                        inventory.add(Other.MAP)
             elif isinstance(action.lower, Resource):
                 if standing_on == Terrain.FACTORY:
-                    if inventory[action.lower]:
-                        if (
-                            line.interaction == Interaction.REFINE
-                            and line.resource == action.lower
-                        ):
-                            subtask_complete = True
-                        inventory[Refined(action.lower.value)] += 1
+                    if action.lower in inventory:
+                        inventory.add(Refined(action.lower.value))
             else:
                 raise NotImplementedError
 
     @staticmethod
-    def initialize_inventory(required):
-        return Counter()
+    def initialize_inventory():
+        return set()
 
-    def obs_generator(self, lines):
+    def obs_generator(self, *lines):
         state = yield
         inventory = state["inventory"]
-        padded = lines + [None] * (self.n_lines - len(lines))
+        padded = list(lines) + [None] * (self.n_lines - len(lines))
 
         def build_array(agent_pos, objects, **_):
             room = np.zeros((len(WorldObjects), *self.room_shape))
@@ -433,18 +438,14 @@ class Env(gym.Env):
             room[(WorldObjects.index(Other.AGENT), *agent_pos)] = 1
             return room
 
-        def inventory_change():
-            for k in InventoryItems:
-                yield k, inventory[k] - prev_inventory[k]
-
-        def render(ptr, action, **_):
+        def render(action, **_):
             for i, line in enumerate(lines):
                 agent_ptr = None if action is None else action.ptr
-                if i == ptr == agent_ptr:
-                    pre = "+ "
-                elif i == ptr:
-                    pre = "| "
-                elif i == agent_ptr:
+                # if i == ptr == agent_ptr:
+                #     pre = "+ "
+                # elif i == ptr:
+                #     pre = "| "
+                if i == agent_ptr:
                     pre = "- "
                 else:
                     pre = "  "
@@ -457,7 +458,6 @@ class Env(gym.Env):
                 print(string, end="")
 
         while True:
-            prev_inventory = copy.deepcopy(inventory)
             array = build_array(**state)
             obs = OrderedDict(
                 Obs(
@@ -465,9 +465,6 @@ class Env(gym.Env):
                     lines=[self.preprocess_line(l) for l in padded],
                     mask=[p is None for p in padded],
                     inventory=self.inventory_representation(inventory),
-                    inventory_change=self.inventory_representation(
-                        dict(inventory_change())
-                    ),
                 )._asdict()
             )
             state = yield obs, lambda: render(**state)  # perform time-step
@@ -487,7 +484,7 @@ class Env(gym.Env):
                 no_ops_remaining -= 1
             no_ops_remaining -= 1
 
-    def done_generator(self, lines):
+    def done_generator(self, *lines):
         state = yield
         time_remaining = len(lines) * self.time_per_subtask()
 
@@ -523,7 +520,7 @@ class Env(gym.Env):
             info = {}
 
     def time_per_subtask(self):
-        return 2 * (self.room_shape.sum()) - 3
+        return 2 * (self.room_shape.sum() - 1)
 
     @staticmethod
     def preprocess_line(line):
@@ -576,7 +573,7 @@ class Env(gym.Env):
                     counts = Counter(objects.values())
                     free_space = list(get_free_space())
 
-    def build_rooms(self, blocks):
+    def build_rooms(self, *blocks):
         n_rooms = len(blocks)
         assert n_rooms > 0
         h, w = self.room_shape
@@ -592,8 +589,7 @@ class Env(gym.Env):
             ] + [(i, w - 1) for i in range(h)]
             limina = copy.deepcopy(self.limina)
             self.random.shuffle(limina)
-            limina = limina[: self.h]
-            assert Terrain.WATER in limina
+            assert limina.count(Terrain.WATER) == 1
             world_objects = (
                 list(self.random.choice(Necessary, size=num_objects)) + limina
             )
@@ -624,7 +620,7 @@ class Env(gym.Env):
 
     @staticmethod
     def inventory_representation(inventory):
-        return np.array([inventory[k] for k in InventoryItems])
+        return np.array([int(i in inventory) for i in InventoryItems])
 
     def seed(self, seed=None):
         assert self.seed == seed

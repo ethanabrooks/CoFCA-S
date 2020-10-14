@@ -92,8 +92,9 @@ class LowerLevel(NNBase):
         self.line_embed = networks.MultiEmbeddingBag(
             obs_spaces.line.nvec, embedding_dim=hidden_size
         )
-        self.inventory_embed = networks.MultiEmbeddingBag(
-            obs_spaces.inventory.nvec, embedding_dim=hidden_size
+        self.embed_inventory = nn.Sequential(
+            init_(nn.Linear(self.obs_spaces.inventory.n, hidden_size)),
+            nn.ReLU(),
         )
 
         self.mlp = nn.Sequential()
@@ -130,7 +131,7 @@ class LowerLevel(NNBase):
             if self.sum_or_max == "sum"
             else obs_embed.max(-1).values.max(-1).values
         )
-        inventory_embed = self.inventory_embed(inputs.inventory.long())
+        inventory_embed = self.embed_inventory(inputs.inventory)
         x = lines_embed + obs_embed + inventory_embed
 
         if self.is_recurrent:

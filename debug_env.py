@@ -19,7 +19,7 @@ class Env(upper_env.Env):
             obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
         )
 
-    def generator(
+    def srti_generator(
         self, objects: ObjectMap, agent_pos: Coord, lines: List[Line], **kwargs
     ) -> Generator[State, Tuple[int, int], None]:
 

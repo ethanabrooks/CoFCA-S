@@ -41,21 +41,28 @@ class Env(upper_env.Env):
         )
         return self.iterator.send(action)
 
-    def initialize_inventory(self, required):
-        inventory = {
-            k: self.random.choice(required[k]) if required[k] else 0
-            for k in InventoryItems
-        }
-        inventory[Other.MAP] = int(self.random.random() < 1 / len(self.subtasks))
-        return Counter(inventory)
+    def initialize_inventory(self):
+        inventory = super().initialize_inventory()
+        if self.random.random() < 1 / len(self.subtasks):
+            inventory.add(Other.MAP)
+        return inventory
 
-    def obs_generator(self, lines):
-        iterator = super().obs_generator(lines)
+    def state_generator(self, *blocks):
+        iterator = super().state_generator(*blocks)
+        action = None
+        line, *_ = self.get_lines(*blocks)
+
+        def check_success(success, subtasks_completed, **_):
+            return success or line in subtasks_completed
+
+        while True:
+            state, render = iterator.send(action)
+            state.update(success=check_success(**state), line=line)
+            action = yield state, render
+
+    def obs_generator(self, *lines):
+        iterator = super().obs_generator(*lines)
         state = yield next(iterator)
-
-        def get_line(ptr, **_):
-            ptr = min(ptr, len(lines) - 1)
-            return lines[ptr]
 
         def build_obs(inventory, obs, **_):
             return Obs(
@@ -68,43 +75,18 @@ class Env(upper_env.Env):
 
         while True:
             cross_mountain = state["should_cross_mountain"]
+            line = state["line"]
             _obs, _render = iterator.send(state)
-            line = get_line(**state)
             _obs = OrderedDict(build_obs(**_obs)._asdict())
 
             def render():
                 _render()
-                print("Line:", "Cross Mountain" if cross_mountain else str(line))
+                print(
+                    "Line:",
+                    "Cross Mountain" if cross_mountain else str(line),
+                )
 
             state = yield _obs, render
-
-    def done_generator(self, lines):
-        state = yield
-        time_remaining = self.time_per_subtask()
-
-        def done(subtask_complete, success, **_):
-            return subtask_complete or success or time_remaining == 0
-
-        while True:
-            if not self.evaluating:
-                time_remaining -= 1
-            state = yield done(**state), lambda: print(
-                "Time remaining:", time_remaining
-            )
-
-    def info_generator(self, lines, rooms):
-        iterator = super().info_generator(lines, rooms)
-        state = yield next(iterator)
-        info, render = iterator.send(state)
-
-        def update_info(done, subtask_complete, **_):
-            if done:
-                info.update(success=subtask_complete)
-
-        while True:
-            update_info(**state)
-            state = yield info, render
-            info, render = iterator.send(state)
 
     # noinspection PyMethodOverriding
     def main(self):
