@@ -132,7 +132,7 @@ class LowerLevel(NNBase):
             else obs_embed.max(-1).values.max(-1).values
         )
         inventory_embed = self.embed_inventory(inputs.inventory)
-        x = lines_embed + obs_embed + inventory_embed
+        x = torch.relu(lines_embed + obs_embed + inventory_embed)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)
