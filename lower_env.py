@@ -44,14 +44,11 @@ class Env(upper_env.Env):
 
     def initialize_inventory(self):
         inventory = super().initialize_inventory()
-        if self.random.random() < 1 / len(self.subtasks):
-            inventory.add(Other.MAP)
-
-            # random inventory
-            prob = 1 / len(InventoryItems)
-            for item in InventoryItems:
-                if self.random.random() < prob:
-                    inventory.add(item)
+        # random inventory
+        prob = 1 / len(InventoryItems)
+        for item in InventoryItems:
+            if self.random.random() < prob:
+                inventory.add(item)
         return inventory
 
     def time_limit(self, lines):
