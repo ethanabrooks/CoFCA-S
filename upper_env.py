@@ -488,7 +488,7 @@ class Env(gym.Env):
 
     def done_generator(self, *lines):
         state = yield
-        time_remaining = len(lines) * self.time_per_subtask()
+        time_remaining = self.time_limit(lines)
 
         while True:
             done = state["success"]
@@ -496,6 +496,9 @@ class Env(gym.Env):
                 time_remaining -= 1
                 done |= time_remaining == 0
             state = yield done, lambda: print("Time remaining:", time_remaining)
+
+    def time_limit(self, lines):
+        return len(lines) * self.time_per_subtask()
 
     def info_generator(self, lines, rooms):
         state = yield

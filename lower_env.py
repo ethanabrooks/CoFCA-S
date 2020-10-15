@@ -54,6 +54,9 @@ class Env(upper_env.Env):
                     inventory.add(item)
         return inventory
 
+    def time_limit(self, lines):
+        return self.time_per_subtask()
+
     def state_generator(self, *blocks):
         iterator = super().state_generator(*blocks)
         action = None
