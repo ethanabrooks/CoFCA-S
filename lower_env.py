@@ -77,24 +77,18 @@ class Env(upper_env.Env):
         def build_obs(inventory, obs, **_):
             return Obs(
                 inventory=inventory,
-                line=(
-                    self.line_space if cross_mountain else self.preprocess_line(line)
-                ),
+                line=self.preprocess_line(line),
                 obs=obs,
             )
 
         while True:
-            cross_mountain = state["should_cross_mountain"]
             line = state["line"]
             _obs, _render = iterator.send(state)
             _obs = OrderedDict(build_obs(**_obs)._asdict())
 
             def render():
                 _render()
-                print(
-                    "Line:",
-                    "Cross Mountain" if cross_mountain else str(line),
-                )
+                print("Line:", str(line))
 
             state = yield _obs, render
 

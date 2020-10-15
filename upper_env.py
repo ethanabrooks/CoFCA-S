@@ -23,6 +23,7 @@ from enums import (
     Interaction,
     Resource,
     Symbols,
+    SubtaskItems,
     ResourceInteractions,
 )
 from lines import Subtask
@@ -527,16 +528,9 @@ class Env(gym.Env):
 
     @staticmethod
     def preprocess_line(line):
-        if isinstance(line, Subtask):
-            if line.resource is None:
-                resource_code = len(Resource)
-            else:
-                resource_code = line.resource.value
-            return [line.interaction.value, resource_code]
-        elif line is None:
+        if line is None:
             return [0, 0]
-        else:
-            raise RuntimeError
+        return [line.interaction.value, SubtaskItems.index(line.resource)]
 
     def room_strings(self, room):
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):

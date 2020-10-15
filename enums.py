@@ -44,6 +44,7 @@ Symbols = {
     Other.AGENT: fg("yellow") + "A",
 }
 Refined = Enum(value="Refined", names=[x.name for x in Resource])
+SubtaskItems = list(Resource) + list(Terrain)
 InventoryItems = [Other.MAP] + list(Resource) + list(Refined)  # defines inventory
 WorldObjects = [Other.AGENT] + list(Resource) + list(Terrain)  # defines channels
 Necessary = list(Resource) + [Terrain.FACTORY]  # things which spawn
