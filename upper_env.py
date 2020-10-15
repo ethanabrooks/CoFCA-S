@@ -54,8 +54,7 @@ def subtasks():
 
 def lower_level_actions():
     yield Interaction.COLLECT
-    for resource in Resource:
-        yield resource  # REFINE
+    yield Interaction.REFINE
     for i in range(-1, 2):
         for j in range(-1, 2):
             if [i, j].count(0) == 1:
@@ -416,10 +415,9 @@ class Env(gym.Env):
                     if self.random.random() < self.map_discovery_prob:
                         should_cross_mountain = True
                         inventory.add(Other.MAP)
-            elif isinstance(action.lower, Resource):
+            elif action.lower == Interaction.REFINE:
                 if standing_on == Terrain.FACTORY:
-                    if action.lower in inventory:
-                        inventory.add(Refined(action.lower.value))
+                    inventory |= {Refined(i.value) for i in inventory}
             else:
                 raise NotImplementedError
 
