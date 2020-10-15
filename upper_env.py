@@ -397,7 +397,7 @@ class Env(gym.Env):
                         agent_pos = new_pos % np.array(self.room_shape)
                         if moving_into == Terrain.MOUNTAIN:
                             inventory.remove(Other.MAP)
-                            subtasks_completed.add(CrossWater)
+                            subtasks_completed.add(CrossMountain)
                         if next_room():
                             room = next(rooms_iter, None)
                             room_complete = True

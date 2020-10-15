@@ -5,8 +5,9 @@ from gym import spaces
 
 import upper_env
 import keyboard_control
-from upper_env import Action
+from upper_env import Action, CrossMountain
 from enums import Interaction, Resource, Other, Terrain, InventoryItems
+
 
 Obs = namedtuple("Obs", "inventory line obs")
 action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
@@ -56,16 +57,18 @@ class Env(upper_env.Env):
 
     def state_generator(self, *blocks):
         iterator = super().state_generator(*blocks)
-        action = None
+        state, render = next(iterator)
         line, *_ = self.get_lines(*blocks)
+        if Other.MAP in state["inventory"]:
+            line = CrossMountain
 
         def check_success(success, subtasks_completed, **_):
             return success or line in subtasks_completed
 
         while True:
-            state, render = iterator.send(action)
             state.update(success=check_success(**state), line=line)
             action = yield state, render
+            state, render = iterator.send(action)
 
     def obs_generator(self, *lines):
         iterator = super().obs_generator(*lines)
