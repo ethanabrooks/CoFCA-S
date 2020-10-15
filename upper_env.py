@@ -523,7 +523,7 @@ class Env(gym.Env):
             info = {}
 
     def time_per_subtask(self):
-        return 2 * (self.room_shape.sum() - 1)
+        return 3 * (self.room_shape.sum() - 2)
 
     @staticmethod
     def preprocess_line(line):

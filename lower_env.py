@@ -110,9 +110,7 @@ class Env(upper_env.Env):
             a=(0, -1),
             d=(0, 1),
             c=Interaction.COLLECT,
-            t=Resource.STONE,
-            i=Resource.IRON,
-            o=Resource.WOOD,
+            r=Interaction.REFINE,
         )
 
         def action_fn(string):
