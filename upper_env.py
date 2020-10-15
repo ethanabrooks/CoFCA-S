@@ -365,7 +365,9 @@ class Env(gym.Env):
                         if isinstance(item, Resource):
                             subtasks_completed.add(Subtask(Interaction.COLLECT, item))
                         if isinstance(item, Refined):
-                            subtasks_completed.add(Subtask(Interaction.REFINE, item))
+                            subtasks_completed.add(
+                                Subtask(Interaction.REFINE, Resource(item.value))
+                            )
                     build_supplies.update(inventory)
                     inventory = set()
 
