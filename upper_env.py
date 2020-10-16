@@ -315,7 +315,6 @@ class Env(gym.Env):
         action = None
         subtasks_completed = set()
         room_complete = False
-        should_cross_mountain = False
 
         while True:
             self.make_feasible(objects)
@@ -329,7 +328,6 @@ class Env(gym.Env):
                 subtasks_completed=subtasks_completed,
                 room_complete=room_complete,
                 required=required,
-                should_cross_mountain=should_cross_mountain,
             )
 
             def render():
@@ -401,8 +399,6 @@ class Env(gym.Env):
                         if next_room():
                             room = next(rooms_iter, None)
                             room_complete = True
-                            subtask_complete = True
-                            should_cross_mountain = False
                             if room is None:
                                 success = True
                             else:
@@ -413,11 +409,10 @@ class Env(gym.Env):
                     inventory.add(standing_on)
                     del objects[tuple(agent_pos)]
                     if self.random.random() < self.map_discovery_prob:
-                        should_cross_mountain = True
                         inventory.add(Other.MAP)
             elif action.lower == Interaction.REFINE:
                 if standing_on == Terrain.FACTORY:
-                    inventory |= {Refined(i.value) for i in inventory}
+                    inventory = {Refined(i.value) for i in inventory}
             else:
                 raise NotImplementedError
 
