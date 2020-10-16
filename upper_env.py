@@ -273,9 +273,8 @@ class Env(gym.Env):
             print(RESET)
 
         while True:
-            if no_op():
-                continue
-            state, render_state = state_iterator.send(action)
+            if not no_op():
+                state, render_state = state_iterator.send(action)
             s, render_s = obs_iterator.send(state)
             r, render_r = reward_iterator.send(state)
             t, render_t = done_iterator.send(dict(state))
