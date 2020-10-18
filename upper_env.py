@@ -378,7 +378,7 @@ class Env(gym.Env):
                     if moving_into == Terrain.WALL:
                         return False
                     if moving_into == Terrain.WATER:
-                        return not (required - build_supplies)
+                        return required + Counter() == build_supplies + Counter()
                         # inventory dominates required
                     if moving_into == Terrain.MOUNTAIN:
                         return Other.MAP in inventory
