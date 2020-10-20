@@ -146,7 +146,7 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser = main.add_arguments(parser)
+        super().add_arguments(parser)
         parser.main.add_argument("--min-eval-lines", type=int)
         parser.main.add_argument("--max-eval-lines", type=int)
         parser.main.add_argument("--no-eval", action="store_true")
@@ -161,12 +161,6 @@ class UpperTrainer(Trainer):
         if config is None:
             config = default_upper
         super().launch(env_id="experiment", config=config, **kwargs)
-
-    @classmethod
-    def main(cls):
-        parser = ArgumentParser()
-        cls.add_arguments(parser)
-        cls.launch(**vars(parser.parse_args()))
 
 
 if __name__ == "__main__":

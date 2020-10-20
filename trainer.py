@@ -3,22 +3,25 @@ import itertools
 import os
 import sys
 import time
+from argparse import ArgumentParser
 from collections import namedtuple, Counter
 from pathlib import Path
-from pprint import pprint
 from typing import Dict, Optional
 
 import gym
 import ray
 import torch
+import torch.nn as nn
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
+import arguments
 from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
+from configs import default
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
@@ -35,6 +38,7 @@ class Trainer:
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
+        env_args = {}
         gen_args = {}
         for k, v in config.items():
             if k in ["num_processes"]:
@@ -50,16 +54,20 @@ class Trainer:
                     rollouts_args[k] = v
                 if k in inspect.signature(PPO.__init__).parameters:
                     ppo_args[k] = v
+                if k in inspect.signature(cls.make_env).parameters:
+                    env_args[k] = v
                 if k in inspect.signature(cls.run).parameters or k not in (
                     list(agent_args.keys())
                     + list(rollouts_args.keys())
                     + list(ppo_args.keys())
+                    + list(env_args.keys())
                 ):
                     gen_args[k] = v
         config = dict(
             agent_args=agent_args,
             rollouts_args=rollouts_args,
             ppo_args=ppo_args,
+            env_args=env_args,
             **gen_args,
         )
         return config
@@ -330,8 +338,13 @@ class Trainer:
         return InfosAggregator()
 
     @staticmethod
-    def build_agent(envs, **agent_args):
-        return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
+    def build_agent(envs, activation=nn.ReLU(), **agent_args):
+        return Agent(
+            envs.observation_space.shape,
+            envs.action_space,
+            activation=activation,
+            **agent_args,
+        )
 
     @staticmethod
     def make_env(env_id, seed, rank, evaluating, **kwargs):
@@ -350,7 +363,8 @@ class Trainer:
         config: dict,
         **kwargs,
     ):
-        assert config is not None
+        if config is None:
+            config = default
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 config[k] = v
@@ -389,3 +403,18 @@ class Trainer:
                 resources_per_trial=resources_per_trial,
                 **kwargs,
             )
+
+    @classmethod
+    def add_arguments(cls, parser):
+        parser = arguments.add_arguments(parser)
+        return parser.main
+
+    @classmethod
+    def main(cls):
+        parser = ArgumentParser()
+        cls.add_arguments(parser)
+        cls.launch(**vars(parser.parse_args()))
+
+
+if __name__ == "__main__":
+    Trainer.main()
