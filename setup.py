@@ -15,6 +15,7 @@ setup(
     author_email="ethanabrooks@gmail.com",
     packages=find_packages(),
     scripts=[
+        "bin/search",
         "bin/load",
         "bin/load1",
         "bin/new-run",
@@ -30,12 +31,5 @@ setup(
         "bin/crawl-and-correlate",
         "bin/wtf.zsh",
         "bin/remove-log.zsh",
-    ],
-    install_requires=[
-        "tensorboardX==1.8",
-        "tensorflow>=1.15",
-        "opencv-python==4.1.0.25",
-        "psutil>=5.6.6",
-        "requests==2.22.0",
     ],
 )

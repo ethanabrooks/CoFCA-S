@@ -13,12 +13,13 @@ class Aggregator(ABC):
         raise NotImplementedError
 
 
-class SumAcrossEpisode(Aggregator):
+class EpisodeAggregator(Aggregator):
     def __init__(self):
         self.complete_episodes = defaultdict(list)
         self.incomplete_episodes = defaultdict(list)
 
     def update(self, dones: Collection[bool], **values):
+        values.update(time_steps=[1 for _ in dones])
         for k, vs in values.items():
             incomplete_episodes = self.incomplete_episodes[k]
             if not incomplete_episodes:
@@ -35,7 +36,7 @@ class SumAcrossEpisode(Aggregator):
             yield k, np.mean(v)
 
 
-class InfosAggregator(SumAcrossEpisode):
+class InfosAggregator(EpisodeAggregator):
     def update(self, *infos: dict, dones: Collection[bool]):
         assert len(dones) == len(infos)
         for i, (done, info) in enumerate(zip(dones, infos)):
