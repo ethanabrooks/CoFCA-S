@@ -333,6 +333,8 @@ class Env(gym.Env):
             def render():
                 print("Inventory:")
                 pprint(inventory)
+                print("Build Supplies:")
+                pprint(build_supplies)
                 print("Required:")
                 pprint(required)
 
@@ -629,12 +631,14 @@ class Env(gym.Env):
 
         lower_level_params = dict(
             hidden_size=128,
-            kernel_size=1,
+            kernel_size=3,
             num_conv_layers=1,
-            stride=1,
+            num_layers=1,
+            stride=2,
+            sum_or_max="sum",
             recurrent=False,
-            concat=False,
         )
+
         if lower_level_config:
             with open(lower_level_config) as f:
                 params = json.load(f)
@@ -647,7 +651,6 @@ class Env(gym.Env):
             ),
             entropy_coef=0,
             action_space=spaces.Discrete(Action(*self.action_space.nvec).lower),
-            num_layers=1,
             **lower_level_params,
         )
         state_dict = torch.load(lower_level_load_path, map_location="cpu")
@@ -707,6 +710,7 @@ class Env(gym.Env):
         p.add_argument("--bandit-prob", type=float)
         p.add_argument("--windfall-prob", type=float)
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
+        p.add_argument("--debug-env", action="store_true")
 
 
 def main(lower_level_load_path, lower_level_config, **kwargs):

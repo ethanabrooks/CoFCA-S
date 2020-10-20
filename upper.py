@@ -8,6 +8,7 @@ from itertools import islice
 import ours
 import upper_agent
 import upper_env
+import debug_env as _debug_env
 import main
 from configs import default_upper
 from trainer import Trainer
@@ -68,13 +69,16 @@ class UpperTrainer(Trainer):
         )
 
     @staticmethod
-    def make_env(seed, rank, evaluating, env_id=None, **kwargs):
+    def make_env(seed, rank, evaluating, debug_env=False, env_id=None, **kwargs):
         kwargs.update(
             seed=seed + rank,
             rank=rank,
             evaluating=evaluating,
         )
-        return upper_env.Env(**kwargs)
+        if debug_env:
+            return _debug_env.Env(**kwargs)
+        else:
+            return upper_env.Env(**kwargs)
 
     @classmethod
     def structure_config(cls, **config):
