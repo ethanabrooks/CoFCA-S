@@ -15,7 +15,7 @@ from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
-from aggregator import SumAcrossEpisode, InfosAggregator, EvalWrapper
+from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -195,7 +195,7 @@ class Trainer:
                 rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
-            train_report = SumAcrossEpisode()
+            train_report = EpisodeAggregator()
             train_infos = self.build_infos_aggregator()
             if load_path:
                 self.load_checkpoint(load_path, ppo, agent, device)
@@ -209,7 +209,7 @@ class Trainer:
                 frames.update(so_far=frames_per_update)
                 if frames["so_far"] >= num_frames:
                     break
-                eval_report = EvalWrapper(SumAcrossEpisode())
+                eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
@@ -295,7 +295,7 @@ class Trainer:
                             training_iteration=frames["so_far"],
                         )
                     )
-                    train_report = SumAcrossEpisode()
+                    train_report = EpisodeAggregator()
                     train_infos = self.build_infos_aggregator()
                     time_spent["logging"] += time.time() - tick
 

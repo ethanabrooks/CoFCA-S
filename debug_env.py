@@ -104,7 +104,7 @@ class Env(upper_env.Env):
                         room_complete = True
 
 
-def main(lower_level_load_path, lower_level_config, **kwargs):
+def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
     Env(rank=0, min_eval_lines=0, max_eval_lines=10, **kwargs).main(
         lower_level_load_path=lower_level_load_path,
         lower_level_config=lower_level_config,
