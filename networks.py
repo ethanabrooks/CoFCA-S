@@ -1,4 +1,5 @@
 from collections import namedtuple
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ AgentOutputs = namedtuple(
 class Agent(nn.Module):
     def __init__(
         self,
-        obs_spaces,
+        obs_space,
         action_space,
         recurrent,
         hidden_size,
@@ -28,7 +29,7 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         self.recurrent_module = self.build_recurrent_module(
-            hidden_size, obs_spaces, recurrent, **network_args
+            hidden_size, obs_space, recurrent, **network_args
         )
 
         if isinstance(action_space, Discrete):
@@ -42,18 +43,18 @@ class Agent(nn.Module):
         self.continuous = isinstance(action_space, Box)
 
     def build_recurrent_module(
-        self, hidden_size, obs_spaces, recurrent, **network_args
+        self, hidden_size, space_shape, recurrent, **network_args
     ):
-        if len(obs_spaces) == 3:
+        if len(space_shape) == 3:
             return CNNBase(
-                *obs_spaces,
+                *space_shape,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
-        elif len(obs_spaces) == 1:
+        elif len(space_shape) == 1:
             return MLPBase(
-                obs_spaces[0],
+                space_shape[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
@@ -121,6 +122,10 @@ class NNBase(nn.Module):
                     nn.init.constant_(param, 0)
                 elif "weight" in name:
                     nn.init.orthogonal_(param)
+
+    @contextmanager
+    def evaluating(self, *args, **kwargs):
+        yield
 
     def build_recurrent_module(self, input_size, hidden_size):
         return nn.GRU(input_size, hidden_size)

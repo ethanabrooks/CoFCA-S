@@ -1,18 +1,18 @@
 import inspect
 import pickle
 from argparse import ArgumentParser
-from collections import Collection
-from pathlib import Path
 from itertools import islice
+from pathlib import Path
 
-import ours
-import upper_agent
-import upper_env
+import torch.nn as nn
+
 import debug_env as _debug_env
 import main
+import networks
+import upper_env
+from aggregator import InfosAggregator
 from configs import default_upper
 from trainer import Trainer
-from aggregator import InfosAggregator
 
 
 class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
@@ -59,14 +59,21 @@ class UpperTrainer(Trainer):
             report(**msg)
 
     def build_agent(self, envs, debug=False, **agent_args):
-        del agent_args["recurrent"]
-        del agent_args["num_layers"]
-        return upper_agent.Agent(
-            observation_space=envs.observation_space,
+        agent_args.update(recurrent=True)
+        return networks.Agent(
+            obs_space=envs.observation_space.shape,
             action_space=envs.action_space,
-            debug=debug,
+            activation=nn.ReLU(),
             **agent_args,
         )
+        # del agent_args["recurrent"]
+        # del agent_args["num_layers"]
+        # return upper_agent.Agent(
+        #     observation_space=envs.observation_space,
+        #     action_space=envs.action_space,
+        #     debug=debug,
+        #     **agent_args,
+        # )
 
     @staticmethod
     def make_env(seed, rank, evaluating, debug_env=False, env_id=None, **kwargs):
@@ -101,11 +108,12 @@ class UpperTrainer(Trainer):
                     else:
                         print("lower_level not specified. Using debug_env")
                 env_args[k] = v
-            if k in inspect.signature(ours.Recurrence.__init__).parameters:
+            # if k in inspect.signature(ours.Recurrence.__init__).parameters:
+            if k in inspect.signature(networks.MLPBase.__init__).parameters:
                 agent_args[k] = v
-            if k in inspect.signature(upper_agent.Agent.__init__).parameters:
+            if k in inspect.signature(networks.Agent.__init__).parameters:
                 agent_args[k] = v
-            if k in inspect.signature(upper_agent.Agent.__init__).parameters:
+            if k in inspect.signature(networks.Agent.__init__).parameters:
                 agent_args[k] = v
             if k in inspect.signature(cls.run).parameters:
                 gen_args[k] = v

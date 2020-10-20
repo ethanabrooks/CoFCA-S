@@ -24,10 +24,10 @@ def get_obs_sections(obs_spaces):
 
 class Agent(networks.Agent):
     def build_recurrent_module(
-        self, hidden_size, obs_spaces, recurrent, **network_args
+        self, hidden_size, space_shape, recurrent, **network_args
     ):
         return LowerLevel(
-            obs_spaces=obs_spaces,
+            obs_spaces=space_shape,
             recurrent=recurrent,
             hidden_size=hidden_size,
             **network_args,
