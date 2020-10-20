@@ -1,15 +1,17 @@
 from collections import namedtuple
 
-from gym.spaces import Box, Discrete
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from gym.spaces import Box, Discrete
 
 from distributions import Categorical, DiagGaussian
 from layers import Flatten
 from utils import init, init_normc_, init_
 
 AgentOutputs = namedtuple(
-    "AgentValues", "value action action_log_probs aux_loss rnn_hxs " "log dist"
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
 )
 
 
@@ -26,7 +28,7 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         self.recurrent_module = self.build_recurrent_module(
-            hidden_size, network_args, obs_spaces, recurrent
+            hidden_size, obs_spaces, recurrent, **network_args
         )
 
         if isinstance(action_space, Discrete):
@@ -39,7 +41,9 @@ class Agent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
-    def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
+    def build_recurrent_module(
+        self, hidden_size, obs_spaces, recurrent, **network_args
+    ):
         if len(obs_spaces) == 3:
             return CNNBase(
                 *obs_spaces,
@@ -274,3 +278,16 @@ class MLPBase(NNBase):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class MultiEmbeddingBag(nn.Module):
+    def __init__(self, nvec: np.ndarray, **kwargs):
+        super().__init__()
+        self.embedding = nn.EmbeddingBag(num_embeddings=nvec.sum(), **kwargs)
+        self.register_buffer(
+            "offset",
+            F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
+        )
+
+    def forward(self, inputs):
+        return self.embedding(self.offset + inputs)

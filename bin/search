@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+ 
+matches=(.runs/logdir/$1/$1/*_$2_*/$3)
+echo ${matches}

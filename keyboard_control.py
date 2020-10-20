@@ -18,10 +18,6 @@ def run(env, action_fn):
         action = None
         while action is None:
             action = action_fn(input("act:"))
-            if action == "p":
-                import ipdb
-
-                ipdb.set_trace()
 
         s, r, t, i = env.step(action)
         print("reward", r)
