@@ -355,6 +355,22 @@ class Env(gym.Env):
                     build_supplies[robbed] -= 1
 
             standing_on = objects.get(tuple(agent_pos), None)
+
+            upper_action = self.subtasks[int(action.upper)]
+
+            action = action._replace(
+                lower=(
+                    self.hard_code_lower(
+                        action=action,
+                        agent_pos=agent_pos,
+                        objects=objects,
+                        inventory=inventory,
+                        standing_on=standing_on,
+                        upper_action=upper_action,
+                    )
+                )
+            )
+
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
                 moving_into = objects.get(tuple(new_pos), None)
@@ -417,6 +433,46 @@ class Env(gym.Env):
                     inventory = {Refined(i.value) for i in inventory}
             else:
                 raise NotImplementedError
+
+    def hard_code_lower(
+        self, action, agent_pos, objects, inventory, standing_on, upper_action
+    ):
+        def get_nearest(o: Union[Resource, Terrain]):
+            def key(t):
+                p, _o = t
+                return np.sum(np.abs(np.array(p) - agent_pos)) if o == _o else np.inf
+
+            return min(objects.items(), key=key)[0]
+
+        def step_toward(o: Union[Resource, Terrain]):
+            nearest = get_nearest(o)
+            # TODO: disallow diagonal
+            return np.clip(np.array(nearest) - agent_pos, -1, 1)
+
+        lower_action = action.lower
+        if upper_action.interaction == Interaction.COLLECT:
+            if upper_action.resource in inventory:
+                lower_action = step_toward(Terrain.WATER)
+            elif standing_on == upper_action.resource:
+                lower_action = Interaction.COLLECT
+            else:
+                lower_action = step_toward(upper_action.resource)
+        elif upper_action.interaction == Interaction.REFINE:
+            if Refined(upper_action.resource.value) in inventory:
+                lower_action = step_toward(Terrain.WATER)
+            elif upper_action.resource in inventory:
+                lower_action = (
+                    Interaction.REFINE
+                    if standing_on == Terrain.FACTORY
+                    else step_toward(Terrain.FACTORY)
+                )
+            else:
+                lower_action = (
+                    Interaction.COLLECT
+                    if standing_on == upper_action.resource
+                    else step_toward(upper_action.resource)
+                )
+        return lower_action
 
     @staticmethod
     def initialize_inventory():
@@ -670,8 +726,6 @@ class Env(gym.Env):
             self.render(pause=False)
             upper = None
             while upper is None:
-                for i, subtask in enumerate(subtasks()):
-                    print(i, str(subtask))
                 upper = action_fn(input("act:"))
             lower = lower_level(
                 lower_env.Obs(
@@ -713,7 +767,7 @@ class Env(gym.Env):
         p.add_argument("--debug-env", action="store_true")
 
 
-def main(lower_level_load_path, lower_level_config, **kwargs):
+def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
     Env(rank=0, min_eval_lines=0, max_eval_lines=10, **kwargs).main(
         lower_level_load_path=lower_level_load_path,
         lower_level_config=lower_level_config,
