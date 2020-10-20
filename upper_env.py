@@ -544,8 +544,8 @@ class Env(gym.Env):
         while True:
             done = state["success"]
             if not self.evaluating:
-                time_remaining -= 1
                 done |= time_remaining == 0
+                time_remaining -= 1
             state = yield done, lambda: print("Time remaining:", time_remaining)
 
     def time_limit(self, lines):

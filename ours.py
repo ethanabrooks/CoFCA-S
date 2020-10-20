@@ -318,12 +318,12 @@ class Recurrence(nn.Module):
             self.print("a_probs", a_dist.probs)
 
             # while True:
-            #     try:
-            #         A[:] = float(input("A:"))
-            #         assert torch.all(A < self.n_a)
-            #         break
-            #     except (ValueError, AssertionError):
-            #         pass
+            #    try:
+            #        A[:] = float(input("A:"))
+            #        assert torch.all(A < self.n_a)
+            #        break
+            #    except (ValueError, AssertionError):
+            #        pass
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
 
