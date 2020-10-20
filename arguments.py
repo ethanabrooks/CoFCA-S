@@ -1,10 +1,8 @@
-import argparse
 import json
 from collections import namedtuple
 from pathlib import Path
 
-from configs import configs, default_upper
-from trainer import Trainer
+from configs import configs
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
@@ -115,11 +113,3 @@ def add_arguments(parser):
     return Parsers(
         main=parser, rollouts=rollouts_parser, ppo=ppo_parser, agent=agent_parser
     )
-
-
-if __name__ == "__main__":
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int)
-    PARSER.add_argument("--max-eval-lines", type=int)
-    add_arguments(PARSER)
-    Trainer.launch(**vars(PARSER))

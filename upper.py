@@ -1,18 +1,15 @@
 import inspect
 import pickle
-from argparse import ArgumentParser
-from collections import Collection
-from pathlib import Path
 from itertools import islice
+from pathlib import Path
 
+import debug_env as _debug_env
 import ours
 import upper_agent
 import upper_env
-import debug_env as _debug_env
-import main
+from aggregator import InfosAggregator
 from configs import default_upper
 from trainer import Trainer
-from aggregator import InfosAggregator
 
 
 class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
@@ -138,7 +135,7 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser = main.add_arguments(parser)
+        super().add_arguments(parser)
         parser.main.add_argument("--min-eval-lines", type=int)
         parser.main.add_argument("--max-eval-lines", type=int)
         parser.main.add_argument("--no-eval", action="store_true")
@@ -153,12 +150,6 @@ class UpperTrainer(Trainer):
         if config is None:
             config = default_upper
         super().launch(env_id="experiment", config=config, **kwargs)
-
-    @classmethod
-    def main(cls):
-        parser = ArgumentParser()
-        cls.add_arguments(parser)
-        cls.launch(**vars(parser.parse_args()))
 
 
 if __name__ == "__main__":

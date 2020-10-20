@@ -6,6 +6,39 @@ from hyperopt import hp
 with open("lower.json") as f:
     default_lower = json.load(f)
 
+default = {
+    "clip_param": 0.2,
+    "cuda": True,
+    "cuda_deterministic": False,
+    "entropy_coef": 0.015,
+    "eps": 1e-05,
+    "eval_interval": None,
+    "eval_steps": None,
+    "gamma": 0.99,
+    "hidden_size": 256,
+    "learning_rate": 0.004,
+    "load_path": None,
+    "log_interval": 20000,
+    "max_grad_norm": 0.5,
+    "no_eval": False,
+    "normalize": False,
+    "num_batch": 2,
+    "num_frames": 30000000,
+    "num_layers": 1,
+    "num_processes": 150,
+    "ppo_epoch": 1,
+    "recurrent": False,
+    "render": False,
+    "render_eval": False,
+    "save_interval": 20000,
+    "seed": 0,
+    "synchronous": False,
+    "tau": 0.95,
+    "train_steps": 25,
+    "use_gae": True,
+    "value_loss_coef": 0.5,
+}
+
 default_upper = {
     "break_on_fail": False,
     "clip_param": 0.2,
