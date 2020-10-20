@@ -102,8 +102,20 @@ default_upper = {
     # "windfall_prob": 0.25,
 }
 
-upper_search = copy.deepcopy(default_upper)
-upper_search.update(
+search = copy.deepcopy(default)
+search.update(
+    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
+    hidden_size=hp.choice("hidden_size", [128, 256, 512]),
+    learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
+    num_batch=hp.choice("num_batch", [1, 2]),
+    num_processes=hp.choice("num_processes", [50, 100, 150]),
+    ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
+    train_steps=hp.choice("train_steps", [20, 25, 30]),
+    use_gae=hp.choice("use_gae", [True, False]),
+)
+
+search_upper = copy.deepcopy(default_upper)
+search_upper.update(
     conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
     gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
@@ -123,8 +135,8 @@ upper_search.update(
     use_gae=hp.choice("use_gae", [True, False]),
 )
 
-lower_search = copy.deepcopy(default_lower)
-lower_search.update(
+search_lower = copy.deepcopy(default_lower)
+search_lower.update(
     conv_hidden_size=hp.choice("conv_hidden_size", [32, 64]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
     hidden_size=hp.choice("hidden_size", [32, 64, 128, 256]),
@@ -142,8 +154,8 @@ lower_search.update(
     use_gae=hp.choice("use_gae", [True, False]),
 )
 
-debug_search = copy.deepcopy(upper_search)
-debug_search.update(
+search_debug = copy.deepcopy(search_upper)
+search_debug.update(
     kernel_size=1,
     stride=1,
     world_size=1,
@@ -155,9 +167,10 @@ debug_default.update(
     world_size=1,
 )
 configs = dict(
-    lower_search=lower_search,
-    upper_search=upper_search,
-    debug_search=debug_search,
+    search_lower=search_lower,
+    search_upper=search_upper,
+    search_debug=search_debug,
     default_upper=default_upper,
     debug_default=debug_default,
+    search=search,
 )
