@@ -35,7 +35,7 @@ default = {
     "synchronous": False,
     "tau": 0.95,
     "train_steps": 25,
-    "use_gae": True,
+    "use_gae": False,
     "value_loss_coef": 0.5,
 }
 
