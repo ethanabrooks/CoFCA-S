@@ -260,7 +260,8 @@ class Trainer(tune.Trainable):
             if i % log_interval == 0:
                 yield dict(
                     **train_results,
-                    **dict(train_counter.items()),
+                    **dict(train_report.items()),
+                    **dict(train_infos.items()),
                     **dict(eval_report.items()),
                     **dict(eval_infos.items()),
                 )
