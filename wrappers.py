@@ -1,6 +1,8 @@
+from contextlib import contextmanager
+
 import gym
 from gym import spaces
-from gym.spaces import Box
+from gym.spaces import Box, Discrete
 import numpy as np
 import torch
 
@@ -66,15 +68,19 @@ class VecPyTorch(VecEnvWrapper):
         super(VecPyTorch, self).__init__(venv)
         self.device = "cpu"
         # TODO: Fix data types
+        self.action_bounds = (
+            (torch.tensor(self.action_space.low), torch.tensor(self.action_space.high))
+            if isinstance(self.action_space, Box)
+            else None
+        )
 
-    @staticmethod
-    def extract_numpy(obs):
+    def extract_numpy(self, obs):
         if isinstance(obs, dict):
             # print("VecPyTorch")
             # for k, x in obs.items():
             #     print(k, x.shape)
             return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
-        if not isinstance(obs, (list, tuple)):
+        elif not isinstance(obs, (list, tuple)):
             return obs
         assert len(obs) == 1
         return obs[0]
@@ -97,6 +103,8 @@ class VecPyTorch(VecEnvWrapper):
     def to(self, device):
         self.device = device
         self.venv.to(device)
+        if self.action_bounds is not None:
+            self.action_bounds = [t.to(device) for t in self.action_bounds]
 
     def evaluate(self):
         self.venv.evaluate()

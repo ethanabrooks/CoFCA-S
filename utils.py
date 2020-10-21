@@ -1,17 +1,17 @@
 # third party
-import argparse
 import csv
 import re
 from io import StringIO
 import random
 import subprocess
-from typing import List
 
+import argparse
 import numpy as np
 import torch
 from torch import nn as nn
 import torch.jit
 import torch.nn as nn
+from typing import List
 
 
 def round(x, dec):
@@ -143,13 +143,7 @@ def trace(module_fn, in_size):
     return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))
 
 
-RED = "\033[1;31m"
-BLUE = "\033[1;34m"
-CYAN = "\033[1;36m"
-GREEN = "\033[0;32m"
-RESET = "\033[0;0m"
-BOLD = "\033[;1m"
-REVERSE = "\033[;7m"
+RESET = "\033[0m"
 
 
 def k_scalar_pairs(*args, **kwargs):
