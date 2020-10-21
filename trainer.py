@@ -13,6 +13,7 @@ from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
+from aggregator import EpisodeAggregator, EvalWrapper, InfosAggregator
 from networks import Agent, AgentOutputs
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -93,6 +94,10 @@ class Trainer(tune.Trainable):
                 self.time_steps = np.zeros(num_processes)
 
             def update(self, reward, done):
+                # if any(done):
+                #     import ipdb
+                #
+                #     ipdb.set_trace()
                 self.rewards += reward.numpy()
                 self.time_steps += np.ones_like(done)
                 self.episode_rewards += list(self.rewards[done])
@@ -181,26 +186,33 @@ class Trainer(tune.Trainable):
 
         start = 0
         train_counter = EpochCounter()
+        train_report = EpisodeAggregator()
+        train_infos = self.build_infos_aggregator()
         rollouts.obs[0].copy_(train_envs.reset())
 
         for i in range(start, num_epochs):
             self.i = i
-            for epoch_output in run_epoch(
+            for output in run_epoch(
                 obs=rollouts.obs[0],
                 rnn_hxs=rollouts.recurrent_hidden_states[0],
                 masks=rollouts.masks[0],
                 envs=train_envs,
                 num_steps=train_steps,
             ):
-                train_counter.update(reward=epoch_output.reward, done=epoch_output.done)
+                train_counter.update(reward=output.reward, done=output.done)
+                train_report.update(
+                    reward=output.reward.cpu().numpy(),
+                    dones=output.done,
+                )
+                train_infos.update(*output.infos, dones=output.done)
                 rollouts.insert(
-                    obs=epoch_output.obs,
-                    recurrent_hidden_states=epoch_output.act.rnn_hxs,
-                    actions=epoch_output.act.action,
-                    action_log_probs=epoch_output.act.action_log_probs,
-                    values=epoch_output.act.value,
-                    rewards=epoch_output.reward,
-                    masks=epoch_output.masks,
+                    obs=output.obs,
+                    recurrent_hidden_states=output.act.rnn_hxs,
+                    actions=output.act.action,
+                    action_log_probs=output.act.action_log_probs,
+                    values=output.act.value,
+                    rewards=output.reward,
+                    masks=output.masks,
                 )
 
             with torch.no_grad():
@@ -214,7 +226,9 @@ class Trainer(tune.Trainable):
             train_results = ppo.update(rollouts)
             rollouts.after_update()
 
-            eval_counter = EpochCounter()
+            eval_report = EvalWrapper(EpisodeAggregator())
+            eval_infos = EvalWrapper(InfosAggregator())
+
             if eval_interval and eval_steps and not no_eval and i % eval_interval == 0:
                 # vec_norm = get_vec_normalize(eval_envs)
                 # if vec_norm is not None:
@@ -229,25 +243,30 @@ class Trainer(tune.Trainable):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes, agent.recurrent_hidden_state_size, device=device
                     )
-                    for epoch_output in run_epoch(
+                    for output in run_epoch(
                         obs=eval_envs.reset(),
                         rnn_hxs=eval_recurrent_hidden_states,
                         masks=eval_masks,
                         envs=eval_envs,
                         num_steps=eval_steps,
                     ):
-                        eval_counter.update(
-                            reward=epoch_output.reward, done=epoch_output.done
+                        eval_report.update(
+                            reward=output.reward.cpu().numpy(),
+                            dones=output.done,
                         )
+                        eval_infos.update(*output.infos, dones=output.done)
 
                 eval_envs.close()
             if i % log_interval == 0:
                 yield dict(
                     **train_results,
                     **dict(train_counter.items()),
-                    **dict(eval_counter.items(prefix="eval_")),
+                    **dict(eval_report.items()),
+                    **dict(eval_infos.items()),
                 )
                 train_counter.reset()
+                train_report.reset()
+                train_infos.reset()
 
     @staticmethod
     def process_infos(episode_counter, done, infos, **act_log):
@@ -256,6 +275,9 @@ class Trainer(tune.Trainable):
                 episode_counter[k] += v if type(v) is list else [float(v)]
         for k, v in act_log.items():
             episode_counter[k] += v if type(v) is list else [float(v)]
+
+    def build_infos_aggregator(self):
+        return InfosAggregator()
 
     @staticmethod
     def build_agent(envs, **agent_args):

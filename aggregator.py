@@ -28,12 +28,19 @@ class EpisodeAggregator(Aggregator):
             for i, (value, done) in enumerate(zip(vs, dones)):
                 incomplete_episodes[i].append(value)
                 if done:
+                    # if k == "reward":
+                    #     import ipdb
+                    #
+                    #     ipdb.set_trace()
                     self.complete_episodes[k].append(sum(incomplete_episodes[i]))
                     incomplete_episodes[i] = []
 
     def items(self):
         for k, v in self.complete_episodes.items():
             yield k, np.mean(v)
+
+    def reset(self):
+        self.complete_episodes = defaultdict(list)
 
 
 class InfosAggregator(EpisodeAggregator):
