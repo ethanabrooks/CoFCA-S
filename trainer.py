@@ -406,8 +406,7 @@ class Trainer:
 
     @classmethod
     def add_arguments(cls, parser):
-        parser = arguments.add_arguments(parser)
-        return parser.main
+        return arguments.add_arguments(parser)
 
     @classmethod
     def main(cls):

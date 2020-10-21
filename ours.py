@@ -158,7 +158,7 @@ class Recurrence(nn.Module):
             }
         ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
         self.lower_level = Agent(
-            obs_spaces=lower_env.Env.observation_space_from_upper(observation_space),
+            obs_space=lower_env.Env.observation_space_from_upper(observation_space),
             entropy_coef=0,
             action_space=ll_action_space,
             **lower_level_params,

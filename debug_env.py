@@ -9,7 +9,7 @@ from upper_env import Action
 
 class Env(upper_env.Env):
     def time_per_subtask(self):
-        return 1
+        return 2
 
     def state_generator(self, *blocks):
         rooms = self.build_rooms(*blocks)

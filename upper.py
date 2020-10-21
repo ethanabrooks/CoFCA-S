@@ -3,9 +3,12 @@ import pickle
 from itertools import islice
 from pathlib import Path
 
-import debug_env as _debug_env
+import torch.nn as nn
+
 import ours
 import upper_agent
+import debug_env as _debug_env
+import networks
 import upper_env
 from aggregator import InfosAggregator
 from configs import default_upper
@@ -81,7 +84,7 @@ class UpperTrainer(Trainer):
     def structure_config(cls, **config):
         config = super().structure_config(**config)
         agent_args = config.pop("agent_args")
-        env_args = {}
+        env_args = config.pop("env_args")
         gen_args = {}
 
         # agent_args["eval_lines"] = config["max_eval_lines"]
@@ -135,7 +138,7 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_arguments(cls, parser):
-        super().add_arguments(parser)
+        parser = super().add_arguments(parser)
         parser.main.add_argument("--min-eval-lines", type=int)
         parser.main.add_argument("--max-eval-lines", type=int)
         parser.main.add_argument("--no-eval", action="store_true")
@@ -143,7 +146,7 @@ class UpperTrainer(Trainer):
         env_parser = parser.main.add_argument_group("env_args")
         cls.add_env_arguments(env_parser)
         cls.add_agent_arguments(parser.agent)
-        return parser.main
+        return parser
 
     @classmethod
     def launch(cls, env_id, config, **kwargs):
