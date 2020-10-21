@@ -303,8 +303,8 @@ class Trainer:
                             training_iteration=frames["so_far"],
                         )
                     )
-                    train_report = EpisodeAggregator()
-                    train_infos = self.build_infos_aggregator()
+                    train_report.reset()
+                    train_infos.reset()
                     time_spent["logging"] += time.time() - tick
 
                 if save_interval and frames["since_save"] > save_interval:
