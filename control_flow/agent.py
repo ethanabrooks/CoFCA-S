@@ -4,17 +4,17 @@ from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
-import agent
+import networks
 import control_flow.multi_step.abstract_recurrence
 import control_flow.multi_step.ours
 import control_flow.no_pointer
 import control_flow.recurrence
-from agent import AgentOutputs, NN
+from networks import AgentOutputs, NN
 from control_flow import Action
 from distributions import FixedCategorical
 
 
-class Agent(agent.Agent, NN):
+class Agent(networks.Agent, NN):
     def __init__(
         self,
         entropy_coef,

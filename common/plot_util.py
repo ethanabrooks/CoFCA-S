@@ -400,7 +400,7 @@ def plot_results(
                     x, y, counts = symmetric_ema(
                         x, y, x[0], x[-1], resample, decay_steps=smooth_step
                     )
-                l, = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
+                (l,) = ax.plot(x, y, color=COLORS[groups.index(group) % len(COLORS)])
                 g2l[group] = l
         if average_group:
             for group in sorted(groups):
@@ -434,7 +434,7 @@ def plot_results(
                 ymean = np.mean(ys, axis=0)
                 ystd = np.std(ys, axis=0)
                 ystderr = ystd / np.sqrt(len(ys))
-                l, = axarr[isplit][0].plot(usex, ymean, color=color)
+                (l,) = axarr[isplit][0].plot(usex, ymean, color=color)
                 g2l[group] = l
                 if shaded_err:
                     ax.fill_between(

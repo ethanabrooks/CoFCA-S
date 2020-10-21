@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import nn as nn
 
 import control_flow.multi_step.abstract_recurrence as abstract_recurrence
-from agent import AgentOutputs, MLP
+from networks import AgentOutputs, MLP
 from control_flow import Obs
 from control_flow import optimal_padding
 from control_flow import get_obs_sections

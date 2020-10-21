@@ -9,7 +9,7 @@ from gym import spaces
 
 import control_flow.multi_step.abstract_recurrence as abstract_recurrence
 import control_flow.recurrence as recurrence
-from agent import Agent
+from networks import Agent
 from control_flow import Action
 from control_flow import Obs
 from distributions import FixedCategorical, Categorical

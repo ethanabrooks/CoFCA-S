@@ -20,7 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import control_flow.multi_step.env
-from agent import Agent
+from networks import Agent
 from control_flow import Action
 from control_flow import Env
 from control_flow import Obs

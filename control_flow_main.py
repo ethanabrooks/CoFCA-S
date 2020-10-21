@@ -4,14 +4,14 @@ import numpy as np
 from gym import spaces
 from rl_utils import hierarchical_parse_args
 
-import agent
+import networks
 import control_flow.agent
 import control_flow.env
 import control_flow.multi_step.env
 import control_flow.multi_step.minimal_gru
 import control_flow.multi_step.one_line
 import control_flow
-from main import add_arguments
+from arguments import add_arguments
 from trainer import Trainer
 
 NAMES = ["instruction", "actions", "program_counter", "evaluations"]
@@ -38,7 +38,7 @@ def main(
                 control_flow.env.Action(*envs.action_space.nvec).lower
             )
             if lower_level == "train-alone":
-                return agent.Agent(
+                return networks.Agent(
                     lower_level=True,
                     obs_spaces=obs_space,
                     action_space=ll_action_space,
