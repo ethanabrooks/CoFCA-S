@@ -3,6 +3,7 @@ from collections import namedtuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from gym.spaces import Box, Discrete
 
 from distributions import Categorical, DiagGaussian
@@ -22,28 +23,36 @@ class Agent(nn.Module):
         recurrent,
         hidden_size,
         entropy_coef,
-        lower_level=False,
         **network_args,
     ):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
-        if lower_level:
+        self.recurrent_module = self.build_recurrent_module(
+            hidden_size, obs_spaces, recurrent, **network_args
+        )
+
+        if isinstance(action_space, Discrete):
+            num_outputs = action_space.n
+            self.dist = Categorical(self.recurrent_module.output_size, num_outputs)
+        elif isinstance(action_space, Box):
+            num_outputs = action_space.shape[0]
+            self.dist = DiagGaussian(self.recurrent_module.output_size, num_outputs)
+        else:
             raise NotImplementedError
-            # self.network = OldLowerLevel(
-            #     obs_space=obs_spaces,
-            #     recurrent=recurrent,
-            #     hidden_size=hidden_size,
-            #     **network_args,
-            # )
-        elif len(obs_spaces) == 3:
-            self.network = CNN(
+        self.continuous = isinstance(action_space, Box)
+
+    def build_recurrent_module(
+        self, hidden_size, obs_spaces, recurrent, **network_args
+    ):
+        if len(obs_spaces) == 3:
+            return CNNBase(
                 *obs_spaces,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
         elif len(obs_spaces) == 1:
-            self.network = MLP(
+            return MLPBase(
                 obs_spaces[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
@@ -52,29 +61,21 @@ class Agent(nn.Module):
         else:
             raise NotImplementedError
 
-        if isinstance(action_space, Discrete):
-            num_outputs = action_space.n
-            self.dist = Categorical(self.network.output_size, num_outputs)
-        elif isinstance(action_space, Box):
-            num_outputs = int(np.prod(action_space.shape))
-            self.dist = DiagGaussian(self.network.output_size, num_outputs)
-        else:
-            raise NotImplementedError
-        self.continuous = isinstance(action_space, Box)
-
     @property
     def is_recurrent(self):
-        return self.network.is_recurrent
+        return self.recurrent_module.is_recurrent
 
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
-        return self.network.recurrent_hidden_state_size
+        return self.recurrent_module.recurrent_hidden_state_size
 
     def forward(
         self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
     ):
-        value, actor_features, rnn_hxs = self.network(inputs, rnn_hxs, masks, **kwargs)
+        value, actor_features, rnn_hxs = self.recurrent_module(
+            inputs, rnn_hxs, masks, **kwargs
+        )
 
         dist = self.dist(actor_features)
 
@@ -99,13 +100,13 @@ class Agent(nn.Module):
         )
 
     def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.network(inputs, rnn_hxs, masks)
+        value, _, _ = self.recurrent_module(inputs, rnn_hxs, masks)
         return value
 
 
-class NN(nn.Module):
+class NNBase(nn.Module):
     def __init__(self, recurrent: bool, recurrent_input_size, hidden_size):
-        super(NN, self).__init__()
+        super(NNBase, self).__init__()
 
         self._hidden_size = hidden_size
         self._recurrent = recurrent
@@ -192,9 +193,9 @@ class NN(nn.Module):
         return x, hxs
 
 
-class CNN(NN):
+class CNNBase(NNBase):
     def __init__(self, d, h, w, activation, hidden_size, num_layers, recurrent=False):
-        super(CNN, self).__init__(recurrent, hidden_size, hidden_size)
+        super(CNNBase, self).__init__(recurrent, hidden_size, hidden_size)
 
         self.main = nn.Sequential(
             init_(nn.Conv2d(d, hidden_size, kernel_size=1)),
@@ -232,10 +233,10 @@ class CNN(NN):
         return self.critic_linear(x), x, rnn_hxs
 
 
-class MLP(NN):
+class MLPBase(NNBase):
     def __init__(self, num_inputs, hidden_size, num_layers, recurrent, activation):
         assert num_layers > 0
-        super(MLP, self).__init__(recurrent, num_inputs, hidden_size)
+        super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
         if recurrent:
             num_inputs = hidden_size
@@ -277,3 +278,16 @@ class MLP(NN):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class MultiEmbeddingBag(nn.Module):
+    def __init__(self, nvec: np.ndarray, **kwargs):
+        super().__init__()
+        self.embedding = nn.EmbeddingBag(num_embeddings=nvec.sum(), **kwargs)
+        self.register_buffer(
+            "offset",
+            F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
+        )
+
+    def forward(self, inputs):
+        return self.embedding(self.offset + inputs)
