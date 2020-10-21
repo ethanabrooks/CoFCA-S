@@ -35,7 +35,7 @@ default = {
     "synchronous": False,
     "tau": 0.95,
     "train_steps": 25,
-    "use_gae": True,
+    "use_gae": False,
     "value_loss_coef": 0.5,
 }
 
@@ -49,7 +49,6 @@ default_upper = {
     "entropy_coef": 0.01,
     "env_id": "control-flow",
     "eps": 1e-5,
-    "eval_interval": 100,
     "eval_steps": 500,
     "failure_buffer_size": 500,
     "gamma": 0.99,
@@ -76,7 +75,7 @@ default_upper = {
     "num_batch": 1,
     "num_edges": 2,
     "num_frames": 200,
-    "num_layers": 0,
+    "num_layers": 1,
     "num_processes": 150,
     "olsk": False,
     "ppo_epoch": 3,

@@ -1,5 +1,9 @@
 from collections import Counter
 from pprint import pprint
+from typing import Union
+
+from gym.spaces import Box, Discrete
+import numpy as np
 
 import upper_env
 from enums import Interaction, Refined, Other, Terrain
@@ -8,6 +12,22 @@ from upper_env import Action
 
 
 class Env(upper_env.Env):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        lines_space = self.observation_space.spaces["lines"]
+        max_line_code = lines_space.nvec.max()
+        self.observation_space = Box(
+            low=0,
+            high=1,
+            shape=[max_line_code * len(lines_space.nvec[0]) * self.n_lines],
+        )
+        self.action_space = Discrete(Action(*self.action_space.nvec).upper)
+        self.eye = np.eye(max_line_code)
+
+    def step(self, action: int):
+        action = Action(upper=action, lower=0, delta=0, dg=0, ptr=0)
+        return self.iterator.send(action)
+
     def time_per_subtask(self):
         return 1
 
@@ -102,6 +122,20 @@ class Env(upper_env.Env):
                 elif upper_action.resource == Terrain.WATER:
                     if required + Counter() == build_supplies + Counter():
                         room_complete = True
+
+    def obs_generator(self, *lines):
+        iterator = super().obs_generator(*lines)
+        next(iterator)
+        state = yield
+
+        while True:
+            obs, render = iterator.send(state)
+            obs = self.eye[np.array(obs["lines"]).flatten()].flatten()
+            # if not self.observation_space.contains(obs):
+            #     import ipdb
+            #
+            #     ipdb.set_trace()
+            state = yield obs, render
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
