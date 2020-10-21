@@ -8,6 +8,21 @@ from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
 
+class FlattenObs(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        if isinstance(self.env.observation_space, Box):
+            self.observation_space = Box(
+                low=self.observation_space.low.flatten(),
+                high=self.observation_space.high.flatten(),
+            )
+        else:
+            raise NotImplementedError
+
+    def observation(self, observation):
+        return observation.flatten()
+
+
 # Can be used to test recurrent policies for Reacher-v2
 class MaskGoal(gym.ObservationWrapper):
     def observation(self, observation):
@@ -92,6 +107,14 @@ class VecPyTorch(VecEnvWrapper):
     def increment_curriculum(self):
         self.venv.increment_curriculum()
 
+    def preprocess(self, action):
+        if self.action_bounds is not None:
+            low, high = self.action_bounds
+            action = torch.min(torch.max(action, low), high)
+        if isinstance(self.action_space, spaces.Discrete):
+            action = action.squeeze(-1)
+        return action
+
 
 class VecNormalize(VecNormalize_):
     def __init__(self, *args, **kwargs):
@@ -159,6 +182,25 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         self.venv.to(device)
 
 
+class OneHotWrapper(gym.Wrapper):
+    def wrap_observation(self, obs, observation_space=None):
+        if observation_space is None:
+            observation_space = self.observation_space
+        if isinstance(observation_space, spaces.Discrete):
+            return onehot(obs, observation_space.n)
+        if isinstance(observation_space, spaces.MultiDiscrete):
+            assert observation_space.contains(obs)
+
+            def one_hots():
+                nvec = observation_space.nvec
+                for o, n in zip(
+                    obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T
+                ):
+                    yield onehot(o, n)
+
+            return np.concatenate(list(one_hots()), axis=-1)
+
+
 def get_vec_normalize(venv):
     if isinstance(venv, VecNormalize):
         return venv
@@ -166,3 +208,17 @@ def get_vec_normalize(venv):
         return get_vec_normalize(venv.venv)
 
     return None
+
+
+class TupleActionWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.action_space = spaces.MultiDiscrete(
+            np.array([space.n for space in env.action_space.spaces])
+        )
+
+    def action(self, action):
+        return tuple(action)
+
+    def reverse_action(self, action):
+        return np.concatenate(action)
