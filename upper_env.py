@@ -564,7 +564,7 @@ class Env(gym.Env):
         info = dict(len_failure_buffer=len(self.failure_buffer))
         rooms_complete = 0
 
-        def update_info(success, done, **_):
+        def update_info(success, done, inventory, subtasks_completed, action, **_):
             if done:
                 info.update(
                     instruction_len=len(lines),
@@ -573,6 +573,9 @@ class Env(gym.Env):
                     progress=rooms_complete / len(rooms),
                     success=float(success),
                 )
+                if Other.MAP in inventory:
+                    upper_action = self.subtasks[int(action.upper)]
+                    info.update(crossing_mountain=float(upper_action == CrossMountain))
 
         while True:
             rooms_complete += int(state["room_complete"])
