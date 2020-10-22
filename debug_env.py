@@ -94,12 +94,11 @@ class Env(upper_env.Env):
                 subtasks_completed.add(upper_action)
                 if self.random.random() < self.map_discovery_prob:
                     inventory.add(Other.MAP)
-                    room_complete = True
-                    inventory.remove(Other.MAP)
 
             elif upper_action.interaction == Interaction.CROSS:
-                if upper_action.resource == Other.MAP and Other.MAP in inventory:
+                if upper_action.resource == Terrain.MOUNTAIN and Other.MAP in inventory:
                     room_complete = True
+                    inventory.remove(Other.MAP)
                     subtasks_completed.add(upper_action)
                 elif upper_action.resource == Terrain.WATER:
                     if (

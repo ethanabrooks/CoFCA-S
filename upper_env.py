@@ -710,7 +710,7 @@ class Env(gym.Env):
                     k: v for k, v in params.items() if k in lower_level_params.keys()
                 }
         lower_level = Agent(
-            obs_spaces=lower_env.Env.observation_space_from_upper(
+            obs_space=lower_env.Env.observation_space_from_upper(
                 self.observation_space
             ),
             entropy_coef=0,
