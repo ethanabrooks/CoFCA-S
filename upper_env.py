@@ -68,6 +68,7 @@ class Env(gym.Env):
         bandit_prob: float,
         break_on_fail: bool,
         bridge_failure_prob: float,
+        exact_count: bool,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
         map_discovery_prob: float,
@@ -83,6 +84,7 @@ class Env(gym.Env):
         windfall_prob: float,
         evaluating=False,
     ):
+        self.exact_count = exact_count
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
         self.map_discovery_prob = map_discovery_prob
@@ -395,8 +397,15 @@ class Env(gym.Env):
                     if moving_into == Terrain.WALL:
                         return False
                     if moving_into == Terrain.WATER:
-                        return not (required - build_supplies)
-                        # inventory dominates required
+                        return (
+                            (
+                                required + Counter() == build_supplies + Counter()
+                            )  # inventory == required
+                            if self.exact_count
+                            else (
+                                not required - build_supplies
+                            )  # inventory dominates required
+                        )
                     if moving_into == Terrain.MOUNTAIN:
                         return Other.MAP in inventory
                     return True
@@ -764,6 +773,7 @@ class Env(gym.Env):
         p.add_argument("--windfall-prob", type=float)
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
         p.add_argument("--debug-env", action="store_true")
+        p.add_argument("--exact-count", action="store_true")
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):

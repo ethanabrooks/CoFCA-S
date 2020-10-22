@@ -97,6 +97,8 @@ default_upper = {
     "map_discovery_prob": 0,
     "bandit_prob": 0,
     "windfall_prob": 0,
+    "debug_env": False,
+    "exact_count": False,
     # "bridge_failure_prob": 0.25,
     # "map_discovery_prob": 0.02,
     # "bandit_prob": 0.005,
