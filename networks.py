@@ -1,22 +1,25 @@
 from collections import namedtuple
+from contextlib import contextmanager
 
-from gym.spaces import Box, Discrete
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from gym.spaces import Box, Discrete
 
 from distributions import Categorical, DiagGaussian
 from layers import Flatten
 from utils import init, init_normc_, init_
 
 AgentOutputs = namedtuple(
-    "AgentValues", "value action action_log_probs aux_loss rnn_hxs " "log dist"
+    "AgentValues", "value action action_log_probs aux_loss rnn_hxs log dist"
 )
 
 
 class Agent(nn.Module):
     def __init__(
         self,
-        obs_spaces,
+        obs_space,
         action_space,
         recurrent,
         hidden_size,
@@ -26,7 +29,7 @@ class Agent(nn.Module):
         super(Agent, self).__init__()
         self.entropy_coef = entropy_coef
         self.recurrent_module = self.build_recurrent_module(
-            hidden_size, network_args, obs_spaces, recurrent
+            hidden_size, obs_space, recurrent, **network_args
         )
 
         if isinstance(action_space, Discrete):
@@ -39,17 +42,19 @@ class Agent(nn.Module):
             raise NotImplementedError
         self.continuous = isinstance(action_space, Box)
 
-    def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
-        if len(obs_spaces) == 3:
+    def build_recurrent_module(
+        self, hidden_size, space_shape, recurrent, **network_args
+    ):
+        if len(space_shape) == 3:
             return CNNBase(
-                *obs_spaces,
+                *space_shape,
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
             )
-        elif len(obs_spaces) == 1:
+        elif len(space_shape) == 1:
             return MLPBase(
-                obs_spaces[0],
+                space_shape[0],
                 recurrent=recurrent,
                 hidden_size=hidden_size,
                 **network_args,
@@ -122,6 +127,10 @@ class NNBase(nn.Module):
                     nn.init.constant_(param, 0)
                 elif "weight" in name:
                     nn.init.orthogonal_(param)
+
+    @contextmanager
+    def evaluating(self, *args, **kwargs):
+        yield
 
     def build_recurrent_module(self, input_size, hidden_size):
         return nn.GRU(input_size, hidden_size)
@@ -350,3 +359,16 @@ class MLPBase(NNBase):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
+
+
+class MultiEmbeddingBag(nn.Module):
+    def __init__(self, nvec: np.ndarray, **kwargs):
+        super().__init__()
+        self.embedding = nn.EmbeddingBag(num_embeddings=nvec.sum(), **kwargs)
+        self.register_buffer(
+            "offset",
+            F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
+        )
+
+    def forward(self, inputs):
+        return self.embedding(self.offset + inputs)

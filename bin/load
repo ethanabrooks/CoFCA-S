@@ -1,4 +1,8 @@
 #!/usr/bin/env zsh
-cmd="$(${0:a:h}/lookup-command.zsh "$@" | ${0:a:h}/log-to-load.zsh)"
+
+config=$(${0:a:h}/search ${@[2, 3]} params.json)
+load=$(${0:a:h}/search ${@[2, 3]} checkpoint.pt)
+failure_buffer_load_path=$(${0:a:h}/search ${@[2, 3]} failure_buffer.pkl)
+cmd="python $1 --config $config --load $load --failure-buffer-load-path $failure_buffer_load_path ${@:4}"
 echo "$cmd\n"
 eval "$cmd"

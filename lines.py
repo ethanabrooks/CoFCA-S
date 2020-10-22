@@ -1,10 +1,10 @@
-import functools
 from abc import ABC
-from enum import Enum
-from typing import List, Type, Generator, Tuple
+from typing import List, Type, Generator, Union
 
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
+
+from enums import Interaction, Resource, Terrain, Refined
 
 
 def sample(random, _min, _max, p=0.5):
@@ -252,6 +252,23 @@ class Subtask(Line):
     required_lines = 1
     required_depth = 0
     depth_change = 0, 0
+
+    def __hash__(self):
+        return hash((self.interaction, self.resource))
+
+    def __eq__(self, other):
+        return self.interaction == other.interaction and self.resource == other.resource
+
+    def __init__(self, interaction: Interaction, resource: Union[Resource, Terrain]):
+        assert not isinstance(resource, Refined)
+        self.interaction = interaction
+        self.resource = resource
+        super().__init__(None)
+
+    def __str__(self):
+        interaction = self.interaction.name
+        resource = "bridge" if self.resource is None else self.resource.name
+        return f"{interaction} {resource}".capitalize()
 
     @staticmethod
     def generate_types(n: int, *args, **kwargs):
