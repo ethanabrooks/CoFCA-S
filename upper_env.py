@@ -213,7 +213,7 @@ class Env(gym.Env):
                 success = i["success"]
                 if not use_failure_buf:
                     i.update(success_without_failure_buf=float(success))
-                self.success_avg += self.alpha * (success - self.success_avg)
+                    self.success_avg += self.alpha * (success - self.success_avg)
 
                 i.update(
                     use_failure_buf=use_failure_buf,
