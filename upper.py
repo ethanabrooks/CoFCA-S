@@ -41,6 +41,7 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
 
 class UpperTrainer(Trainer):
     metric = "eval_reward"
+    default = default_upper
 
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
@@ -149,10 +150,8 @@ class UpperTrainer(Trainer):
         return parser
 
     @classmethod
-    def launch(cls, env_id, config, **kwargs):
-        if config is None:
-            config = default_upper
-        super().launch(env_id="experiment", config=config, **kwargs)
+    def launch(cls, env_id, **kwargs):
+        super().launch(env_id="experiment", **kwargs)
 
 
 if __name__ == "__main__":

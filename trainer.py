@@ -32,6 +32,7 @@ EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 class Trainer:
     metric = "reward"
+    default = default
 
     @classmethod
     def structure_config(cls, **config):
@@ -364,10 +365,14 @@ class Trainer:
         **kwargs,
     ):
         if config is None:
-            config = default
+            config = cls.default
         for k, v in kwargs.items():
             if k not in config or v is not None:
-                config[k] = v
+                if isinstance(v, bool):  # handle store_{true, false} differently
+                    if v != cls.default[k]:  # flag used
+                        config[k] = v
+                else:
+                    config[k] = v
 
         config.update(log_dir=log_dir)
 

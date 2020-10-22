@@ -10,6 +10,7 @@ from upper import UpperTrainer
 
 class LowerTrainer(UpperTrainer):
     metric = "reward"
+    default = default_lower
 
     def build_agent(self, envs, **agent_args):
         return lower_agent.Agent(
@@ -52,10 +53,8 @@ class LowerTrainer(UpperTrainer):
         return config
 
     @classmethod
-    def launch(cls, eval_interval, config, **kwargs):
-        if config is None:
-            config = default_lower
-        super().launch(eval_interval=None, config=config, **kwargs)
+    def launch(cls, eval_interval, **kwargs):
+        super().launch(eval_interval=None, **kwargs)
 
     @classmethod
     def add_agent_arguments(cls, parser):
