@@ -1,5 +1,6 @@
 from collections import Counter
 from pprint import pprint
+import numpy as np
 
 import upper_env
 from enums import Interaction, Refined, Other, Terrain
@@ -9,7 +10,8 @@ from upper_env import Action
 
 class Env(upper_env.Env):
     def time_per_subtask(self):
-        return 2
+        e = 0.0001
+        return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
 
     def state_generator(self, *blocks):
         rooms = self.build_rooms(*blocks)
