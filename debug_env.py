@@ -111,9 +111,10 @@ class Env(upper_env.Env):
                             not required - build_supplies
                         )  # inventory dominates required
                     ):
-                        room_complete = True
                         build_supplies -= required  # build bridge
-                        subtasks_completed.add(upper_action)
+                        if self.random.random() > self.bridge_failure_prob:
+                            room_complete = True
+                            subtasks_completed.add(upper_action)
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
