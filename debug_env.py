@@ -41,7 +41,6 @@ class Env(upper_env.Env):
         while True:
             self.make_feasible(objects)
             if room_complete:
-                build_supplies -= required  # build bridge
                 room = next(rooms_iter, None)
                 if room is None:
                     success = True
@@ -87,10 +86,12 @@ class Env(upper_env.Env):
             assert isinstance(upper_action, Subtask)
             if upper_action.interaction == Interaction.COLLECT:
                 build_supplies[upper_action.resource] += 1
+                subtasks_completed.add(upper_action)
                 if self.random.random() < self.map_discovery_prob:
                     inventory.add(Other.MAP)
             elif upper_action.interaction == Interaction.REFINE:
                 build_supplies[Refined(upper_action.resource.value)] += 1
+                subtasks_completed.add(upper_action)
                 if self.random.random() < self.map_discovery_prob:
                     inventory.add(Other.MAP)
                     room_complete = True
@@ -99,9 +100,20 @@ class Env(upper_env.Env):
             elif upper_action.interaction == Interaction.CROSS:
                 if upper_action.resource == Other.MAP and Other.MAP in inventory:
                     room_complete = True
+                    subtasks_completed.add(upper_action)
                 elif upper_action.resource == Terrain.WATER:
-                    if required + Counter() == build_supplies + Counter():
+                    if (
+                        (
+                            required + Counter() == build_supplies + Counter()
+                        )  # inventory == required
+                        if self.exact_count
+                        else (
+                            not required - build_supplies
+                        )  # inventory dominates required
+                    ):
                         room_complete = True
+                        build_supplies -= required  # build bridge
+                        subtasks_completed.add(upper_action)
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
