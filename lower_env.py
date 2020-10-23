@@ -102,21 +102,29 @@ class Env(upper_env.Env):
             for x in self.lower_level_actions
         ]
         mapping = dict(
-            w=(-1, 0),
-            s=(1, 0),
-            a=(0, -1),
-            d=(0, 1),
+            # w=(-1, 0),
+            # s=(1, 0),
+            # a=(0, -1),
+            # d=(0, 1),
             c=Interaction.COLLECT,
             r=Interaction.REFINE,
         )
 
         def action_fn(string):
-            action = mapping.get(string, None)
+            try:
+                action = tuple(map(int, string.split()))
+            except ValueError:
+                action = mapping.get(string, None)
             if action is None:
                 return None
-            return actions.index(action)
+            if action in actions:
+                return actions.index(action)
 
         keyboard_control.run(self, action_fn=action_fn)
+
+
+def main(debug_env, **kwargs):
+    Env(rank=0, min_eval_lines=0, max_eval_lines=10, eval_steps=0, **kwargs).main()
 
 
 if __name__ == "__main__":
@@ -125,4 +133,4 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **vars(PARSER.parse_args())).main()
+    main(**vars(PARSER.parse_args()))

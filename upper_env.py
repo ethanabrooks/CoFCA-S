@@ -406,7 +406,6 @@ class Env(gym.Env):
                             chance_events.add("bridge failed")
                         # else bridge failed
                     else:
-                        agent_pos = new_pos % np.array(self.room_shape)
                         if moving_into == Terrain.MOUNTAIN:
                             inventory.remove(Other.MAP)
                         if next_room():
@@ -423,6 +422,7 @@ class Env(gym.Env):
                             else:
                                 objects = dict(room)
                             required = Counter(next_required())
+                        agent_pos = new_pos % np.array(self.room_shape)
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
                     inventory.add(standing_on)
@@ -714,7 +714,6 @@ class Env(gym.Env):
     def add_arguments(cls, p):
         p.add_argument("--min-lines", type=int)
         p.add_argument("--max-lines", type=int)
-        p.add_argument("--no-op-limit", type=int)
         p.add_argument("--break-on-fail", action="store_true")
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--failure-buffer-size", type=int)
