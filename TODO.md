@@ -1,8 +1,2 @@
-- update captions
-- write analysis of simple-rewards graph
-- generate generalization lengths 11-15 graphs (for no-roll and no-pointer)
-- analysis??
-- spruce up the Example instruction diagram
-- debug conditions when counts are equal
-- debug save intervals
-- rerun generalization by length baselines and generate graphs.
+- add reproducible_seed to tune.run
+- use num_frames for eval_interval
