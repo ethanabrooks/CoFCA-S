@@ -37,8 +37,6 @@ def worker(remote, parent_remote, env_fn_wrapper):
                     env.train()
                 except AttributeError:
                     print("Attribute train undefined")
-            elif cmd == "get_lower_action":
-                remote.send(env.lower_iterator.send(data))
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:
@@ -97,22 +95,6 @@ class SubprocVecEnv(VecEnv):
         self.waiting = False
         obs, rews, dones, infos = zip(*results)
         return _flatten_obs(obs), np.stack(rews), np.stack(dones), infos
-
-    def get_lower_async(self, upper_action):
-        self._assert_not_closed()
-        for remote, action in zip(self.remotes, upper_action):
-            remote.send(("get_lower_action", action))
-        self.waiting = True
-
-    def get_lower_wait(self):
-        self._assert_not_closed()
-        results = [remote.recv() for remote in self.remotes]
-        self.waiting = False
-        return np.array(results)
-
-    def get_lower_action(self, upper_action):
-        self.get_lower_async(upper_action)
-        return self.get_lower_wait()
 
     def reset(self):
         self._assert_not_closed()

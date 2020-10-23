@@ -138,9 +138,10 @@ class Trainer:
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
+            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
             return VecPyTorch(
                 DummyVecEnv(env_fns, render=render)
-                if len(env_fns) == 1 or synchronous
+                if use_dummy
                 else SubprocVecEnv(env_fns)
             )
 

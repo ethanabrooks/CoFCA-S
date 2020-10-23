@@ -59,14 +59,13 @@ class UpperTrainer(Trainer):
             msg = yield
             report(**msg)
 
-    def build_agent(self, envs, debug=False, hard_code_lower=False, **agent_args):
+    def build_agent(self, envs, debug=False, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
         return upper_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             debug=debug,
-            envs=envs if hard_code_lower else None,
             **agent_args,
         )
 
@@ -119,25 +118,24 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--conv-hidden-size", type=int)
+        parser.add_argument("--lower-level-config", type=Path)
         parser.add_argument("--debug", action="store_true")
         parser.add_argument("--debug-obs", action="store_true")
-        parser.add_argument("--fuzz", action="store_true")
-        parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--hard-code-lower", action="store_true")
-        parser.add_argument("--inventory-hidden-size", type=int)
-        parser.add_argument("--kernel-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
-        parser.add_argument("--lower-level-config", type=Path)
-        parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--num-edges", type=int)
-        parser.add_argument("--no-op-coef", type=float)
-        parser.add_argument("--no-pointer", action="store_true")
-        parser.add_argument("--no-roll", action="store_true")
         parser.add_argument("--no-scan", action="store_true")
-        parser.add_argument("--stride", type=int)
-        parser.add_argument("--task-embed-size", type=int)
+        parser.add_argument("--no-roll", action="store_true")
+        parser.add_argument("--no-pointer", action="store_true")
+        parser.add_argument("--olsk", action="store_true")
         parser.add_argument("--transformer", action="store_true")
+        parser.add_argument("--fuzz", action="store_true")
+        parser.add_argument("--conv-hidden-size", type=int)
+        parser.add_argument("--task-embed-size", type=int)
+        parser.add_argument("--lower-embed-size", type=int)
+        parser.add_argument("--inventory-hidden-size", type=int)
+        parser.add_argument("--num-edges", type=int)
+        parser.add_argument("--gate-coef", type=float)
+        parser.add_argument("--no-op-coef", type=float)
+        parser.add_argument("--kernel-size", type=int)
+        parser.add_argument("--stride", type=int)
 
     @classmethod
     def add_arguments(cls, parser):

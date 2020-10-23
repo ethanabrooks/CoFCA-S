@@ -117,14 +117,6 @@ class DummyVecEnv(VecEnv):
             except AttributeError:
                 print("Attribute train undefined")
 
-    def get_lower_action(self, upper_action):
-        return np.array(
-            [
-                env.lower_iterator.send(upper)
-                for env, upper in zip(self.envs, upper_action)
-            ]
-        )
-
     def render(self, mode="human"):
         return self.envs[0].render(mode=mode)
         # if self.num_envs == 1:
