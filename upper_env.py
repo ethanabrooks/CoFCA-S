@@ -53,15 +53,6 @@ def subtasks():
             yield Subtask(interaction, resource)
 
 
-def lower_level_actions():
-    yield Interaction.COLLECT
-    yield Interaction.REFINE
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            if [i, j].count(0) == 1:
-                yield np.array([i, j])
-
-
 class Env(gym.Env):
     def __init__(
         self,
@@ -125,6 +116,13 @@ class Env(gym.Env):
         self.limina = [Terrain.WATER] + [Terrain.MOUNTAIN] * (self.h - 1)
         self.iterator = None
         self.render_thunk = None
+
+        def lower_level_actions():
+            yield Interaction.COLLECT
+            yield Interaction.REFINE
+            for i in range(self.h):
+                for j in range(self.w):
+                    yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
@@ -359,7 +357,7 @@ class Env(gym.Env):
             standing_on = objects.get(tuple(agent_pos), None)
 
             if isinstance(action.lower, np.ndarray):
-                new_pos = agent_pos + action.lower
+                new_pos = action.lower
                 moving_into = objects.get(tuple(new_pos), None)
 
                 if moving_into == Terrain.WATER:
