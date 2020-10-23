@@ -319,6 +319,7 @@ class Env(gym.Env):
         success = False
         action = None
         subtasks_completed = set()
+        chance_events = set()
         room_complete = False
 
         while True:
@@ -342,6 +343,7 @@ class Env(gym.Env):
                 pprint(build_supplies)
                 print("Required:")
                 pprint(required)
+                print("Chance events:", *chance_events)
 
             self.render_thunk = render
             # for name, space in self.observation_space.spaces.items():
@@ -352,12 +354,14 @@ class Env(gym.Env):
             #         space.contains(s[name])
             action = yield state, render
             subtasks_completed = set()
+            chance_events = set()
             room_complete = False
             if self.random.random() < self.bandit_prob:
                 possessions = [k for k, v in build_supplies.items() if v > 0]
                 if possessions:
                     robbed = self.random.choice(possessions)
                     build_supplies[robbed] -= 1
+                    chance_events.add(f"bandit stole {robbed}")
 
             standing_on = objects.get(tuple(agent_pos), None)
 
@@ -403,7 +407,9 @@ class Env(gym.Env):
                     if moving_into == Terrain.WATER:
                         build_supplies -= required  # build bridge
                         if self.random.random() > self.bridge_failure_prob:
-                            agent_pos = new_pos  # check for "flash flood"
+                            agent_pos = new_pos  # check if bridge failed
+                        else:
+                            chance_events.add("bridge failed")
                         subtasks_completed.add(CrossWater)
                         # else bridge failed
                     else:
