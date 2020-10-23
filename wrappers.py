@@ -112,6 +112,11 @@ class VecPyTorch(VecEnvWrapper):
     def train(self):
         self.venv.train()
 
+    def get_lower_action(self, upper_action):
+        upper_action = upper_action.cpu().numpy()
+        lower_action = self.venv.get_lower_action(upper_action)
+        return torch.from_numpy(lower_action).float().to(self.device)
+
     def increment_curriculum(self):
         self.venv.increment_curriculum()
 
