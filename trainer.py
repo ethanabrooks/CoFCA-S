@@ -217,14 +217,14 @@ class Trainer:
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
                 done = frames["so_far"] >= num_frames
+                eval_report = EvalWrapper(EpisodeAggregator())
+                eval_infos = EvalWrapper(InfosAggregator())
                 if done or (
                     not no_eval
                     and eval_interval
                     and frames["since_eval"] > eval_interval
                 ):
                     frames["since_eval"] = 0
-                    eval_report = EvalWrapper(EpisodeAggregator())
-                    eval_infos = EvalWrapper(InfosAggregator())
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
                     #     vec_norm.eval()
