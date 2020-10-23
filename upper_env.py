@@ -2,7 +2,7 @@ import copy
 import json
 import pickle
 from collections import Counter, namedtuple, deque, OrderedDict
-from itertools import product, zip_longest
+from itertools import product, zip_longest, tee, filterfalse, groupby
 from pathlib import Path
 from pprint import pprint
 from typing import Tuple, Dict, Union
@@ -28,6 +28,7 @@ from enums import (
 )
 from lines import Subtask
 from utils import RESET
+
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
@@ -93,9 +94,7 @@ class Env(gym.Env):
         self.tgt_success_rate = tgt_success_rate
 
         self.subtasks = list(subtasks())
-        self.block_subtasks = [
-            s for s in self.subtasks if s.interaction in ResourceInteractions
-        ]
+        self.line_subtasks = [s for s in self.subtasks if s != CrossMountain]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
@@ -125,7 +124,7 @@ class Env(gym.Env):
         self.evaluating = evaluating
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
-        self.chunk_size = self.room_size - self.h - 1
+        self.block_size = self.room_size - self.h - 1
         self.limina = [Terrain.WATER] + [Terrain.MOUNTAIN] * (self.h - 1)
         self.iterator = None
         self.render_thunk = None
@@ -228,19 +227,21 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    @staticmethod
-    def get_lines(*blocks):
-        for block in blocks:
-            for subtask in block:
-                yield subtask
-            yield CrossWater
+    def get_blocks(self, *lines):
+        block = []
+        for line in lines:
+            if line == CrossWater:
+                yield block
+                block = []
+            else:
+                block.append(line)
 
     def srti_generator(self):
-        blocks = self.build_blocks()
+        lines = self.build_lines()
+        blocks = list(self.get_blocks(*lines))
         rooms = self.build_rooms(*blocks)
         assert len(rooms) == len(blocks)
 
-        lines = list(self.get_lines(*blocks))
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator(*lines)
@@ -455,7 +456,8 @@ class Env(gym.Env):
         def step_toward(o: Union[Resource, Terrain]):
             nearest = get_nearest(o)
             # TODO: disallow diagonal
-            return np.clip(np.array(nearest) - agent_pos, -1, 1)
+            # return np.clip(np.array(nearest) - agent_pos, -1, 1)
+            return np.array(nearest) - agent_pos
 
         lower_action = action.lower
         if upper_action.interaction == Interaction.COLLECT:
@@ -480,6 +482,11 @@ class Env(gym.Env):
                     if standing_on == upper_action.resource
                     else step_toward(upper_action.resource)
                 )
+        elif upper_action.interaction == Interaction.CROSS:
+            if standing_on == upper_action.resource:
+                lower_action = np.array([0, 1])
+            else:
+                lower_action = step_toward(upper_action.resource)
         return lower_action
 
     @staticmethod
@@ -661,24 +668,18 @@ class Env(gym.Env):
         rooms = [get_objects() for _ in range(n_rooms)]
         return rooms
 
-    def build_blocks(self):
+    def build_lines(self):
         n_lines = (
             self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
             if self.evaluating
             else self.random.random_integers(self.min_lines, self.max_lines)
         )
-
-        def get_blocks():
-            i = n_lines
-            while i > 0:
-                size = self.random.choice(self.chunk_size)
-                block = self.random.choice(self.block_subtasks, size=size)
-                block = block[: i - 1]  # for CrossWater
-                yield block
-                i -= len(block) + 1  # for CrossWater
-
-        blocks = list(get_blocks())
-        return blocks
+        lines = (
+            list(self.random.choice(self.line_subtasks, size=n_lines - 1))
+            if n_lines - 1
+            else []
+        )
+        return lines + [CrossWater]
 
     @staticmethod
     def inventory_representation(inventory):
