@@ -11,3 +11,4 @@ export RUN_CONFIG_SCRIPT='config_script.py'
 export RUN_CONFIG_SCRIPT_INTERPRETER='python3'
 export RUN_CONFIG_SCRIPT_INTERPRETER_ARGS='-c'
 export DOCKER_RUN_COMMAND='docker run --rm --gpus all -it --detach --label RUN'
+export TUNE_DISABLE_STRICT_METRIC_CHECKING=1
