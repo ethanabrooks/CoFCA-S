@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import os
-import sys
 import time
 from argparse import ArgumentParser
 from collections import namedtuple, Counter
@@ -175,7 +174,10 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(cuda, cuda_deterministic, seed)
+        set_seeds(seed)
+        if cuda and cuda_deterministic:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
 
         if cuda:
             device = torch.device("cuda")
@@ -360,10 +362,14 @@ class Trainer:
         num_samples: int,
         name: str,
         config: dict,
+        seed: Optional[int],
         **kwargs,
     ):
         if config is None:
             config = cls.default
+            if seed is not None:
+                config[seed] = seed
+
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 if isinstance(v, bool):  # handle store_{true, false} differently
@@ -391,7 +397,9 @@ class Trainer:
                 kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric=cls.metric, mode="max"),
+                    search_alg=HyperOptSearch(
+                        config, metric=cls.metric, mode="max", random_state_seed=seed
+                    ),
                     num_samples=num_samples,
                 )
             if log_dir is not None:
