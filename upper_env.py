@@ -123,7 +123,7 @@ class Env(gym.Env):
             yield Interaction.COLLECT
             yield Interaction.REFINE
             for i in range(self.h):
-                for j in range(self.w):
+                for j in range(self.w + 1):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
@@ -376,8 +376,7 @@ class Env(gym.Env):
                     inventory = set()
 
                 def next_room():
-                    h, w = new_pos
-                    return w == self.w
+                    return agent_pos[1] == self.w - 1 and new_pos[1] == self.w
 
                 def valid_new_pos():
                     if not self.room_space.contains(new_pos):
@@ -405,14 +404,18 @@ class Env(gym.Env):
                             agent_pos = new_pos  # check if bridge failed
                         else:
                             chance_events.add("bridge failed")
-                        subtasks_completed.add(CrossWater)
                         # else bridge failed
                     else:
                         agent_pos = new_pos % np.array(self.room_shape)
                         if moving_into == Terrain.MOUNTAIN:
                             inventory.remove(Other.MAP)
-                            subtasks_completed.add(CrossMountain)
                         if next_room():
+                            if standing_on == Terrain.WATER:
+                                subtasks_completed.add(CrossWater)
+                            elif standing_on == Terrain.MOUNTAIN:
+                                subtasks_completed.add(CrossMountain)
+                            else:
+                                raise RuntimeError
                             room = next(rooms_iter, None)
                             room_complete = True
                             if room is None:
