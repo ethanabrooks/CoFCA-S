@@ -2,7 +2,7 @@ import copy
 import json
 import pickle
 from collections import Counter, namedtuple, deque, OrderedDict
-from itertools import product, zip_longest, tee, filterfalse, groupby
+from itertools import product, zip_longest
 from pathlib import Path
 from pprint import pprint
 from typing import Tuple, Dict, Union
@@ -28,7 +28,6 @@ from enums import (
 )
 from lines import Subtask
 from utils import RESET
-
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
@@ -72,7 +71,6 @@ class Env(gym.Env):
         exact_count: bool,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
-        hard_code_lower: bool,
         map_discovery_prob: float,
         max_eval_lines: int,
         max_lines: int,
@@ -85,7 +83,6 @@ class Env(gym.Env):
         windfall_prob: float,
         evaluating=False,
     ):
-        self._hard_code_lower = hard_code_lower
         self.exact_count = exact_count
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -252,9 +249,10 @@ class Env(gym.Env):
         next(done_iterator)
         next(info_iterator)
         action = None
+        state, render_state = next(state_iterator)
 
         def no_op():
-            return action is not None and action.upper == len(self.subtasks)
+            return action.upper == len(self.subtasks)
 
         def render():
             if t:
@@ -275,8 +273,6 @@ class Env(gym.Env):
             print(RESET)
 
         while True:
-            if not no_op():
-                state, render_state = state_iterator.send(action)
             s, render_s = obs_iterator.send(state)
             r, render_r = reward_iterator.send(state)
             t, render_t = done_iterator.send(dict(state))
@@ -290,6 +286,8 @@ class Env(gym.Env):
             self.render_thunk = render
 
             action = yield s, r, t, i
+            if not no_op():
+                state, render_state = state_iterator.send(action)
 
     def state_generator(self, *blocks):
         rooms = self.build_rooms(*blocks)
@@ -362,22 +360,6 @@ class Env(gym.Env):
 
             standing_on = objects.get(tuple(agent_pos), None)
 
-            upper_action = self.subtasks[int(action.upper)]
-
-            if self._hard_code_lower:
-                action = action._replace(
-                    lower=(
-                        self.hard_code_lower(
-                            action=action,
-                            agent_pos=agent_pos,
-                            objects=objects,
-                            inventory=inventory,
-                            standing_on=standing_on,
-                            upper_action=upper_action,
-                        )
-                    )
-                )
-
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
                 moving_into = objects.get(tuple(new_pos), None)
@@ -449,52 +431,6 @@ class Env(gym.Env):
                     inventory = {Refined(i.value) for i in inventory}
             else:
                 raise NotImplementedError
-
-    def hard_code_lower(
-        self, action, agent_pos, objects, inventory, standing_on, upper_action
-    ):
-        def get_nearest(o: Union[Resource, Terrain]):
-            def key(t):
-                p, _o = t
-                return np.sum(np.abs(np.array(p) - agent_pos)) if o == _o else np.inf
-
-            return min(objects.items(), key=key)[0]
-
-        def step_toward(o: Union[Resource, Terrain]):
-            nearest = get_nearest(o)
-            # TODO: disallow diagonal
-            # return np.clip(np.array(nearest) - agent_pos, -1, 1)
-            return np.array(nearest) - agent_pos
-
-        lower_action = action.lower
-        if upper_action.interaction == Interaction.COLLECT:
-            if upper_action.resource in inventory:
-                lower_action = step_toward(Terrain.WATER)
-            elif standing_on == upper_action.resource:
-                lower_action = Interaction.COLLECT
-            else:
-                lower_action = step_toward(upper_action.resource)
-        elif upper_action.interaction == Interaction.REFINE:
-            if Refined(upper_action.resource.value) in inventory:
-                lower_action = step_toward(Terrain.WATER)
-            elif upper_action.resource in inventory:
-                lower_action = (
-                    Interaction.REFINE
-                    if standing_on == Terrain.FACTORY
-                    else step_toward(Terrain.FACTORY)
-                )
-            else:
-                lower_action = (
-                    Interaction.COLLECT
-                    if standing_on == upper_action.resource
-                    else step_toward(upper_action.resource)
-                )
-        elif upper_action.interaction == Interaction.CROSS:
-            if standing_on == upper_action.resource:
-                lower_action = np.array([0, 1])
-            else:
-                lower_action = step_toward(upper_action.resource)
-        return lower_action
 
     @staticmethod
     def initialize_inventory():
@@ -779,7 +715,6 @@ class Env(gym.Env):
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
         p.add_argument("--debug-env", action="store_true")
         p.add_argument("--exact-count", action="store_true")
-        p.add_argument("--hard-code-lower", action="store_true")
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):

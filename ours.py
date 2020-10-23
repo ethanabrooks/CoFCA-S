@@ -18,7 +18,7 @@ from transformer import TransformerModel
 from utils import init_
 
 RecurrentState = namedtuple(
-    "RecurrentState", "a l d h dg p v lh l_probs a_probs d_probs dg_probs"
+    "RecurrentState", "a l d h dg p v lh a_probs d_probs dg_probs"
 )
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
@@ -36,15 +36,15 @@ class Recurrence(nn.Module):
         conv_hidden_size,
         debug,
         debug_obs,
-        max_eval_lines,
         fuzz,
+        gate_coef,
+        hidden_size,
+        inventory_hidden_size,
         kernel_size,
         lower_level_config,
         lower_embed_size,
         lower_level_load_path,
-        gate_coef,
-        hidden_size,
-        inventory_hidden_size,
+        max_eval_lines,
         no_pointer,
         no_roll,
         no_scan,
@@ -174,7 +174,6 @@ class Recurrence(nn.Module):
             dg_probs=2,
             dg=1,
             l=1,
-            l_probs=ll_action_space.n,
             lh=lower_level_params["hidden_size"],
         )
         if lower_level_load_path is not None:
@@ -328,15 +327,15 @@ class Recurrence(nn.Module):
             # a = 3 * (it - 1) + (be - 1)
 
             line = self.subtasks[A[t].clamp(0, len(self.subtasks) - 1)]
-            ll_output = self.lower_level(
+            ll_action = self.lower_level(
                 lower_env.Obs(inventory=inventory, line=line, obs=obs),
                 hx.lh,
                 masks=None,
                 action=None,
-            )
+            ).action
             if torch.any(L[0] < 0):
                 assert torch.all(L[0] < 0)
-                L[t] = ll_output.action.flatten()
+                L[t] = ll_action.flatten()
 
             if self.fuzz:
                 assert not self.debug_obs
@@ -420,7 +419,6 @@ class Recurrence(nn.Module):
                 a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
-                l_probs=ll_output.dist.probs,
             )
 
     @property

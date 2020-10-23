@@ -118,24 +118,25 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--lower-level-config", type=Path)
+        parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--debug", action="store_true")
         parser.add_argument("--debug-obs", action="store_true")
-        parser.add_argument("--no-scan", action="store_true")
-        parser.add_argument("--no-roll", action="store_true")
-        parser.add_argument("--no-pointer", action="store_true")
-        parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--transformer", action="store_true")
         parser.add_argument("--fuzz", action="store_true")
-        parser.add_argument("--conv-hidden-size", type=int)
-        parser.add_argument("--task-embed-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
-        parser.add_argument("--inventory-hidden-size", type=int)
-        parser.add_argument("--num-edges", type=int)
         parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--no-op-coef", type=float)
+        parser.add_argument("--hard-code-lower", action="store_true")
+        parser.add_argument("--inventory-hidden-size", type=int)
         parser.add_argument("--kernel-size", type=int)
+        parser.add_argument("--lower-embed-size", type=int)
+        parser.add_argument("--lower-level-config", type=Path)
+        parser.add_argument("--olsk", action="store_true")
+        parser.add_argument("--num-edges", type=int)
+        parser.add_argument("--no-op-coef", type=float)
+        parser.add_argument("--no-pointer", action="store_true")
+        parser.add_argument("--no-roll", action="store_true")
+        parser.add_argument("--no-scan", action="store_true")
         parser.add_argument("--stride", type=int)
+        parser.add_argument("--task-embed-size", type=int)
+        parser.add_argument("--transformer", action="store_true")
 
     @classmethod
     def add_arguments(cls, parser):
