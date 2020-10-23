@@ -171,7 +171,12 @@ class Env(gym.Env):
     def step(self, action: Union[np.ndarray, Action]):
         action = Action(*action)
         return self.iterator.send(
-            action._replace(lower=self.lower_level_actions[int(action.lower)])
+            action._replace(
+                lower=self.lower_level_actions[int(action.lower)],
+                upper=self.subtasks[int(action.upper)]
+                if action.upper < len(self.subtasks)
+                else None,
+            )
         )
 
     def failure_buffer_wrapper(self, iterator):
@@ -247,9 +252,6 @@ class Env(gym.Env):
         action = None
         state, render_state = next(state_iterator)
 
-        def no_op():
-            return action.upper == len(self.subtasks)
-
         def render():
             if t:
                 print(fg("green") if i["success"] else fg("red"))
@@ -260,11 +262,11 @@ class Env(gym.Env):
             print("Action:", end=" ")
             if action is None:
                 print(None)
-            elif no_op():
+            elif action.upper is None:
                 print("No op")
             else:
                 # noinspection PyProtectedMember
-                print(action._replace(upper=str(self.subtasks[int(action.upper)])))
+                print(action)
             render_s()
             print(RESET)
 
@@ -282,7 +284,7 @@ class Env(gym.Env):
             self.render_thunk = render
 
             action = yield s, r, t, i
-            if not no_op():
+            if action.upper is not None:
                 state, render_state = state_iterator.send(action)
 
     def state_generator(self, *lines):
@@ -512,14 +514,13 @@ class Env(gym.Env):
                     progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
                 )
-                upper_action = self.subtasks[int(action.upper)]
                 if isinstance(action.lower, Interaction):
                     if action.lower == Interaction.COLLECT:
-                        lower_error = upper_action.resource not in inventory
+                        lower_error = action.upper.resource not in inventory
                     elif action.lower == Interaction.REFINE:
                         lower_error = (
-                            upper_action.interaction != action.lower
-                            or Refined(upper_action.resource.value) not in inventory
+                            action.upper.interaction != action.lower
+                            or Refined(action.upper.resource.value) not in inventory
                         )
                     else:
                         raise RuntimeError
@@ -529,7 +530,7 @@ class Env(gym.Env):
                 if CrossMountain in subtasks_completed:
                     info.update(crossing_mountain=1)
                 if Other.MAP in inventory:
-                    info.update(crossing_mountain=float(upper_action == CrossMountain))
+                    info.update(crossing_mountain=int(action.upper == CrossMountain))
 
         while True:
             rooms_complete += int(state["room_complete"])
@@ -671,7 +672,6 @@ class Env(gym.Env):
         state_dict = torch.load(lower_level_load_path, map_location="cpu")
         lower_level.load_state_dict(state_dict["agent"])
         print(f"Loaded lower_level from {lower_level_load_path}.")
-        subtask_list = list(subtasks())
 
         def action_fn(string):
             try:
@@ -690,9 +690,7 @@ class Env(gym.Env):
                 lower_env.Obs(
                     inventory=torch.from_numpy(s.inventory).float().unsqueeze(0),
                     obs=torch.from_numpy(s.obs).float().unsqueeze(0),
-                    line=torch.Tensor(self.preprocess_line(subtask_list[upper]))
-                    .float()
-                    .unsqueeze(0),
+                    line=torch.Tensor(self.preprocess_line(upper)).float().unsqueeze(0),
                 ),
                 None,
                 None,
