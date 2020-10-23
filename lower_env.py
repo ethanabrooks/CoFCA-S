@@ -38,7 +38,11 @@ class Env(upper_env.Env):
 
     def step(self, action: int):
         action = Action(
-            upper=0, lower=self.lower_level_actions[action], delta=0, dg=0, ptr=0
+            upper=self.subtasks[0],
+            lower=self.lower_level_actions[action],
+            delta=0,
+            dg=0,
+            ptr=0,
         )
         return self.iterator.send(action)
 
