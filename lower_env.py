@@ -10,7 +10,6 @@ from enums import Interaction, Resource, Other, Terrain, InventoryItems
 
 
 Obs = namedtuple("Obs", "inventory line obs")
-action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
 
 
 class Env(upper_env.Env):
@@ -25,7 +24,7 @@ class Env(upper_env.Env):
         self.observation_space = self.observation_space_from_upper(
             self.observation_space
         )
-        self.action_space = action_space
+        self.action_space = spaces.Discrete(len(list(self.lower_level_actions)))
 
     @staticmethod
     def observation_space_from_upper(observation_space):
