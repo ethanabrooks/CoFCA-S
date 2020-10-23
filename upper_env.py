@@ -268,7 +268,9 @@ class Env(gym.Env):
                 print("No op")
             else:
                 # noinspection PyProtectedMember
-                print(action)
+                for k, v in action._asdict().items():
+                    print(f"{k}=({str(v)})", end=" ")
+                print()
             render_s()
             print(RESET)
 
