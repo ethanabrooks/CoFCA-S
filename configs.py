@@ -1,9 +1,10 @@
 import copy
 import json
+from pathlib import Path
 
 from hyperopt import hp
 
-with open("lower.json") as f:
+with Path(__file__).resolve().with_name("lower.json").open() as f:
     default_lower = json.load(f)
 
 default = {
