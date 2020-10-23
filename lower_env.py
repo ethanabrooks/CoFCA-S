@@ -55,10 +55,10 @@ class Env(upper_env.Env):
     def time_limit(self, lines):
         return self.time_per_subtask()
 
-    def state_generator(self, *blocks):
-        iterator = super().state_generator(*blocks)
+    def state_generator(self, line, *lines):
+        iterator = super().state_generator(line, *lines)
         state, render = next(iterator)
-        line, *_ = self.get_lines(*blocks)
+
         if Other.MAP in state["inventory"]:
             line = CrossMountain
 

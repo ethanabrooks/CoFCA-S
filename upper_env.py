@@ -235,15 +235,11 @@ class Env(gym.Env):
 
     def srti_generator(self):
         lines = self.build_lines()
-        blocks = list(self.get_blocks(*lines))
-        rooms = self.build_rooms(*blocks)
-        assert len(rooms) == len(blocks)
-
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator(*lines)
-        info_iterator = self.info_generator(lines, rooms)
-        state_iterator = self.state_generator(*blocks)
+        info_iterator = self.info_generator(*lines)
+        state_iterator = self.state_generator(*lines)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
@@ -289,9 +285,11 @@ class Env(gym.Env):
             if not no_op():
                 state, render_state = state_iterator.send(action)
 
-    def state_generator(self, *blocks):
+    def state_generator(self, *lines):
+        blocks = list(self.get_blocks(*lines))
         rooms = self.build_rooms(*blocks)
         assert len(rooms) == len(blocks)
+
         rooms_iter = iter(rooms)
         blocks_iter = iter(blocks)
 
@@ -501,7 +499,7 @@ class Env(gym.Env):
     def time_limit(self, lines):
         return len(lines) * self.time_per_subtask()
 
-    def info_generator(self, lines, rooms):
+    def info_generator(self, *lines):
         state = yield
         info = dict(len_failure_buffer=len(self.failure_buffer))
         rooms_complete = 0
@@ -512,7 +510,7 @@ class Env(gym.Env):
                     instruction_len=len(lines),
                     len_failure_buffer=len(self.failure_buffer),
                     rooms_complete=rooms_complete,
-                    progress=rooms_complete / len(rooms),
+                    progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
                 )
                 if CrossMountain in subtasks_completed:
