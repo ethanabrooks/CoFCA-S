@@ -69,6 +69,7 @@ class Env(gym.Env):
         break_on_fail: bool,
         bridge_failure_prob: float,
         exact_count: bool,
+        eval_steps: int,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
         map_discovery_prob: float,
@@ -83,6 +84,7 @@ class Env(gym.Env):
         windfall_prob: float,
         evaluating=False,
     ):
+        self.eval_steps = eval_steps
         self.exact_count = exact_count
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -487,13 +489,12 @@ class Env(gym.Env):
 
     def done_generator(self, *lines):
         state = yield
-        time_remaining = self.time_limit(lines)
+        time_remaining = self.eval_steps if self.evaluating else self.time_limit(lines)
 
         while True:
             done = state["success"]
-            if not self.evaluating:
-                done |= time_remaining == 0
-                time_remaining -= 1
+            done |= time_remaining == 0
+            time_remaining -= 1
             state = yield done, lambda: print("Time remaining:", time_remaining + 1)
 
     def time_limit(self, lines):
