@@ -76,7 +76,6 @@ class Env(gym.Env):
         max_lines: int,
         min_eval_lines: int,
         min_lines: int,
-        no_op_limit: int,
         rank: int,
         room_side: int,
         seed: int,
@@ -99,7 +98,6 @@ class Env(gym.Env):
         self.max_eval_lines = max_eval_lines
         self.rank = rank
         self.break_on_fail = break_on_fail
-        self.no_op_limit = no_op_limit
         self.num_subtasks = num_subtasks
         self.i = 0
         self.success_avg = 0.5
@@ -568,14 +566,6 @@ class Env(gym.Env):
         reward = -0.1
         while True:
             yield reward, lambda: print("Reward:", reward)
-
-    def no_op_remaining_generator(self):
-        no_ops_remaining = self.no_op_limit
-        while True:
-            action = yield no_ops_remaining
-            if action == len(self.subtasks):
-                no_ops_remaining -= 1
-            no_ops_remaining -= 1
 
     def done_generator(self, *lines):
         state = yield

@@ -71,8 +71,6 @@ default_upper = {
     "min_eval_lines": 1,
     "min_lines": 1,
     "no_eval": False,
-    "no_op_coef": 0,
-    "no_op_limit": 40,
     "no_pointer": False,
     "no_roll": False,
     "no_scan": False,
