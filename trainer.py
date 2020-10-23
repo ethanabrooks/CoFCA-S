@@ -216,11 +216,15 @@ class Trainer:
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
-                if frames["so_far"] >= num_frames:
-                    break
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
-                if eval_interval and not no_eval and i % eval_interval == 0:
+                done = frames["so_far"] >= num_frames
+                if done or (
+                    not no_eval
+                    and eval_interval
+                    and frames["since_eval"] > eval_interval
+                ):
+                    frames["since_eval"] = 0
+                    eval_report = EvalWrapper(EpisodeAggregator())
+                    eval_infos = EvalWrapper(InfosAggregator())
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
                     #     vec_norm.eval()
@@ -253,6 +257,8 @@ class Trainer:
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
+                if done:
+                    break
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -275,8 +281,11 @@ class Trainer:
                         rewards=output.reward,
                         masks=output.masks,
                     )
-                    frames.update(since_save=num_processes)
-                    frames.update(since_log=num_processes)
+                    frames.update(
+                        since_save=num_processes,
+                        since_log=num_processes,
+                        since_eval=num_processes,
+                    )
 
                 with torch.no_grad():
                     next_value = agent.get_value(
