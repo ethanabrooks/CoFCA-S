@@ -206,6 +206,7 @@ class Trainer:
             ppo = PPO(agent=agent, **ppo_args)
             train_report = EpisodeAggregator()
             train_infos = self.build_infos_aggregator()
+            train_results = {}
             if load_path:
                 self.load_checkpoint(load_path, ppo, agent, device)
 
@@ -257,6 +258,32 @@ class Trainer:
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
+                if done or frames["since_log"] > log_interval:
+                    tick = time.time()
+                    frames["since_log"] = 0
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
+                    )
+                    train_report.reset()
+                    train_infos.reset()
+                    time_spent["logging"] += time.time() - tick
+
+                if done or (save_interval and frames["since_save"] > save_interval):
+                    tick = time.time()
+                    frames["since_save"] = 0
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    time_spent["saving"] += time.time() - tick
+
                 if done:
                     break
 
@@ -297,32 +324,6 @@ class Trainer:
                 rollouts.compute_returns(next_value.detach())
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
-
-                if frames["since_log"] > log_interval:
-                    tick = time.time()
-                    frames["since_log"] = 0
-                    reporter.send(
-                        dict(
-                            **train_results,
-                            **dict(train_report.items()),
-                            **dict(train_infos.items()),
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
-                            time_logging=time_spent["logging"],
-                            time_saving=time_spent["saving"],
-                            training_iteration=frames["so_far"],
-                        )
-                    )
-                    train_report.reset()
-                    train_infos.reset()
-                    time_spent["logging"] += time.time() - tick
-
-                if save_interval and frames["since_save"] > save_interval:
-                    tick = time.time()
-                    frames["since_save"] = 0
-                    if log_dir:
-                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
-                    time_spent["saving"] += time.time() - tick
 
         finally:
             train_envs.close()
