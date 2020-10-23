@@ -50,7 +50,6 @@
   "tgt_success_rate": 0.5,
   "train_steps": 25,
   "use_gae": true,
-  "use_tune": true,
   "value_loss_coef": 0.5,
   "windfall_prob": null
 }

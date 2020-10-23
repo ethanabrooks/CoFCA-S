@@ -112,7 +112,6 @@ class Trainer:
         save_interval: int,
         synchronous: bool,
         train_steps: int,
-        use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
         load_path: Path = None,
@@ -126,11 +125,11 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        if use_tune:
+        if tune.is_session_enabled():
             with tune.checkpoint_dir(0) as _dir:
                 log_dir = str(Path(_dir).parent)
 
-        reporter = self.report_generator(use_tune, log_dir)
+        reporter = self.report_generator(log_dir)
         next(reporter)
 
         def make_vec_envs(evaluating):
@@ -318,9 +317,9 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report_generator(use_tune: bool, log_dir: Optional[str]):
+    def report_generator(log_dir: Optional[str]):
 
-        if use_tune:
+        if tune.is_session_enabled():
             report = tune.report
         else:
             writer = SummaryWriter(logdir=log_dir) if log_dir else None
@@ -381,13 +380,11 @@ class Trainer:
 
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
-            config.update(use_tune=False)
             run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
-            config.update(use_tune=True)
 
             if local_mode:
                 print("Using local mode because num_samples is None")

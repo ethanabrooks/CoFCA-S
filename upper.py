@@ -46,8 +46,8 @@ class UpperTrainer(Trainer):
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
 
-    def report_generator(self, use_tune, log_dir):
-        reporter = super().report_generator(use_tune, log_dir)
+    def report_generator(self, log_dir):
+        reporter = super().report_generator(log_dir)
         next(reporter)
 
         def report(failure_buffer, **kwargs):

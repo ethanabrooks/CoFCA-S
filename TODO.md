@@ -1,2 +1,3 @@
 - add reproducible_seed to tune.run
 - use num_frames for eval_interval
+- remove no_op_coef and no_op_limit
