@@ -72,6 +72,7 @@ class Env(gym.Env):
         exact_count: bool,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
+        hard_code_lower: bool,
         map_discovery_prob: float,
         max_eval_lines: int,
         max_lines: int,
@@ -85,6 +86,7 @@ class Env(gym.Env):
         windfall_prob: float,
         evaluating=False,
     ):
+        self._hard_code_lower = hard_code_lower
         self.exact_count = exact_count
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -360,18 +362,19 @@ class Env(gym.Env):
 
             upper_action = self.subtasks[int(action.upper)]
 
-            action = action._replace(
-                lower=(
-                    self.hard_code_lower(
-                        action=action,
-                        agent_pos=agent_pos,
-                        objects=objects,
-                        inventory=inventory,
-                        standing_on=standing_on,
-                        upper_action=upper_action,
+            if self._hard_code_lower:
+                action = action._replace(
+                    lower=(
+                        self.hard_code_lower(
+                            action=action,
+                            agent_pos=agent_pos,
+                            objects=objects,
+                            inventory=inventory,
+                            standing_on=standing_on,
+                            upper_action=upper_action,
+                        )
                     )
                 )
-            )
 
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
@@ -780,6 +783,7 @@ class Env(gym.Env):
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
         p.add_argument("--debug-env", action="store_true")
         p.add_argument("--exact-count", action="store_true")
+        p.add_argument("--hard-code-lower", action="store_true")
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
