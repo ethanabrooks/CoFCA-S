@@ -514,10 +514,24 @@ class Env(gym.Env):
                     progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
                 )
+                lower_action = self.lower_level_actions[int(action.lower)]
+                upper_action = self.subtasks[int(action.upper)]
+                if isinstance(lower_action, Interaction):
+                    if lower_action.interaction == Interaction.COLLECT:
+                        lower_error = upper_action.resource not in inventory
+                    elif lower_action.interaction == Interaction.REFINE:
+                        lower_error = (
+                            upper_action.interaction != lower_action.interaction
+                            or Refined(upper_action.resource.value) not in inventory
+                        )
+                    else:
+                        raise RuntimeError
+
+                    info.update(lower_error=lower_error)
+
                 if CrossMountain in subtasks_completed:
                     info.update(crossing_mountain=1)
                 if Other.MAP in inventory:
-                    upper_action = self.subtasks[int(action.upper)]
                     info.update(crossing_mountain=float(upper_action == CrossMountain))
 
         while True:
