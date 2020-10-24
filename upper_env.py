@@ -340,7 +340,7 @@ class Env(gym.Env):
                 pprint(build_supplies)
                 print("Required:")
                 pprint(required)
-                print("Chance events:", *chance_events)
+                print("Chance events:", fg("purple_1b"), *chance_events, RESET)
 
             self.render_thunk = render
             # for name, space in self.observation_space.spaces.items():
@@ -424,6 +424,7 @@ class Env(gym.Env):
                             else:
                                 objects = dict(room)
                             required = Counter(next_required())
+                            build_supplies = Counter()
                         agent_pos = new_pos % np.array(self.room_shape)
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
