@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import os
-import sys
 import time
 from argparse import ArgumentParser
 from collections import namedtuple, Counter
@@ -112,7 +111,6 @@ class Trainer:
         save_interval: int,
         synchronous: bool,
         train_steps: int,
-        use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
         load_path: Path = None,
@@ -126,11 +124,11 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        if use_tune:
+        if tune.is_session_enabled():
             with tune.checkpoint_dir(0) as _dir:
                 log_dir = str(Path(_dir).parent)
 
-        reporter = self.report_generator(use_tune, log_dir)
+        reporter = self.report_generator(log_dir)
         next(reporter)
 
         def make_vec_envs(evaluating):
@@ -140,10 +138,9 @@ class Trainer:
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
-            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
             return VecPyTorch(
                 DummyVecEnv(env_fns, render=render)
-                if use_dummy
+                if len(env_fns) == 1 or synchronous
                 else SubprocVecEnv(env_fns)
             )
 
@@ -177,7 +174,10 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(cuda, cuda_deterministic, seed)
+        set_seeds(seed)
+        if cuda and cuda_deterministic:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
 
         if cuda:
             device = torch.device("cuda")
@@ -206,6 +206,7 @@ class Trainer:
             ppo = PPO(agent=agent, **ppo_args)
             train_report = EpisodeAggregator()
             train_infos = self.build_infos_aggregator()
+            train_results = {}
             if load_path:
                 self.load_checkpoint(load_path, ppo, agent, device)
 
@@ -216,11 +217,15 @@ class Trainer:
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
-                if frames["so_far"] >= num_frames:
-                    break
+                done = frames["so_far"] >= num_frames
                 eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
-                if eval_interval and not no_eval and i % eval_interval == 0:
+                if done or (
+                    not no_eval
+                    and eval_interval
+                    and frames["since_eval"] > eval_interval
+                ):
+                    frames["since_eval"] = 0
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
                     #     vec_norm.eval()
@@ -253,6 +258,34 @@ class Trainer:
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
+                if done or frames["since_log"] > log_interval:
+                    tick = time.time()
+                    frames["since_log"] = 0
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
+                    )
+                    train_report.reset()
+                    train_infos.reset()
+                    time_spent["logging"] += time.time() - tick
+
+                if done or (save_interval and frames["since_save"] > save_interval):
+                    tick = time.time()
+                    frames["since_save"] = 0
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    time_spent["saving"] += time.time() - tick
+
+                if done:
+                    break
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -275,8 +308,11 @@ class Trainer:
                         rewards=output.reward,
                         masks=output.masks,
                     )
-                    frames.update(since_save=num_processes)
-                    frames.update(since_log=num_processes)
+                    frames.update(
+                        since_save=num_processes,
+                        since_log=num_processes,
+                        since_eval=num_processes,
+                    )
 
                 with torch.no_grad():
                     next_value = agent.get_value(
@@ -289,39 +325,13 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                if frames["since_log"] > log_interval:
-                    tick = time.time()
-                    frames["since_log"] = 0
-                    reporter.send(
-                        dict(
-                            **train_results,
-                            **dict(train_report.items()),
-                            **dict(train_infos.items()),
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
-                            time_logging=time_spent["logging"],
-                            time_saving=time_spent["saving"],
-                            training_iteration=frames["so_far"],
-                        )
-                    )
-                    train_report.reset()
-                    train_infos.reset()
-                    time_spent["logging"] += time.time() - tick
-
-                if save_interval and frames["since_save"] > save_interval:
-                    tick = time.time()
-                    frames["since_save"] = 0
-                    if log_dir:
-                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
-                    time_spent["saving"] += time.time() - tick
-
         finally:
             train_envs.close()
 
     @staticmethod
-    def report_generator(use_tune: bool, log_dir: Optional[str]):
+    def report_generator(log_dir: Optional[str]):
 
-        if use_tune:
+        if tune.is_session_enabled():
             report = tune.report
         else:
             writer = SummaryWriter(logdir=log_dir) if log_dir else None
@@ -362,10 +372,14 @@ class Trainer:
         num_samples: int,
         name: str,
         config: dict,
+        seed: Optional[int],
         **kwargs,
     ):
         if config is None:
             config = cls.default
+            if seed is not None:
+                config[seed] = seed
+
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 if isinstance(v, bool):  # handle store_{true, false} differently
@@ -382,20 +396,20 @@ class Trainer:
 
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
-            config.update(use_tune=False)
             run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
-            config.update(use_tune=True)
 
             if local_mode:
                 print("Using local mode because num_samples is None")
                 kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric=cls.metric, mode="max"),
+                    search_alg=HyperOptSearch(
+                        config, metric=cls.metric, mode="max", random_state_seed=seed
+                    ),
                     num_samples=num_samples,
                 )
             if log_dir is not None:

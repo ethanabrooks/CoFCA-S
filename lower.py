@@ -14,7 +14,7 @@ class LowerTrainer(UpperTrainer):
 
     def build_agent(self, envs, **agent_args):
         return lower_agent.Agent(
-            obs_spaces=envs.observation_space,
+            obs_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
         )
@@ -32,7 +32,7 @@ class LowerTrainer(UpperTrainer):
     def structure_config(cls, **config):
         config = Trainer.structure_config(**config)
         agent_args = config.pop("agent_args")
-        env_args = {}
+        env_args = config.pop("env_args")
         gen_args = {}
 
         for k, v in config.items():

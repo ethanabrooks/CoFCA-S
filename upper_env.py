@@ -69,6 +69,7 @@ class Env(gym.Env):
         break_on_fail: bool,
         bridge_failure_prob: float,
         exact_count: bool,
+        eval_steps: int,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
         map_discovery_prob: float,
@@ -76,7 +77,6 @@ class Env(gym.Env):
         max_lines: int,
         min_eval_lines: int,
         min_lines: int,
-        no_op_limit: int,
         rank: int,
         room_side: int,
         seed: int,
@@ -84,6 +84,7 @@ class Env(gym.Env):
         windfall_prob: float,
         evaluating=False,
     ):
+        self.eval_steps = eval_steps
         self.exact_count = exact_count
         self.windfall_prob = windfall_prob
         self.bandit_prob = bandit_prob
@@ -93,15 +94,12 @@ class Env(gym.Env):
         self.tgt_success_rate = tgt_success_rate
 
         self.subtasks = list(subtasks())
-        self.block_subtasks = [
-            s for s in self.subtasks if s.interaction in ResourceInteractions
-        ]
+        self.line_subtasks = [s for s in self.subtasks if s != CrossMountain]
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
         self.rank = rank
         self.break_on_fail = break_on_fail
-        self.no_op_limit = no_op_limit
         self.num_subtasks = num_subtasks
         self.i = 0
         self.success_avg = 0.5
@@ -125,7 +123,7 @@ class Env(gym.Env):
         self.evaluating = evaluating
         self.h, self.w = self.room_shape = np.array([room_side, room_side])
         self.room_size = int(self.room_shape.prod())
-        self.chunk_size = self.room_size - self.h - 1
+        self.block_size = self.room_size - self.h - 1
         self.limina = [Terrain.WATER] + [Terrain.MOUNTAIN] * (self.h - 1)
         self.iterator = None
         self.render_thunk = None
@@ -175,7 +173,12 @@ class Env(gym.Env):
     def step(self, action: Union[np.ndarray, Action]):
         action = Action(*action)
         return self.iterator.send(
-            action._replace(lower=self.lower_level_actions[int(action.lower)])
+            action._replace(
+                lower=self.lower_level_actions[int(action.lower)],
+                upper=self.subtasks[int(action.upper)]
+                if action.upper < len(self.subtasks)
+                else None,
+            )
         )
 
     def failure_buffer_wrapper(self, iterator):
@@ -213,7 +216,7 @@ class Env(gym.Env):
                 success = i["success"]
                 if not use_failure_buf:
                     i.update(success_without_failure_buf=float(success))
-                self.success_avg += self.alpha * (success - self.success_avg)
+                    self.success_avg += self.alpha * (success - self.success_avg)
 
                 i.update(
                     use_failure_buf=use_failure_buf,
@@ -228,32 +231,28 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    @staticmethod
-    def get_lines(*blocks):
-        for block in blocks:
-            for subtask in block:
-                yield subtask
-            yield CrossWater
+    def get_blocks(self, *lines):
+        block = []
+        for line in lines:
+            if line == CrossWater:
+                yield block
+                block = []
+            else:
+                block.append(line)
 
     def srti_generator(self):
-        blocks = self.build_blocks()
-        rooms = self.build_rooms(*blocks)
-        assert len(rooms) == len(blocks)
-
-        lines = list(self.get_lines(*blocks))
+        lines = self.build_lines()
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator(*lines)
-        info_iterator = self.info_generator(lines, rooms)
-        state_iterator = self.state_generator(*blocks)
+        info_iterator = self.info_generator(*lines)
+        state_iterator = self.state_generator(*lines)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
         next(info_iterator)
         action = None
-
-        def no_op():
-            return action is not None and action.upper == len(self.subtasks)
+        state, render_state = next(state_iterator)
 
         def render():
             if t:
@@ -265,17 +264,17 @@ class Env(gym.Env):
             print("Action:", end=" ")
             if action is None:
                 print(None)
-            elif no_op():
+            elif action.upper is None:
                 print("No op")
             else:
                 # noinspection PyProtectedMember
-                print(action._replace(upper=str(self.subtasks[int(action.upper)])))
+                for k, v in action._asdict().items():
+                    print(f"{k}=({str(v)})", end=" ")
+                print()
             render_s()
             print(RESET)
 
         while True:
-            if not no_op():
-                state, render_state = state_iterator.send(action)
             s, render_s = obs_iterator.send(state)
             r, render_r = reward_iterator.send(state)
             t, render_t = done_iterator.send(dict(state))
@@ -289,10 +288,14 @@ class Env(gym.Env):
             self.render_thunk = render
 
             action = yield s, r, t, i
+            if action.upper is not None:
+                state, render_state = state_iterator.send(action)
 
-    def state_generator(self, *blocks):
+    def state_generator(self, *lines):
+        blocks = list(self.get_blocks(*lines))
         rooms = self.build_rooms(*blocks)
         assert len(rooms) == len(blocks)
+
         rooms_iter = iter(rooms)
         blocks_iter = iter(blocks)
 
@@ -315,6 +318,7 @@ class Env(gym.Env):
         success = False
         action = None
         subtasks_completed = set()
+        chance_events = set()
         room_complete = False
 
         while True:
@@ -338,6 +342,7 @@ class Env(gym.Env):
                 pprint(build_supplies)
                 print("Required:")
                 pprint(required)
+                print("Chance events:", *chance_events)
 
             self.render_thunk = render
             # for name, space in self.observation_space.spaces.items():
@@ -348,29 +353,16 @@ class Env(gym.Env):
             #         space.contains(s[name])
             action = yield state, render
             subtasks_completed = set()
+            chance_events = set()
             room_complete = False
             if self.random.random() < self.bandit_prob:
                 possessions = [k for k, v in build_supplies.items() if v > 0]
                 if possessions:
                     robbed = self.random.choice(possessions)
                     build_supplies[robbed] -= 1
+                    chance_events.add(f"bandit stole {robbed}")
 
             standing_on = objects.get(tuple(agent_pos), None)
-
-            upper_action = self.subtasks[int(action.upper)]
-
-            action = action._replace(
-                lower=(
-                    self.hard_code_lower(
-                        action=action,
-                        agent_pos=agent_pos,
-                        objects=objects,
-                        inventory=inventory,
-                        standing_on=standing_on,
-                        upper_action=upper_action,
-                    )
-                )
-            )
 
             if isinstance(action.lower, np.ndarray):
                 new_pos = agent_pos + action.lower
@@ -414,15 +406,20 @@ class Env(gym.Env):
                     if moving_into == Terrain.WATER:
                         build_supplies -= required  # build bridge
                         if self.random.random() > self.bridge_failure_prob:
-                            agent_pos = new_pos  # check for "flash flood"
-                        subtasks_completed.add(CrossWater)
+                            agent_pos = new_pos  # check if bridge failed
+                        else:
+                            chance_events.add("bridge failed")
                         # else bridge failed
                     else:
-                        agent_pos = new_pos % np.array(self.room_shape)
                         if moving_into == Terrain.MOUNTAIN:
                             inventory.remove(Other.MAP)
-                            subtasks_completed.add(CrossMountain)
                         if next_room():
+                            if standing_on == Terrain.WATER:
+                                subtasks_completed.add(CrossWater)
+                            elif standing_on == Terrain.MOUNTAIN:
+                                subtasks_completed.add(CrossMountain)
+                            else:
+                                raise RuntimeError
                             room = next(rooms_iter, None)
                             room_complete = True
                             if room is None:
@@ -430,6 +427,7 @@ class Env(gym.Env):
                             else:
                                 objects = dict(room)
                             required = Counter(next_required())
+                        agent_pos = new_pos % np.array(self.room_shape)
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
                     inventory.add(standing_on)
@@ -441,46 +439,6 @@ class Env(gym.Env):
                     inventory = {Refined(i.value) for i in inventory}
             else:
                 raise NotImplementedError
-
-    def hard_code_lower(
-        self, action, agent_pos, objects, inventory, standing_on, upper_action
-    ):
-        def get_nearest(o: Union[Resource, Terrain]):
-            def key(t):
-                p, _o = t
-                return np.sum(np.abs(np.array(p) - agent_pos)) if o == _o else np.inf
-
-            return min(objects.items(), key=key)[0]
-
-        def step_toward(o: Union[Resource, Terrain]):
-            nearest = get_nearest(o)
-            # TODO: disallow diagonal
-            return np.clip(np.array(nearest) - agent_pos, -1, 1)
-
-        lower_action = action.lower
-        if upper_action.interaction == Interaction.COLLECT:
-            if upper_action.resource in inventory:
-                lower_action = step_toward(Terrain.WATER)
-            elif standing_on == upper_action.resource:
-                lower_action = Interaction.COLLECT
-            else:
-                lower_action = step_toward(upper_action.resource)
-        elif upper_action.interaction == Interaction.REFINE:
-            if Refined(upper_action.resource.value) in inventory:
-                lower_action = step_toward(Terrain.WATER)
-            elif upper_action.resource in inventory:
-                lower_action = (
-                    Interaction.REFINE
-                    if standing_on == Terrain.FACTORY
-                    else step_toward(Terrain.FACTORY)
-                )
-            else:
-                lower_action = (
-                    Interaction.COLLECT
-                    if standing_on == upper_action.resource
-                    else step_toward(upper_action.resource)
-                )
-        return lower_action
 
     @staticmethod
     def initialize_inventory():
@@ -537,45 +495,53 @@ class Env(gym.Env):
         while True:
             yield reward, lambda: print("Reward:", reward)
 
-    def no_op_remaining_generator(self):
-        no_ops_remaining = self.no_op_limit
-        while True:
-            action = yield no_ops_remaining
-            if action == len(self.subtasks):
-                no_ops_remaining -= 1
-            no_ops_remaining -= 1
-
     def done_generator(self, *lines):
         state = yield
-        time_remaining = self.time_limit(lines)
+        time_remaining = self.eval_steps if self.evaluating else self.time_limit(lines)
 
         while True:
             done = state["success"]
-            if not self.evaluating:
-                done |= time_remaining == 0
-                time_remaining -= 1
-            state = yield done, lambda: print("Time remaining:", time_remaining)
+            done |= time_remaining == 0
+            time_remaining -= 1
+            state = yield done, lambda: print("Time remaining:", time_remaining + 1)
 
     def time_limit(self, lines):
         return len(lines) * self.time_per_subtask()
 
-    def info_generator(self, lines, rooms):
+    def info_generator(self, *lines):
         state = yield
         info = dict(len_failure_buffer=len(self.failure_buffer))
         rooms_complete = 0
 
         def update_info(success, done, inventory, subtasks_completed, action, **_):
+            if action is not None and isinstance(action.lower, Interaction):
+                if action.lower == Interaction.COLLECT:
+                    lower_error = action.upper.resource not in inventory
+                elif action.lower == Interaction.REFINE:
+                    lower_error = (
+                        action.upper.interaction != action.lower
+                        or Refined(action.upper.resource.value) not in inventory
+                    )
+                else:
+                    raise RuntimeError
+
+                info.update(lower_error=lower_error)
             if done:
                 info.update(
                     instruction_len=len(lines),
                     len_failure_buffer=len(self.failure_buffer),
                     rooms_complete=rooms_complete,
-                    progress=rooms_complete / len(rooms),
+                    progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
                 )
                 if Other.MAP in inventory:
                     upper_action = self.subtasks[int(action.upper)]
                     info.update(crossing_mountain=float(upper_action == CrossMountain))
+
+                if CrossMountain in subtasks_completed:
+                    info.update(crossing_mountain=1)
+                if Other.MAP in inventory:
+                    info.update(crossing_mountain=int(action.upper == CrossMountain))
 
         while True:
             rooms_complete += int(state["room_complete"])
@@ -659,24 +625,18 @@ class Env(gym.Env):
         rooms = [get_objects() for _ in range(n_rooms)]
         return rooms
 
-    def build_blocks(self):
+    def build_lines(self):
         n_lines = (
             self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
             if self.evaluating
             else self.random.random_integers(self.min_lines, self.max_lines)
         )
-
-        def get_blocks():
-            i = n_lines
-            while i > 0:
-                size = self.random.choice(self.chunk_size)
-                block = self.random.choice(self.block_subtasks, size=size)
-                block = block[: i - 1]  # for CrossWater
-                yield block
-                i -= len(block) + 1  # for CrossWater
-
-        blocks = list(get_blocks())
-        return blocks
+        lines = (
+            list(self.random.choice(self.line_subtasks, size=n_lines - 1))
+            if n_lines - 1
+            else []
+        )
+        return lines + [CrossWater]
 
     @staticmethod
     def inventory_representation(inventory):
@@ -723,7 +683,6 @@ class Env(gym.Env):
         state_dict = torch.load(lower_level_load_path, map_location="cpu")
         lower_level.load_state_dict(state_dict["agent"])
         print(f"Loaded lower_level from {lower_level_load_path}.")
-        subtask_list = list(subtasks())
 
         def action_fn(string):
             try:
@@ -742,9 +701,7 @@ class Env(gym.Env):
                 lower_env.Obs(
                     inventory=torch.from_numpy(s.inventory).float().unsqueeze(0),
                     obs=torch.from_numpy(s.obs).float().unsqueeze(0),
-                    line=torch.Tensor(self.preprocess_line(subtask_list[upper]))
-                    .float()
-                    .unsqueeze(0),
+                    line=torch.Tensor(self.preprocess_line(upper)).float().unsqueeze(0),
                 ),
                 None,
                 None,
@@ -765,7 +722,6 @@ class Env(gym.Env):
     def add_arguments(cls, p):
         p.add_argument("--min-lines", type=int)
         p.add_argument("--max-lines", type=int)
-        p.add_argument("--no-op-limit", type=int)
         p.add_argument("--break-on-fail", action="store_true")
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--failure-buffer-size", type=int)

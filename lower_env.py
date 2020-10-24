@@ -10,7 +10,6 @@ from enums import Interaction, Resource, Other, Terrain, InventoryItems
 
 
 Obs = namedtuple("Obs", "inventory line obs")
-action_space = spaces.Discrete(len(list(upper_env.lower_level_actions())))
 
 
 class Env(upper_env.Env):
@@ -25,7 +24,7 @@ class Env(upper_env.Env):
         self.observation_space = self.observation_space_from_upper(
             self.observation_space
         )
-        self.action_space = action_space
+        self.action_space = spaces.Discrete(len(list(self.lower_level_actions)))
 
     @staticmethod
     def observation_space_from_upper(observation_space):
@@ -39,7 +38,11 @@ class Env(upper_env.Env):
 
     def step(self, action: int):
         action = Action(
-            upper=0, lower=self.lower_level_actions[action], delta=0, dg=0, ptr=0
+            upper=self.subtasks[0],
+            lower=self.lower_level_actions[action],
+            delta=0,
+            dg=0,
+            ptr=0,
         )
         return self.iterator.send(action)
 
@@ -55,10 +58,10 @@ class Env(upper_env.Env):
     def time_limit(self, lines):
         return self.time_per_subtask()
 
-    def state_generator(self, *blocks):
-        iterator = super().state_generator(*blocks)
+    def state_generator(self, line, *lines):
+        iterator = super().state_generator(line, *lines)
         state, render = next(iterator)
-        line, *_ = self.get_lines(*blocks)
+
         if Other.MAP in state["inventory"]:
             line = CrossMountain
 
@@ -99,21 +102,29 @@ class Env(upper_env.Env):
             for x in self.lower_level_actions
         ]
         mapping = dict(
-            w=(-1, 0),
-            s=(1, 0),
-            a=(0, -1),
-            d=(0, 1),
+            # w=(-1, 0),
+            # s=(1, 0),
+            # a=(0, -1),
+            # d=(0, 1),
             c=Interaction.COLLECT,
             r=Interaction.REFINE,
         )
 
         def action_fn(string):
-            action = mapping.get(string, None)
+            try:
+                action = tuple(map(int, string.split()))
+            except ValueError:
+                action = mapping.get(string, None)
             if action is None:
                 return None
-            return actions.index(action)
+            if action in actions:
+                return actions.index(action)
 
         keyboard_control.run(self, action_fn=action_fn)
+
+
+def main(debug_env, **kwargs):
+    Env(rank=0, min_eval_lines=0, max_eval_lines=10, eval_steps=0, **kwargs).main()
 
 
 if __name__ == "__main__":
@@ -122,4 +133,4 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **vars(PARSER.parse_args())).main()
+    main(**vars(PARSER.parse_args()))

@@ -15,12 +15,10 @@ class Agent(networks.Agent, NNBase):
         self,
         entropy_coef,
         observation_space,
-        no_op_coef,
         action_space,
         **network_args,
     ):
         nn.Module.__init__(self)
-        self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = ours.Recurrence(
             observation_space=observation_space,
@@ -58,8 +56,6 @@ class Agent(networks.Agent, NNBase):
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
-        if probs.upper is not None:
-            aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
             aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
 

@@ -1,9 +1,10 @@
 import copy
 import json
+from pathlib import Path
 
 from hyperopt import hp
 
-with open("lower.json") as f:
+with Path(__file__).resolve().with_name("lower.json").open() as f:
     default_lower = json.load(f)
 
 default = {
@@ -50,7 +51,7 @@ default_upper = {
     "entropy_coef": 0.01,
     "env_id": "control-flow",
     "eps": 1e-5,
-    "eval_interval": 100,
+    "eval_interval": 1000000,
     "eval_steps": 500,
     "failure_buffer_size": 500,
     "fuzz": False,
@@ -61,7 +62,7 @@ default_upper = {
     "kernel_size": 1,
     "learning_rate": 0.003,
     "load_path": None,
-    "log_interval": 10,
+    "log_interval": 20000,
     "lower_embed_size": 64,
     "max_eval_lines": 50,
     "tgt_success_rate": 0.8,
@@ -70,8 +71,6 @@ default_upper = {
     "min_eval_lines": 1,
     "min_lines": 1,
     "no_eval": False,
-    "no_op_coef": 0,
-    "no_op_limit": 40,
     "no_pointer": False,
     "no_roll": False,
     "no_scan": False,
@@ -86,7 +85,7 @@ default_upper = {
     "recurrent": False,
     "render": False,
     "render_eval": False,
-    "save_interval": None,
+    "save_interval": 20000,
     "seed": 0,
     "sum_or_max": "sum",
     "stride": 1,
@@ -104,6 +103,7 @@ default_upper = {
     "windfall_prob": 0,
     "debug_env": False,
     "exact_count": False,
+    "hard_code_lower": False,
     # "bridge_failure_prob": 0.25,
     # "map_discovery_prob": 0.02,
     # "bandit_prob": 0.005,
@@ -125,19 +125,19 @@ search.update(
 search_upper = copy.deepcopy(default_upper)
 search_upper.update(
     conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
-    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
+    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015]),
     gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
-    hidden_size=hp.choice("hidden_size", [128, 256, 512]),
+    hidden_size=hp.choice("hidden_size", [256, 512]),
     inventory_hidden_size=hp.choice("inventory_hidden_size", [64, 128, 256]),
     kernel_size=hp.choice("kernel_size", [1, 2, 3]),
     learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
     lower_embed_size=hp.choice("lower_embed_size", [32, 64, 128]),
     num_batch=hp.choice("num_batch", [1, 2]),
     num_edges=hp.choice("num_edges", [2, 4, 6]),
-    num_processes=hp.choice("num_processes", [50, 100, 150]),
+    num_processes=150,
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
     stride=hp.choice("stride", [1, 2, 3]),
-    tgt_success_rate=hp.choice("tgt_success_rate", [0.5, 0.7, 0.8, 0.9, 1]),
+    tgt_success_rate=hp.choice("tgt_success_rate", [0.7, 0.8, 0.9, 1]),
     task_embed_size=hp.choice("task_embed_size", [32, 64, 128]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
     use_gae=hp.choice("use_gae", [True, False]),
@@ -181,16 +181,4 @@ configs = dict(
     default_upper=default_upper,
     debug_default=debug_default,
     search=search,
-)
-debug_default = copy.deepcopy(default)
-debug_default.update(
-    kernel_size=1,
-    stride=1,
-    world_size=1,
-)
-configs = dict(
-    search=search,
-    debug_search=debug_search,
-    default=default,
-    debug_default=debug_default,
 )

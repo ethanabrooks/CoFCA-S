@@ -85,12 +85,8 @@ def obs_to_dict(obs):
     return {None: obs}
 
 
-def set_seeds(cuda, cuda_deterministic, seed):
+def set_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
-    cuda &= torch.cuda.is_available()
-    if cuda and cuda_deterministic:
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
     torch.set_num_threads(1)
