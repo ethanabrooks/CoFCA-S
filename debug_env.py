@@ -1,131 +1,136 @@
-from typing import List, Generator, Tuple, Optional
-
-from gym import spaces
+from collections import Counter
+from pprint import pprint
 import numpy as np
 
-from lines import If, While
-from utils import hierarchical_parse_args, RESET, GREEN, RED
-
-import env
-import keyboard_control
-from env import ObjectMap, Coord, Line, State, Action, Obs
+import upper_env
+from enums import Interaction, Refined, Other, Terrain
+from lines import Subtask
+from upper_env import Action
 
 
-class Env(env.Env):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.observation_space.spaces.update(
-            inventory=spaces.MultiBinary(1),
-            obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
-        )
+class Env(upper_env.Env):
+    def time_per_subtask(self):
+        e = 0.0001
+        return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
 
-    def state_generator(
-        self, objects: ObjectMap, agent_pos: Coord, lines: List[Line], **kwargs
-    ) -> Generator[State, Tuple[int, int], None]:
+    def state_generator(self, *blocks):
+        rooms = self.build_rooms(*blocks)
+        assert len(rooms) == len(blocks)
+        rooms_iter = iter(rooms)
+        blocks_iter = iter(blocks)
 
-        line_iterator = self.line_generator(lines)
-        condition_bit = self.random.choice(2)
-        subtask_iterator = self.subtask_generator(
-            line_iterator, lines, condition_bit=condition_bit
-        )
-        prev, ptr = 0, next(subtask_iterator)
-        term = False
+        def next_required():
+            block = next(blocks_iter, None)
+            if block is not None:
+                for subtask in block:
+                    if subtask.interaction == Interaction.COLLECT:
+                        yield subtask.resource
+                    elif subtask.interaction == Interaction.REFINE:
+                        yield Refined(subtask.resource.value)
+                    else:
+                        assert subtask.interaction == Interaction.BUILD
+
+        required = Counter(next_required())
+        objects = dict(next(rooms_iter))
+        agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
+        build_supplies = Counter()
+        inventory = self.initialize_inventory()
+        success = False
+        action = None
+        subtasks_completed = set()
+        room_complete = False
 
         while True:
-            state = State(
-                obs=[condition_bit],
-                prev=prev,
-                ptr=ptr,
-                term=term,
-                subtask_complete=True,
-                time_remaining=0,
-                counts=condition_bit,
-                inventory=None,
+            self.make_feasible(objects)
+            if room_complete:
+                room = next(rooms_iter, None)
+                if room is None:
+                    success = True
+                else:
+                    objects = dict(room)
+                required = Counter(next_required())
+
+            state = dict(
+                inventory=inventory,
+                agent_pos=agent_pos,
+                objects=objects,
+                action=action,
+                success=success,
+                subtasks_completed=subtasks_completed,
+                room_complete=room_complete,
+                required=required,
             )
-            subtask_id, lower_level_index = yield state
-            term = subtask_id != self.subtasks.index(lines[ptr].id)
-            condition_bit = self.random.choice(2)
-            prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
 
-    def inventory_representation(self, state):
-        return np.array([0])
+            def render():
+                print("Inventory:")
+                pprint(inventory)
+                print("Build Supplies:")
+                pprint(build_supplies)
+                print("Required:")
+                pprint(required)
 
-    def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
-        return bool(condition_bit)
+            self.render_thunk = render
+            # for name, space in self.observation_space.spaces.items():
+            #     if not space.contains(s[name]):
+            #         import ipdb
+            #
+            #         ipdb.set_trace()
+            #         space.contains(s[name])
+            action = yield state, render  # type: Action
+            subtasks_completed = set()
+            room_complete = False
+            if self.random.random() < self.bandit_prob:
+                possessions = [k for k, v in build_supplies.items() if v > 0]
+                if possessions:
+                    robbed = self.random.choice(possessions)
+                    build_supplies[robbed] -= 1
+            upper_action = self.subtasks[int(action.upper)]
+            assert isinstance(upper_action, Subtask)
+            if upper_action.interaction == Interaction.COLLECT:
+                build_supplies[upper_action.resource] += 1
+                subtasks_completed.add(upper_action)
+                if self.random.random() < self.map_discovery_prob:
+                    inventory.add(Other.MAP)
+            elif upper_action.interaction == Interaction.REFINE:
+                build_supplies[Refined(upper_action.resource.value)] += 1
+                subtasks_completed.add(upper_action)
+                if self.random.random() < self.map_discovery_prob:
+                    inventory.add(Other.MAP)
 
-    def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
-        return (0, 0), {}
-
-    def feasible(self, objects, lines) -> bool:
-        return True
-
-    def render_world(
-        self,
-        state,
-        action,
-        lower_level_action,
-        reward,
-    ):
-        if action is not None and action < len(self.subtasks):
-            print("Selected:", self.subtasks[action], action)
-        print("Action:", action)
-        print("Reward", reward)
-        for i, subtask in enumerate(self.subtasks):
-            print(i, subtask)
-
-    def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
-    ):
-
-        if term:
-            print(GREEN if success else RED)
-        indent = 0
-        for i, line in enumerate(lines):
-            if i == state.ptr and i == agent_ptr:
-                pre = "+ "
-            elif i == agent_ptr:
-                pre = "- "
-            elif i == state.ptr:
-                pre = "| "
-            else:
-                pre = "  "
-            indent += line.depth_change[0]
-            if type(line) in (If, While):
-                evaluation = state.counts
-                line_str = f"{line} {evaluation}"
-            else:
-                line_str = str(line)
-            print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
-            indent += line.depth_change[1]
-        print("Condition bit:", state.counts)
-        print(RESET)
+            elif upper_action.interaction == Interaction.CROSS:
+                if upper_action.resource == Terrain.MOUNTAIN and Other.MAP in inventory:
+                    room_complete = True
+                    inventory.remove(Other.MAP)
+                    subtasks_completed.add(upper_action)
+                elif upper_action.resource == Terrain.WATER:
+                    if (
+                        (
+                            required + Counter() == build_supplies + Counter()
+                        )  # inventory == required
+                        if self.exact_count
+                        else (
+                            not required - build_supplies
+                        )  # inventory dominates required
+                    ):
+                        build_supplies -= required  # build bridge
+                        if self.random.random() > self.bridge_failure_prob:
+                            room_complete = True
+                            subtasks_completed.add(upper_action)
 
 
-def main(env: Env):
-    def action_fn(string):
-        try:
-            action = int(string)
-            if action > env.num_subtasks:
-                raise ValueError
-        except ValueError:
-            return None
-
-        return np.array(Action(upper=action, lower=0, delta=0, dg=0, ptr=0))
-
-    keyboard_control.run(env, action_fn=action_fn)
+def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
+    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **kwargs).main(
+        lower_level_load_path=lower_level_load_path,
+        lower_level_config=lower_level_config,
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int, required=True)
-    PARSER.add_argument("--max-eval-lines", type=int, required=True)
-    env.add_arguments(PARSER)
+    Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, lower_level=None, **hierarchical_parse_args(PARSER)))
+    PARSER.add_argument("--lower-level-config", default="lower.json")
+    PARSER.add_argument("--lower-level-load-path", default="lower.pt")
+    main(**vars(PARSER.parse_args()))

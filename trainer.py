@@ -1,38 +1,44 @@
 import inspect
 import itertools
 import os
-import sys
-from collections import namedtuple
+import time
+from argparse import ArgumentParser
+from collections import namedtuple, Counter
 from pathlib import Path
-from pprint import pprint
 from typing import Dict, Optional
 
 import gym
 import ray
 import torch
+import torch.nn as nn
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
-from aggregator import SumAcrossEpisode, InfosAggregator, EvalWrapper
+import arguments
+from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
+from configs import default
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import get_device
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
 
 class Trainer:
+    metric = "reward"
+    default = default
+
     @classmethod
     def structure_config(cls, **config):
         agent_args = {}
         rollouts_args = {}
         ppo_args = {}
+        env_args = {}
         gen_args = {}
         for k, v in config.items():
             if k in ["num_processes"]:
@@ -48,16 +54,20 @@ class Trainer:
                     rollouts_args[k] = v
                 if k in inspect.signature(PPO.__init__).parameters:
                     ppo_args[k] = v
+                if k in inspect.signature(cls.make_env).parameters:
+                    env_args[k] = v
                 if k in inspect.signature(cls.run).parameters or k not in (
                     list(agent_args.keys())
                     + list(rollouts_args.keys())
                     + list(ppo_args.keys())
+                    + list(env_args.keys())
                 ):
                     gen_args[k] = v
         config = dict(
             agent_args=agent_args,
             rollouts_args=rollouts_args,
             ppo_args=ppo_args,
+            env_args=env_args,
             **gen_args,
         )
         return config
@@ -90,26 +100,23 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
-        env_id: str,
         log_dir: Optional[str],
         log_interval: int,
-        name: str,
         normalize: float,
-        num_iterations: int,
+        num_frames: int,
         num_processes: int,
         ppo_args: dict,
-        render_eval: bool,
         rollouts_args: dict,
         seed: int,
         save_interval: int,
         synchronous: bool,
         train_steps: int,
-        use_tune: bool,
         eval_interval: int = None,
         eval_steps: int = None,
-        no_eval: bool = False,
         load_path: Path = None,
+        no_eval: bool = False,
         render: bool = False,
+        render_eval: bool = False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -117,23 +124,12 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        if use_tune:
-            report_iterator = None
-        else:
+        if tune.is_session_enabled():
+            with tune.checkpoint_dir(0) as _dir:
+                log_dir = str(Path(_dir).parent)
 
-            def report_generator():
-                writer = SummaryWriter(logdir=str(log_dir)) if log_dir else None
-
-                for i in itertools.count():
-                    if i % log_interval == 0:
-                        values = yield
-                        pprint(values)
-                        if writer:
-                            for k, v in values.items():
-                                writer.add_scalar(k, v, i)
-
-            report_iterator = report_generator()
-            next(report_iterator)
+        reporter = self.report_generator(log_dir)
+        next(reporter)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -142,10 +138,9 @@ class Trainer:
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
-            use_dummy = len(env_fns) == 1 or sys.platform == "darwin" or synchronous
             return VecPyTorch(
                 DummyVecEnv(env_fns, render=render)
-                if use_dummy
+                if len(env_fns) == 1 or synchronous
                 else SubprocVecEnv(env_fns)
             )
 
@@ -179,10 +174,13 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(cuda, cuda_deterministic, seed)
+        set_seeds(seed)
+        if cuda and cuda_deterministic:
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
 
         if cuda:
-            device = torch.device("cuda") if name else get_device(name)
+            device = torch.device("cuda")
         else:
             device = torch.device("cpu")
         print("Using device", device)
@@ -206,18 +204,28 @@ class Trainer:
                 rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
-            train_report = SumAcrossEpisode()
-            train_infos = InfosAggregator()
-            start = 0
+            train_report = EpisodeAggregator()
+            train_infos = self.build_infos_aggregator()
+            train_results = {}
             if load_path:
-                start = self.load_checkpoint(load_path, ppo, agent, device)
+                self.load_checkpoint(load_path, ppo, agent, device)
 
             rollouts.obs[0].copy_(train_envs.reset())
+            frames_per_update = train_steps * num_processes
+            frames = Counter()
+            time_spent = Counter()
 
-            for i in range(start, num_iterations + 1):
-                eval_report = EvalWrapper(SumAcrossEpisode())
+            for i in itertools.count():
+                frames.update(so_far=frames_per_update)
+                done = frames["so_far"] >= num_frames
+                eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
-                if eval_interval and not no_eval and i % eval_interval == 0:
+                if done or (
+                    not no_eval
+                    and eval_interval
+                    and frames["since_eval"] > eval_interval
+                ):
+                    frames["since_eval"] = 0
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
                     #     vec_norm.eval()
@@ -250,6 +258,34 @@ class Trainer:
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
+                if done or frames["since_log"] > log_interval:
+                    tick = time.time()
+                    frames["since_log"] = 0
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
+                    )
+                    train_report.reset()
+                    train_infos.reset()
+                    time_spent["logging"] += time.time() - tick
+
+                if done or (save_interval and frames["since_save"] > save_interval):
+                    tick = time.time()
+                    frames["since_save"] = 0
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    time_spent["saving"] += time.time() - tick
+
+                if done:
+                    break
 
                 for output in run_epoch(
                     obs=rollouts.obs[0],
@@ -272,6 +308,11 @@ class Trainer:
                         rewards=output.reward,
                         masks=output.masks,
                     )
+                    frames.update(
+                        since_save=num_processes,
+                        since_log=num_processes,
+                        since_eval=num_processes,
+                    )
 
                 with torch.no_grad():
                     next_value = agent.get_value(
@@ -284,40 +325,37 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
-                if i % log_interval == 0:
-                    report = dict(
-                        **train_results,
-                        **dict(train_report.items()),
-                        **dict(train_infos.items()),
-                        **dict(eval_report.items()),
-                        **dict(eval_infos.items()),
-                        step=i,
-                    )
-                    if use_tune:
-                        tune.report(**report)
-                    else:
-                        assert report_iterator is not None
-                        report_iterator.send(report)
-                    train_report = SumAcrossEpisode()
-                    train_infos = InfosAggregator()
-                if save_interval and i % save_interval == 0:
-                    if use_tune:
-                        with tune.checkpoint_dir(i) as _dir:
-                            checkpoint_dir = _dir
-                    else:
-                        checkpoint_dir = Path(log_dir) if log_dir else None
-
-                    if checkpoint_dir:
-                        self.save_checkpoint(
-                            checkpoint_dir, ppo=ppo, agent=agent, step=i
-                        )
-
         finally:
             train_envs.close()
 
     @staticmethod
-    def build_agent(envs, **agent_args):
-        return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
+    def report_generator(log_dir: Optional[str]):
+
+        if tune.is_session_enabled():
+            report = tune.report
+        else:
+            writer = SummaryWriter(logdir=log_dir) if log_dir else None
+
+            def report(training_iteration, **args):
+                if writer:
+                    for k, v in args.items():
+                        writer.add_scalar(k, v, global_step=training_iteration)
+
+        while True:
+            kwargs = yield
+            report(**kwargs)
+
+    def build_infos_aggregator(self):
+        return InfosAggregator()
+
+    @staticmethod
+    def build_agent(envs, activation=nn.ReLU(), **agent_args):
+        return Agent(
+            envs.observation_space.shape,
+            envs.action_space,
+            activation=activation,
+            **agent_args,
+        )
 
     @staticmethod
     def make_env(env_id, seed, rank, evaluating, **kwargs):
@@ -326,7 +364,7 @@ class Trainer:
         return env
 
     @classmethod
-    def main(
+    def launch(
         cls,
         gpus_per_trial: float,
         cpus_per_trial: float,
@@ -334,13 +372,23 @@ class Trainer:
         num_samples: int,
         name: str,
         config: dict,
+        seed: Optional[int],
         **kwargs,
     ):
+        if config is None:
+            config = cls.default
+            if seed is not None:
+                config[seed] = seed
+
         for k, v in kwargs.items():
             if k not in config or v is not None:
-                config[k] = v
+                if isinstance(v, bool):  # handle store_{true, false} differently
+                    if v != cls.default[k]:  # flag used
+                        config[k] = v
+                else:
+                    config[k] = v
 
-        config.update(name=name, log_dir=log_dir)
+        config.update(log_dir=log_dir)
 
         def run(c):
             c = cls.structure_config(**c)
@@ -348,20 +396,20 @@ class Trainer:
 
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
-            config.update(use_tune=False)
             run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
-            config.update(use_tune=True)
 
             if local_mode:
                 print("Using local mode because num_samples is None")
                 kwargs = dict()
             else:
                 kwargs = dict(
-                    search_alg=HyperOptSearch(config, metric="eval_reward"),
+                    search_alg=HyperOptSearch(
+                        config, metric=cls.metric, mode="max", random_state_seed=seed
+                    ),
                     num_samples=num_samples,
                 )
             if log_dir is not None:
@@ -374,3 +422,17 @@ class Trainer:
                 resources_per_trial=resources_per_trial,
                 **kwargs,
             )
+
+    @classmethod
+    def add_arguments(cls, parser):
+        return arguments.add_arguments(parser)
+
+    @classmethod
+    def main(cls):
+        parser = ArgumentParser()
+        cls.add_arguments(parser)
+        cls.launch(**vars(parser.parse_args()))
+
+
+if __name__ == "__main__":
+    Trainer.main()
