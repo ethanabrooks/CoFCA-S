@@ -342,7 +342,7 @@ class Env(gym.Env):
                 pprint(build_supplies)
                 print("Required:")
                 pprint(required)
-                print("Chance events:", *chance_events)
+                print("Chance events:", fg("purple_1b"), *chance_events, RESET)
 
             self.render_thunk = render
             # for name, space in self.observation_space.spaces.items():
