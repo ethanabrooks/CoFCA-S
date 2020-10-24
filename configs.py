@@ -40,6 +40,19 @@ default = {
     "value_loss_coef": 0.5,
 }
 
+search = copy.deepcopy(default)
+search.update(
+    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
+    hidden_size=hp.choice("hidden_size", [128, 256, 512]),
+    learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
+    num_batch=hp.choice("num_batch", [1, 2]),
+    num_processes=hp.choice("num_processes", [50, 100, 150]),
+    ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
+    train_steps=hp.choice("train_steps", [20, 25, 30]),
+    use_gae=hp.choice("use_gae", [True, False]),
+)
+
+
 default_upper = {
     "break_on_fail": False,
     "clip_param": 0.2,
@@ -110,35 +123,21 @@ default_upper = {
     # "windfall_prob": 0.25,
 }
 
-search = copy.deepcopy(default)
-search.update(
-    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
-    hidden_size=hp.choice("hidden_size", [128, 256, 512]),
-    learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
-    num_batch=hp.choice("num_batch", [1, 2]),
-    num_processes=hp.choice("num_processes", [50, 100, 150]),
-    ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
-    train_steps=hp.choice("train_steps", [20, 25, 30]),
-    use_gae=hp.choice("use_gae", [True, False]),
-)
-
 search_upper = copy.deepcopy(default_upper)
 search_upper.update(
-    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
+    conv_hidden_size=hp.choice("conv_hidden_size", [64, 128]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015]),
-    gate_coef=hp.choice("gate_coef", [0, 0.01, 0.05]),
     hidden_size=hp.choice("hidden_size", [256, 512]),
-    inventory_hidden_size=hp.choice("inventory_hidden_size", [64, 128, 256]),
+    inventory_hidden_size=hp.choice("inventory_hidden_size", [128, 256]),
     kernel_size=hp.choice("kernel_size", [1, 2, 3]),
-    learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
+    learning_rate=hp.choice("learning_rate", [0.003, 0.004]),
     lower_embed_size=hp.choice("lower_embed_size", [32, 64, 128]),
     num_batch=hp.choice("num_batch", [1, 2]),
     num_edges=hp.choice("num_edges", [2, 4, 6]),
-    num_processes=150,
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
-    stride=hp.choice("stride", [1, 2, 3]),
+    stride=hp.choice("stride", [1, 2]),
     tgt_success_rate=hp.choice("tgt_success_rate", [0.7, 0.8, 0.9, 1]),
-    task_embed_size=hp.choice("task_embed_size", [32, 64, 128]),
+    task_embed_size=hp.choice("task_embed_size", [32, 64]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
     use_gae=hp.choice("use_gae", [True, False]),
 )
