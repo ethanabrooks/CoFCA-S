@@ -427,6 +427,7 @@ class Env(gym.Env):
                             else:
                                 objects = dict(room)
                             required = Counter(next_required())
+                            build_supplies = Counter()
                         agent_pos = new_pos % np.array(self.room_shape)
             elif action.lower == Interaction.COLLECT:
                 if standing_on in list(Resource):
