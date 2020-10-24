@@ -1,0 +1,1 @@
+- index into rolled before feeding to task_encoder

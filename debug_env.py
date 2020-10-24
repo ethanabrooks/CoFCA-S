@@ -13,7 +13,8 @@ class Env(upper_env.Env):
         e = 0.0001
         return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
 
-    def state_generator(self, *blocks):
+    def state_generator(self, *lines):
+        blocks = list(self.get_blocks(*lines))
         rooms = self.build_rooms(*blocks)
         assert len(rooms) == len(blocks)
         rooms_iter = iter(rooms)
@@ -84,25 +85,24 @@ class Env(upper_env.Env):
                 if possessions:
                     robbed = self.random.choice(possessions)
                     build_supplies[robbed] -= 1
-            upper_action = self.subtasks[int(action.upper)]
-            assert isinstance(upper_action, Subtask)
-            if upper_action.interaction == Interaction.COLLECT:
-                build_supplies[upper_action.resource] += 1
-                subtasks_completed.add(upper_action)
+            assert isinstance(action.upper, Subtask)
+            if action.upper.interaction == Interaction.COLLECT:
+                build_supplies[action.upper.resource] += 1
+                subtasks_completed.add(action.upper)
                 if self.random.random() < self.map_discovery_prob:
                     inventory.add(Other.MAP)
-            elif upper_action.interaction == Interaction.REFINE:
-                build_supplies[Refined(upper_action.resource.value)] += 1
-                subtasks_completed.add(upper_action)
+            elif action.upper.interaction == Interaction.REFINE:
+                build_supplies[Refined(action.upper.resource.value)] += 1
+                subtasks_completed.add(action.upper)
                 if self.random.random() < self.map_discovery_prob:
                     inventory.add(Other.MAP)
 
-            elif upper_action.interaction == Interaction.CROSS:
-                if upper_action.resource == Terrain.MOUNTAIN and Other.MAP in inventory:
+            elif action.upper.interaction == Interaction.CROSS:
+                if action.upper.resource == Terrain.MOUNTAIN and Other.MAP in inventory:
                     room_complete = True
                     inventory.remove(Other.MAP)
-                    subtasks_completed.add(upper_action)
-                elif upper_action.resource == Terrain.WATER:
+                    subtasks_completed.add(action.upper)
+                elif action.upper.resource == Terrain.WATER:
                     if (
                         (
                             required + Counter() == build_supplies + Counter()
@@ -115,7 +115,7 @@ class Env(upper_env.Env):
                         build_supplies -= required  # build bridge
                         if self.random.random() > self.bridge_failure_prob:
                             room_complete = True
-                            subtasks_completed.add(upper_action)
+                            subtasks_completed.add(action.upper)
 
 
 def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
