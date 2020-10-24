@@ -268,7 +268,9 @@ class Env(gym.Env):
                 print("No op")
             else:
                 # noinspection PyProtectedMember
-                print(action)
+                for k, v in action._asdict().items():
+                    print(f"{k}=({str(v)})", end=" ")
+                print()
             render_s()
             print(RESET)
 
@@ -512,6 +514,18 @@ class Env(gym.Env):
         rooms_complete = 0
 
         def update_info(success, done, inventory, subtasks_completed, action, **_):
+            if action is not None and isinstance(action.lower, Interaction):
+                if action.lower == Interaction.COLLECT:
+                    lower_error = action.upper.resource not in inventory
+                elif action.lower == Interaction.REFINE:
+                    lower_error = (
+                        action.upper.interaction != action.lower
+                        or Refined(action.upper.resource.value) not in inventory
+                    )
+                else:
+                    raise RuntimeError
+
+                info.update(lower_error=lower_error)
             if done:
                 info.update(
                     instruction_len=len(lines),
@@ -520,18 +534,6 @@ class Env(gym.Env):
                     progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
                 )
-                if isinstance(action.lower, Interaction):
-                    if action.lower == Interaction.COLLECT:
-                        lower_error = action.upper.resource not in inventory
-                    elif action.lower == Interaction.REFINE:
-                        lower_error = (
-                            action.upper.interaction != action.lower
-                            or Refined(action.upper.resource.value) not in inventory
-                        )
-                    else:
-                        raise RuntimeError
-
-                    info.update(lower_error=lower_error)
 
                 if CrossMountain in subtasks_completed:
                     info.update(crossing_mountain=1)
