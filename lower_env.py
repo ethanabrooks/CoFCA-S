@@ -102,10 +102,10 @@ class Env(upper_env.Env):
             for x in self.lower_level_actions
         ]
         mapping = dict(
-            # w=(-1, 0),
-            # s=(1, 0),
-            # a=(0, -1),
-            # d=(0, 1),
+            w=(-1, 0),
+            s=(1, 0),
+            a=(0, -1),
+            d=(0, 1),
             c=Interaction.COLLECT,
             r=Interaction.REFINE,
         )

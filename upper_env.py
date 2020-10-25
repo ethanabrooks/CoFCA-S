@@ -376,8 +376,8 @@ class Env(gym.Env):
                             subtasks_completed.add(
                                 Subtask(Interaction.REFINE, Resource(item.value))
                             )
-                    build_supplies.update(inventory)
-                    inventory = set()
+                    build_supplies.update(inventory - {Other.MAP})
+                    inventory &= {Other.MAP}
 
                 def next_room():
                     h, w = new_pos
@@ -411,9 +411,9 @@ class Env(gym.Env):
                             chance_events.add("bridge failed")
                         # else bridge failed
                     else:
-                        if moving_into == Terrain.MOUNTAIN:
-                            inventory.remove(Other.MAP)
                         if next_room():
+                            if Other.MAP in inventory:
+                                inventory.remove(Other.MAP)
                             if standing_on == Terrain.WATER:
                                 subtasks_completed.add(CrossWater)
                             elif standing_on == Terrain.MOUNTAIN:
