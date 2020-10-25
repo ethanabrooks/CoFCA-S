@@ -265,6 +265,7 @@ class Recurrence(nn.Module):
                     mask = torch.stack(
                         [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
                     )[p, R]
+                    self.print(mask.view(N, nl))
                     G, _ = self.task_encoder(rolled_M)
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
