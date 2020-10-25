@@ -52,7 +52,6 @@ class LowerLevel(NNBase):
     ):
         if type(obs_spaces) is spaces.Dict:
             obs_spaces = Obs(**obs_spaces.spaces)
-        assert num_layers > 0
         super().__init__(
             recurrent=recurrent,
             recurrent_input_size=None,

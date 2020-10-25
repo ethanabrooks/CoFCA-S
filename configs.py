@@ -155,7 +155,7 @@ search_lower.update(
     num_batch=hp.choice("num_batch", [1, 2]),
     num_conv_layers=1,
     num_frames=30000000,
-    num_layers=1,
+    num_layers=hp.choice("num_layers", [0, 1]),
     num_processes=150,
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
     stride=hp.choice("stride", [1, 2]),
