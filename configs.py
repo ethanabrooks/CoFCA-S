@@ -143,19 +143,22 @@ search_upper.update(
 
 search_lower = copy.deepcopy(default_lower)
 search_lower.update(
-    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64]),
+    conv_hidden_size=hp.choice("conv_hidden_size", [16, 32, 64]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015, 0.02]),
-    hidden_size=hp.choice("hidden_size", [32, 64, 128, 256]),
-    kernel_size=hp.choice("kernel_size", [2, 3, 4]),
+    eval_interval=float("inf"),
+    hidden_size=hp.choice("hidden_size", [32, 64, 128]),
+    inventory_hidden_size=hp.choice("inventory_hidden_size", [16, 32, 64]),
+    task_embed_size=hp.choice("task_embed_size", [16, 32, 64]),
+    kernel_size=hp.choice("kernel_size", [1, 2, 3]),
     learning_rate=hp.choice("learning_rate", [0.002, 0.003, 0.004]),
-    tgt_success_rate=hp.choice("tgt_success_rate", [0.5, 0.7, 0.8, 0.9, 1]),
+    tgt_success_rate=hp.choice("tgt_success_rate", [0.7, 0.8, 0.9, 1]),
     num_batch=hp.choice("num_batch", [1, 2]),
     num_conv_layers=1,
+    num_frames=30000000,
     num_layers=1,
     num_processes=150,
     ppo_epoch=hp.choice("ppo_epoch", [1, 2, 3]),
     stride=hp.choice("stride", [1, 2]),
-    sum_or_max=hp.choice("sum_or_max", ["sum", "max"]),
     train_steps=hp.choice("train_steps", [20, 25, 30]),
     use_gae=hp.choice("use_gae", [True, False]),
 )
