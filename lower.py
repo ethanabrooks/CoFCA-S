@@ -58,10 +58,12 @@ class LowerTrainer(UpperTrainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
+        parser.add_argument("--conv-hidden-size", type=int)
+        parser.add_argument("--inventory-hidden-size", type=int)
+        parser.add_argument("--task-embed-size", type=int)
         parser.add_argument("--num-conv-layers", type=int)
         parser.add_argument("--kernel-size", type=int)
         parser.add_argument("--stride", type=int)
-        parser.add_argument("--sum-or-max")
 
 
 if __name__ == "__main__":
