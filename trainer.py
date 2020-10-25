@@ -377,8 +377,8 @@ class Trainer:
     ):
         if config is None:
             config = cls.default
-            if seed is not None:
-                config[seed] = seed
+        if seed is not None:
+            config.update(seed=seed)
 
         for k, v in kwargs.items():
             if k not in config or v is not None:
