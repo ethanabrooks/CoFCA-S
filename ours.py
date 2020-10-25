@@ -235,10 +235,10 @@ class Recurrence(nn.Module):
                 if self.no_roll:
                     H, _ = self.task_encoder(M)
                 else:
-                    rolled = torch.cat(
+                    rolled_M = torch.cat(
                         [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
                     )
-                    _, H = self.task_encoder(rolled)
+                    _, H = self.task_encoder(rolled_M)
                 H = H.transpose(0, 1).reshape(nl, N, -1)
                 P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
             elif self.transformer:
@@ -258,13 +258,16 @@ class Recurrence(nn.Module):
                         dim=-1,
                     ).transpose(0, 1)
                 else:
-                    rolled = torch.stack(
+                    rolled_M = torch.stack(
                         [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
                     )[p, R]
-                    G, _ = self.task_encoder(rolled)
+                    mask = state.mask[0].view(N, nl, 1, 1)
+                    mask = torch.stack(
+                        [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
+                    )[p, R]
+                    G, _ = self.task_encoder(rolled_M)
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
-                mask = state.mask[0].view(N, nl, 1, 1)
                 B = B * (1 - mask)
                 # arange = torch.zeros(6).float()
                 # arange[0] = 1
@@ -279,8 +282,8 @@ class Recurrence(nn.Module):
                 B = (1 - last).flip(1) * B  # this ensures the first B is 0
                 zero_last = (1 - last) * B
                 B = zero_last + last  # this ensures that the last B is 1
-                rolled = torch.roll(zero_last, shifts=1, dims=1)
-                C = torch.cumprod(1 - rolled, dim=1)
+                rolled_M = torch.roll(zero_last, shifts=1, dims=1)
+                C = torch.cumprod(1 - rolled_M, dim=1)
                 P = B * C
                 P = P.view(N, nl, 2, self.ne)
                 f, b = torch.unbind(P, dim=2)
