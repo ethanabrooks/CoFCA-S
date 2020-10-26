@@ -142,12 +142,14 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(hidden_size, 1))
         assert lower_level_load_path
         lower_level_params = dict(
-            hidden_size=128,
+            conv_hidden_size=32,
+            hidden_size=64,
+            inventory_hidden_size=32,
             kernel_size=3,
             num_conv_layers=1,
             num_layers=1,
-            stride=2,
-            sum_or_max="sum",
+            stride=1,
+            task_embed_size=32,
             recurrent=False,
         )
         if lower_level_config:
