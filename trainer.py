@@ -11,6 +11,7 @@ import gym
 import ray
 import torch
 import torch.nn as nn
+from colored import fg
 from hyperopt.pyll import Apply
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
@@ -25,6 +26,7 @@ from configs import default
 from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
+from utils import RESET
 from wrappers import VecPyTorch
 import hyperopt as hp
 
@@ -397,24 +399,35 @@ class Trainer:
         def run(_search):
             cls().run(**cls.structure_config(**_search, **fixed))
 
+        def print_color(string):
+            print(fg("gold_1"), string, RESET, sep="")
+
         if num_samples is None:
-            print("Not using tune, because num_samples was not specified")
+            print_color("Not using tune, because num_samples was not specified.")
             run(search)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
+            resources_per_trial = dict(
+                gpu=gpus_per_trial if torch.cuda.is_available() else 0,
+                cpu=cpus_per_trial,
+            )
 
-            if local_mode:
-                print("Using local mode because num_samples is None")
-                kwargs = dict()
-            else:
+            if search:
+                print_color(
+                    "Using hyperopt because search values were found in config."
+                )
                 kwargs = dict(
                     search_alg=HyperOptSearch(
                         search, metric=cls.metric, mode="max", random_state_seed=seed
                     ),
                     num_samples=num_samples,
                 )
+            else:
+                print_color(
+                    "Using local mode because no search values were found in config."
+                )
+                kwargs = dict()
             if log_dir is not None:
                 kwargs.update(local_dir=log_dir)
 
