@@ -498,8 +498,9 @@ class Env(gym.Env):
 
     def done_generator(self, *lines):
         state = yield
-        time_remaining = self.eval_steps if self.evaluating else self.time_limit(lines)
-
+        time_remaining = (
+            self.eval_steps - 1 if self.evaluating else self.time_limit(lines)
+        )
         while True:
             done = state["success"]
             done |= time_remaining == 0
@@ -511,8 +512,10 @@ class Env(gym.Env):
 
     def info_generator(self, *lines):
         state = yield
-        info = dict(len_failure_buffer=len(self.failure_buffer))
+        info = dict(len_failure_buffer=float(len(self.failure_buffer)))
         rooms_complete = 0
+        time_limit = self.time_limit(lines)
+        time_elapsed = 0
 
         def update_info(success, done, inventory, subtasks_completed, action, **_):
             if action is not None and isinstance(action.lower, Interaction):
@@ -534,7 +537,14 @@ class Env(gym.Env):
                     rooms_complete=rooms_complete,
                     progress=rooms_complete / lines.count(CrossWater),
                     success=float(success),
+                    train_time_success=float(time_elapsed <= time_limit),
+                    normalized_elapsed_time=time_elapsed / time_limit
                 )
+                if self.evaluating:
+                    bucket = 10 * (len(lines) // 10)
+                    info["time_elapsed" + str(bucket)] = time_elapsed
+                    for key in ["success", "train_time_success", "normalized_elapsed_time"]:
+                        info[key + str(bucket)] = info[key]
 
                 if CrossMountain in subtasks_completed:
                     info.update(crossing_mountain=1)
@@ -544,6 +554,7 @@ class Env(gym.Env):
         while True:
             rooms_complete += int(state["room_complete"])
             update_info(**state)
+            time_elapsed += 1
             # line_specific_info = {
             #     f"{k}_{10 * (len(blocks) // 10)}": v for k, v in info.items()
             # }
