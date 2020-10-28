@@ -11,8 +11,6 @@ import gym
 import ray
 import torch
 import torch.nn as nn
-from colored import fg
-from hyperopt.pyll import Apply
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
@@ -28,7 +26,6 @@ from ppo import PPO
 from rollouts import RolloutStorage
 from utils import RESET
 from wrappers import VecPyTorch
-import hyperopt as hp
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
@@ -393,18 +390,17 @@ class Trainer:
                     config[k] = v
 
         config.update(log_dir=log_dir)
-        search = {k: v for k, v in config.items() if isinstance(v, Apply)}
-        fixed = {k: v for k, v in config.items() if not isinstance(v, Apply)}
 
-        def run(_search):
-            cls().run(**cls.structure_config(**_search, **fixed))
+        def run(c):
+            c = cls.structure_config(**c)
+            cls().run(**c)
 
         def print_color(string):
             print(fg("gold_1"), string, RESET, sep="")
 
         if num_samples is None:
-            print_color("Not using tune, because num_samples was not specified.")
-            run(search)
+            print("Not using tune, because num_samples was not specified")
+            run(config)
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
@@ -413,28 +409,23 @@ class Trainer:
                 cpu=cpus_per_trial,
             )
 
-            if search:
-                print_color(
-                    "Using hyperopt because search values were found in config."
-                )
+            if local_mode:
+                print("Using local mode because num_samples is None")
+                kwargs = dict()
+            else:
                 kwargs = dict(
                     search_alg=HyperOptSearch(
-                        search, metric=cls.metric, mode="max", random_state_seed=seed
+                        config, metric=cls.metric, mode="max", random_state_seed=seed
                     ),
                     num_samples=num_samples,
                 )
-            else:
-                print_color(
-                    "Using local mode because no search values were found in config."
-                )
-                kwargs = dict()
             if log_dir is not None:
                 kwargs.update(local_dir=log_dir)
 
             tune.run(
                 run,
                 name=name,
-                config=search,
+                config=config,
                 resources_per_trial=resources_per_trial,
                 **kwargs,
             )
