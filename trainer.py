@@ -215,12 +215,12 @@ class Trainer:
             frames_per_update = train_steps * num_processes
             frames = Counter()
             time_spent = Counter()
+            eval_report = dict()
+            eval_infos = dict()
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
                 done = frames["so_far"] >= num_frames
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
                 if (
                     i == 0
                     or done
@@ -230,6 +230,8 @@ class Trainer:
                         and frames["since_eval"] > eval_interval
                     )
                 ):
+                    eval_report = EvalWrapper(EpisodeAggregator())
+                    eval_infos = EvalWrapper(InfosAggregator())
                     frames["since_eval"] = 0
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
