@@ -221,10 +221,14 @@ class Trainer:
                 done = frames["so_far"] >= num_frames
                 eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
-                if done or (
-                    not no_eval
-                    and eval_interval
-                    and frames["since_eval"] > eval_interval
+                if (
+                    i == 0
+                    or done
+                    or (
+                        not no_eval
+                        and eval_interval
+                        and frames["since_eval"] > eval_interval
+                    )
                 ):
                     frames["since_eval"] = 0
                     # vec_norm = get_vec_normalize(eval_envs)
