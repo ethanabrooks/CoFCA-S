@@ -50,9 +50,10 @@ class UpperTrainer(Trainer):
         reporter = super().report_generator(log_dir)
         next(reporter)
 
-        def report(failure_buffer, **kwargs):
-            with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                pickle.dump(failure_buffer, f)
+        def report(failure_buffer=None, **kwargs):
+            if failure_buffer is not None:
+                with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
+                    pickle.dump(failure_buffer, f)
             reporter.send(kwargs)
 
         while True:

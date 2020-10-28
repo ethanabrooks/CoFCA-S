@@ -215,8 +215,6 @@ class Trainer:
             frames_per_update = train_steps * num_processes
             frames = Counter()
             time_spent = Counter()
-            eval_report = dict()
-            eval_infos = dict()
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
@@ -261,6 +259,11 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
+                        reporter.send(
+                            dict(
+                                **dict(eval_report.items()), **dict(eval_infos.items())
+                            )
+                        )
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
@@ -273,8 +276,6 @@ class Trainer:
                             **train_results,
                             **dict(train_report.items()),
                             **dict(train_infos.items()),
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
                             time_logging=time_spent["logging"],
                             time_saving=time_spent["saving"],
                             training_iteration=frames["so_far"],
