@@ -378,8 +378,6 @@ class Recurrence(nn.Module):
                 lt = L[t]
 
             embedded_lower = self.embed_lower(lt.clone())
-            self.print("L[t]", L[t])
-            self.print("lines[R, p]", lines[t][R, p])
             z2 = torch.cat([zeta1_input, embedded_lower], dim=-1)
 
             # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
@@ -405,17 +403,15 @@ class Recurrence(nn.Module):
                 self.print("u", u)
                 d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
-                self.print("dg prob", d_gate.probs[:, 1])
-                self.print("dg", dg)
+                self.print("dg prob, dg", d_gate.probs[:, 1], dg)
                 d_dist = gate(dg, d_probs, ones * half)
-                self.print("d_probs", d_probs[:, half:])
+                self.print("d_probs", d_dist.probs[:, :half])
+                self.print("d_probs", d_dist.probs[:, half:])
                 self.sample_new(D[t], d_dist)
                 # D[:] = float(input("D:")) + half
                 delta = D[t].clone() - half
                 self.print("D[t], delta", D[t], delta)
-            self.print("old p", p)
             p = p + delta
-            self.print("new p", p)
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
             yield RecurrentState(
                 a=A[t],
