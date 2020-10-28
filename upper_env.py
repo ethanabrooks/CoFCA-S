@@ -483,7 +483,7 @@ class Env(gym.Env):
                 Obs(
                     obs=array,
                     lines=[self.preprocess_line(l) for l in padded],
-                    mask=[p is None for p in padded],
+                    mask=[p is not None for p in padded],
                     inventory=self.inventory_representation(inventory),
                 )._asdict()
             )

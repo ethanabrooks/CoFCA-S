@@ -193,6 +193,7 @@ class Recurrence(nn.Module):
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
+        nl = len(self.obs_spaces.lines.nvec)
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
@@ -205,14 +206,21 @@ class Recurrence(nn.Module):
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
+        mask = state.mask[0].view(N, nl, 1, 1)
+        mask = torch.stack(
+            [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
 
         # build memory
-        nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(
             (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0]).view(
                 -1, self.obs_spaces.lines.nvec[0].size
             )
         ).view(N, -1, self.task_embed_size)
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         hx = RecurrentState(*[x.squeeze(0) for x in hx])
@@ -260,18 +268,11 @@ class Recurrence(nn.Module):
                         dim=-1,
                     ).transpose(0, 1)
                 else:
-                    rolled = torch.stack(
-                        [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                    )[p, R]
-                    mask = state.mask[0].view(N, nl, 1, 1)
-                    mask = torch.stack(
-                        [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
-                    )[p, R]
-                    self.print(mask.view(N, nl))
-                    G, _ = self.task_encoder(rolled)
+                    self.print(mask[p, R].view(N, nl))
+                    G, _ = self.task_encoder(rolled[p, R])
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
-                B = B * (1 - mask)
+                B = B * mask[p, R]
                 # arange = torch.zeros(6).float()
                 # arange[0] = 1
                 # arange[1] = 1
