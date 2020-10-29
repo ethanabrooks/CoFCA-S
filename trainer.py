@@ -219,14 +219,10 @@ class Trainer:
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
                 done = frames["so_far"] >= num_frames
-                if (
+                if not no_eval and (
                     i == 0
                     or done
-                    or (
-                        not no_eval
-                        and eval_interval
-                        and frames["since_eval"] > eval_interval
-                    )
+                    or (eval_interval and frames["since_eval"] > eval_interval)
                 ):
                     eval_report = EvalWrapper(EpisodeAggregator())
                     eval_infos = EvalWrapper(InfosAggregator())
