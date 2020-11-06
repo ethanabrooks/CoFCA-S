@@ -4,7 +4,8 @@ from typing import List, Type, Generator, Union
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
 
-from enums import Interaction, Resource, Terrain, Refined
+from enums import Interaction, Terrain, Refined
+from data_types import Resource
 
 
 def sample(random, _min, _max, p=0.5):
@@ -222,7 +223,7 @@ class Subtask(Line):
         return hash((self.interaction, self.resource))
 
     def __eq__(self, other):
-        return self.interaction == other.interaction and self.resource == other.resource
+        return self.interaction == other.task and self.resource == other.resource
 
     def __init__(self, interaction: Interaction, resource: Union[Resource, Terrain]):
         assert not isinstance(resource, Refined)

@@ -152,7 +152,7 @@ class Trainer:
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
 
-                action = envs.preprocess(act.action)
+                action = envs.preprocess(act.task)
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(action)
 
@@ -306,7 +306,7 @@ class Trainer:
                     rollouts.insert(
                         obs=output.obs,
                         recurrent_hidden_states=output.act.rnn_hxs,
-                        actions=output.act.action,
+                        actions=output.act.task,
                         action_log_probs=output.act.action_log_probs,
                         values=output.act.value,
                         rewards=output.reward,

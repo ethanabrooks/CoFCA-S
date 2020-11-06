@@ -142,8 +142,6 @@ class UpperTrainer(Trainer):
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
-        parser.main.add_argument("--min-eval-lines", type=int)
-        parser.main.add_argument("--max-eval-lines", type=int)
         parser.main.add_argument("--no-eval", action="store_true")
         parser.main.add_argument("--lower-level-load-path")
         env_parser = parser.main.add_argument_group("env_args")

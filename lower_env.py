@@ -5,8 +5,9 @@ from gym import spaces
 
 import upper_env
 import keyboard_control
-from upper_env import Action, CrossMountain
-from enums import Interaction, Resource, Other, Terrain, InventoryItems
+from upper_env import CrossMountain
+from data_types import Command, Other, Resource
+from enums import Interaction, Terrain, InventoryItems
 
 
 Obs = namedtuple("Obs", "inventory line obs")
@@ -37,7 +38,7 @@ class Env(upper_env.Env):
         )
 
     def step(self, action: int):
-        action = Action(
+        action = Command(
             upper=self.subtasks[0],
             lower=self.lower_level_actions[action],
             delta=0,

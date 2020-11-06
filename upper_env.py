@@ -1,42 +1,47 @@
-import copy
-import json
 import pickle
-from collections import Counter, namedtuple, deque, OrderedDict
-from itertools import product, zip_longest
+import typing
+from collections import Counter, deque, OrderedDict
+from dataclasses import astuple
+from functools import reduce
+from itertools import zip_longest
 from pathlib import Path
 from pprint import pprint
-from typing import Tuple, Dict, Union
+from typing import Union, Dict, Generator, Tuple, List, Optional
 
 import gym
 import numpy as np
 from colored import fg
 from gym import spaces
+from gym.spaces import MultiDiscrete
 from gym.utils import seeding
+from treelib import Tree
 
-from enums import (
-    Terrain,
-    Other,
-    Refined,
-    InventoryItems,
-    WorldObjects,
-    Necessary,
-    Interaction,
+import keyboard_control
+from data_types import (
+    Command,
+    Obs,
     Resource,
+    Building,
+    Coord,
+    Costs,
+    Action,
+    WorldObject,
+    ActionTypes,
+    WorldObjects,
+    worker_actions,
+    Movement,
+    WorkerID,
+    Worker,
+    Resources,
+    State,
+    Line,
     Symbols,
-    SubtaskItems,
-    ResourceInteractions,
+    NoOp,
+    BuildOrder,
 )
-from lines import Subtask
 from utils import RESET
 
-Coord = Tuple[int, int]
-ObjectMap = Dict[Coord, str]
-Last = namedtuple("Last", "action active reward terminal selected")
-Action = namedtuple("Action", "upper lower delta dg ptr")
-CrossWater = Subtask(Interaction.CROSS, Terrain.WATER)
-CrossMountain = Subtask(Interaction.CROSS, Terrain.MOUNTAIN)
-Obs = namedtuple("Obs", "inventory lines mask obs")
-assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
+Dependencies = Dict[Building, Building]
 
 
 def delete_nth(d, n):
@@ -45,62 +50,35 @@ def delete_nth(d, n):
     d.rotate(n)
 
 
-def subtasks():
-    yield CrossWater
-    yield CrossMountain
-    for interaction in ResourceInteractions:
-        for resource in Resource:
-            yield Subtask(interaction, resource)
-
-
-def lower_level_actions():
-    yield Interaction.COLLECT
-    yield Interaction.REFINE
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            if [i, j].count(0) == 1:
-                yield np.array([i, j])
-
-
 class Env(gym.Env):
     def __init__(
         self,
-        bandit_prob: float,
         break_on_fail: bool,
-        bridge_failure_prob: float,
-        exact_count: bool,
+        debug_env: bool,
         eval_steps: int,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
-        map_discovery_prob: float,
         max_eval_lines: int,
         max_lines: int,
         min_eval_lines: int,
         min_lines: int,
+        num_initial_buildings: int,
         rank: int,
-        room_side: int,
+        world_size: int,
         seed: int,
         tgt_success_rate: int,
-        windfall_prob: float,
         evaluating=False,
     ):
-        self.eval_steps = eval_steps
-        self.exact_count = exact_count
-        self.windfall_prob = windfall_prob
-        self.bandit_prob = bandit_prob
-        self.map_discovery_prob = map_discovery_prob
-        self.bridge_failure_prob = bridge_failure_prob
-        self.counts = None
-        self.tgt_success_rate = tgt_success_rate
 
-        self.subtasks = list(subtasks())
-        self.line_subtasks = [s for s in self.subtasks if s != CrossMountain]
-        num_subtasks = len(self.subtasks)
+        self.worker_actions = [*worker_actions()]
+
+        self.num_initial_buildings = num_initial_buildings
+        self.eval_steps = eval_steps
+        self.tgt_success_rate = tgt_success_rate
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
         self.rank = rank
         self.break_on_fail = break_on_fail
-        self.num_subtasks = num_subtasks
         self.i = 0
         self.success_avg = 0.5
         self.alpha = 0.05
@@ -121,46 +99,52 @@ class Env(gym.Env):
                 )
         self.non_failure_random = self.random.get_state()
         self.evaluating = evaluating
-        self.h, self.w = self.room_shape = np.array([room_side, room_side])
-        self.room_size = int(self.room_shape.prod())
-        self.block_size = self.room_size - self.h - 1
-        self.limina = [Terrain.WATER] + [Terrain.MOUNTAIN] * (self.h - 1)
+        self.world_size = world_size
         self.iterator = None
         self.render_thunk = None
-
-        self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array(
-                Action(
-                    upper=num_subtasks + 1,
-                    delta=2 * self.n_lines,
-                    dg=2,
-                    lower=len(self.lower_level_actions),
-                    ptr=self.n_lines,
+                astuple(
+                    Action(
+                        type=len(ActionTypes),
+                        worker=len(WorkerID),
+                        i=self.world_size,
+                        j=self.world_size,
+                        target=len(Building),
+                        ptr=self.n_lines,
+                    )
                 )
             )
         )
-        self.line_space = [1 + len(Interaction), 2 + len(Resource)]
+        self.line_space = len(Building)
         lines_space = spaces.MultiDiscrete(np.array([self.line_space] * self.n_lines))
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
 
-        self.room_space = spaces.Box(
-            low=np.zeros_like(self.room_shape, dtype=np.float32),
-            high=(self.room_shape - 1).astype(np.float32),
+        self.world_shape = world_shape = np.array([world_size, world_size])
+        self.world_space = spaces.Box(
+            low=np.zeros_like(world_shape, dtype=np.float32),
+            high=(world_shape - 1).astype(np.float32),
         )
 
-        inventory_space = spaces.MultiBinary(len(InventoryItems))
-        shape = (len(Resource) + len(Terrain) + 1, *self.room_shape)
+        shape = (len(Building) + len(WorkerID), *world_shape)
         obs_space = spaces.Box(
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
+        self.max = Resources(*sum(Costs.values(), Counter()).values())
+        self.time_per_line = 2 * max(
+            reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
+        )
+        resources_space = spaces.MultiDiscrete([self.max.minerals, self.max.gas])
+        worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(self.worker_actions))
+        # noinspection PyProtectedMember
         self.observation_space = spaces.Dict(
             Obs(
-                inventory=inventory_space,
+                obs=obs_space,
+                resources=resources_space,
+                workers=worker_space,
                 lines=lines_space,
                 mask=mask_space,
-                obs=obs_space,
             )._asdict()
         )
 
@@ -170,16 +154,8 @@ class Env(gym.Env):
         s, r, t, i = next(self.iterator)
         return s
 
-    def step(self, action: Union[np.ndarray, Action]):
-        action = Action(*action)
-        return self.iterator.send(
-            action._replace(
-                lower=self.lower_level_actions[int(action.lower)],
-                upper=self.subtasks[int(action.upper)]
-                if action.upper < len(self.subtasks)
-                else None,
-            )
-        )
+    def step(self, action: np.ndarray):
+        return self.iterator.send(Action(*action))
 
     def failure_buffer_wrapper(self, iterator):
         if self.evaluating or len(self.failure_buffer) == 0:
@@ -197,7 +173,9 @@ class Env(gym.Env):
             self.random.set_state(self.non_failure_random)
         initial_random = self.random.get_state()
         action = None
-        render_thunk = lambda: None
+
+        def render_thunk():
+            return
 
         def render():
             render_thunk()
@@ -222,7 +200,7 @@ class Env(gym.Env):
                     use_failure_buf=use_failure_buf,
                 )
                 if not self.evaluating:
-                    i.update(failure_buffer=list(self.failure_buffer)[:2])
+                    i.update(failure_buffer=[*self.failure_buffer][:2])
 
                 if not success:
                     self.failure_buffer.append(initial_random)
@@ -231,17 +209,10 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def get_blocks(self, *lines):
-        block = []
-        for line in lines:
-            if line == CrossWater:
-                yield block
-                block = []
-            else:
-                block.append(line)
-
     def srti_generator(self):
-        lines = self.build_lines()
+        dependencies = self.build_dependencies()
+        trees = self.build_trees(dependencies)
+        lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator(*lines)
@@ -255,6 +226,9 @@ class Env(gym.Env):
         state, render_state = next(state_iterator)
 
         def render():
+            for tree in trees:
+                tree.show()
+
             if t:
                 print(fg("green") if i["success"] else fg("red"))
             render_r()
@@ -262,23 +236,15 @@ class Env(gym.Env):
             render_i()
             render_state()
             print("Action:", end=" ")
-            if action is None:
-                print(None)
-            elif action.upper is None:
-                print("No op")
-            else:
-                # noinspection PyProtectedMember
-                for k, v in action._asdict().items():
-                    print(f"{k}=({str(v)})", end=" ")
-                print()
+            print(action)
             render_s()
             print(RESET)
 
         while True:
             s, render_s = obs_iterator.send(state)
             r, render_r = reward_iterator.send(state)
-            t, render_t = done_iterator.send(dict(state))
-            i, render_i = info_iterator.send(dict(state, done=t))
+            t, render_t = done_iterator.send(state)
+            i, render_i = info_iterator.send((state, t))
 
             if self.break_on_fail and t and not i["success"]:
                 import ipdb
@@ -287,208 +253,186 @@ class Env(gym.Env):
 
             self.render_thunk = render
 
+            action: Optional[Action]
+            # noinspection PyTypeChecker
             action = yield s, r, t, i
-            if action.upper is not None:
+            action_type = ActionTypes[action.type]
+            if action_type != NoOp(step=False):
                 state, render_state = state_iterator.send(action)
 
-    def state_generator(self, *lines):
-        blocks = list(self.get_blocks(*lines))
-        rooms = self.build_rooms(*blocks)
-        assert len(rooms) == len(blocks)
+    def build_dependencies(self):
+        n = len(Building)
+        dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
+        buildings = list(Building)
+        self.random.shuffle(buildings)
 
-        rooms_iter = iter(rooms)
-        blocks_iter = iter(blocks)
+        def generate_dependencies():
+            for b1, b2 in zip(buildings, dependencies):
+                yield b1, (
+                    None if b1 is Building.ASSIMILATOR or b2 < 0 else buildings[b2]
+                )
 
-        def next_required():
-            block = next(blocks_iter, None)
-            if block is not None:
-                for subtask in block:
-                    if subtask.interaction == Interaction.COLLECT:
-                        yield subtask.resource
-                    elif subtask.interaction == Interaction.REFINE:
-                        yield Refined(subtask.resource.value)
-                    else:
-                        assert subtask.interaction == Interaction.BUILD
+        return dict(generate_dependencies())
 
-        required = Counter(next_required())
-        objects = dict(next(rooms_iter))
-        agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
-        build_supplies = Counter()
-        inventory = self.initialize_inventory()
-        success = False
-        action = None
-        subtasks_completed = set()
-        chance_events = set()
-        room_complete = False
+    def state_generator(self, *lines: Line) -> Generator[State, Action, None]:
+        positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
+        building_positions: Dict[Coord, Building] = dict(
+            [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
+        )
+        positions: Dict[Union[Resource, WorkerID], Coord] = dict(
+            [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
+        )
+        workers: Dict[WorkerID, Worker] = {}
+        for w in WorkerID:
+            workers[w] = Worker(assignment=Resource.MINERALS)
+
+        required = Counter(l.building for l in lines if l.required)
+        remaining: Dict[Resource, int] = self.max.as_dict()
+        resources: typing.Counter[Resource] = Counter()
+        ptr: int = 0
 
         while True:
-            self.make_feasible(objects)
+            success = not required - Counter(building_positions.values())
 
-            state = dict(
-                inventory=inventory,
-                agent_pos=agent_pos,
-                objects=objects,
-                action=action,
+            state = State(
+                building_positions=building_positions,
+                positions=positions,
+                resources=resources,
+                workers=workers,
                 success=success,
-                subtasks_completed=subtasks_completed,
-                room_complete=room_complete,
-                required=required,
+                pointer=ptr,
             )
 
             def render():
-                print("Inventory:")
-                pprint(inventory)
-                print("Build Supplies:")
-                pprint(build_supplies)
-                print("Required:")
-                pprint(required)
-                print("Chance events:", fg("purple_1b"), *chance_events, RESET)
+                print("Resources:")
+                pprint(resources)
+                # print("Chance events:", fg("purple_1b"), *chance_events, RESET)
 
             self.render_thunk = render
-            # for name, space in self.observation_space.spaces.items():
-            #     if not space.contains(s[name]):
-            #         import ipdb
-            #
-            #         ipdb.set_trace()
-            #         space.contains(s[name])
-            action = yield state, render
-            subtasks_completed = set()
-            chance_events = set()
-            room_complete = False
-            if self.random.random() < self.bandit_prob:
-                possessions = [k for k, v in build_supplies.items() if v > 0]
-                if possessions:
-                    robbed = self.random.choice(possessions)
-                    build_supplies[robbed] -= 1
-                    chance_events.add(f"bandit stole {robbed}")
 
-            standing_on = objects.get(tuple(agent_pos), None)
-
-            if isinstance(action.lower, np.ndarray):
-                new_pos = agent_pos + action.lower
-                moving_into = objects.get(tuple(new_pos), None)
-
-                if moving_into == Terrain.WATER:
-                    for item in inventory:
-                        if isinstance(item, Resource):
-                            subtasks_completed.add(Subtask(Interaction.COLLECT, item))
-                        if isinstance(item, Refined):
-                            subtasks_completed.add(
-                                Subtask(Interaction.REFINE, Resource(item.value))
-                            )
-                    build_supplies.update(inventory - {Other.MAP})
-                    inventory &= {Other.MAP}
-
-                def next_room():
-                    h, w = new_pos
-                    return w == self.w
-
-                def valid_new_pos():
-                    if not self.room_space.contains(new_pos):
-                        return next_room()
-                    if moving_into == Terrain.WALL:
-                        return False
-                    if moving_into == Terrain.WATER:
-                        return (
-                            (
-                                required + Counter() == build_supplies + Counter()
-                            )  # inventory == required
-                            if self.exact_count
-                            else (
-                                not required - build_supplies
-                            )  # inventory dominates required
-                        )
-                    if moving_into == Terrain.MOUNTAIN:
-                        return Other.MAP in inventory
-                    return True
-
-                if valid_new_pos():
-                    if moving_into == Terrain.WATER:
-                        build_supplies -= required  # build bridge
-                        if self.random.random() > self.bridge_failure_prob:
-                            agent_pos = new_pos  # check if bridge failed
-                        else:
-                            chance_events.add("bridge failed")
-                        # else bridge failed
-                    else:
-                        if next_room():
-                            if Other.MAP in inventory:
-                                inventory.remove(Other.MAP)
-                            if standing_on == Terrain.WATER:
-                                subtasks_completed.add(CrossWater)
-                            elif standing_on == Terrain.MOUNTAIN:
-                                subtasks_completed.add(CrossMountain)
-                            else:
-                                raise RuntimeError
-                            room = next(rooms_iter, None)
-                            room_complete = True
-                            if room is None:
-                                success = True
-                            else:
-                                objects = dict(room)
-                            required = Counter(next_required())
-                            build_supplies = Counter()
-                        agent_pos = new_pos % np.array(self.room_shape)
-            elif action.lower == Interaction.COLLECT:
-                if standing_on in list(Resource):
-                    inventory.add(standing_on)
-                    del objects[tuple(agent_pos)]
-                    if self.random.random() < self.map_discovery_prob:
-                        inventory.add(Other.MAP)
-            elif action.lower == Interaction.REFINE:
-                if standing_on == Terrain.FACTORY:
-                    inventory = {Refined(i.value) for i in inventory}
-            else:
-                raise NotImplementedError
-
-    @staticmethod
-    def initialize_inventory():
-        return set()
-
-    def obs_generator(self, *lines):
-        state = yield
-        inventory = state["inventory"]
-        padded = list(lines) + [None] * (self.n_lines - len(lines))
-
-        def build_array(agent_pos, objects, **_):
-            room = np.zeros((len(WorldObjects), *self.room_shape))
-            for p, o in list(objects.items()):
-                p = np.array(p)
-                room[(WorldObjects.index(o), *p)] = 1
-            room[(WorldObjects.index(Other.AGENT), *agent_pos)] = 1
-            return room
-
-        def render(action, **_):
-            for i, line in enumerate(lines):
-                agent_ptr = None if action is None else action.ptr
-                # if i == ptr == agent_ptr:
-                #     pre = "+ "
-                # elif i == ptr:
-                #     pre = "| "
-                if i == agent_ptr:
-                    pre = "- "
-                else:
-                    pre = "  "
-                index = [(s.interaction, s.resource) for s in self.subtasks].index(
-                    (line.interaction, line.resource)
+            nexus_positions: List[Coord] = [
+                p for p, b in building_positions.items() if b is Building.NEXUS
+            ]
+            for worker_id, worker in workers.items():
+                worker.next_action = worker.get_action(
+                    position=positions[worker_id],
+                    positions=positions,
+                    nexus_positions=nexus_positions,
                 )
-                print("{:2}{}{} ({}) {}".format(i, pre, " ", index, str(line)))
+
+            action: Action
+            # noinspection PyTypeChecker
+            action = yield state, render
+            ptr = action.ptr
+            action = action.parse()
+
+            if isinstance(action, Command):
+                workers[action.worker].assignment = action.assignment
+
+            worker_id: WorkerID
+            worker: Worker
+            for worker_id, worker in sorted(
+                workers.items(), key=lambda w: isinstance(w[1].assignment, BuildOrder)
+            ):  # collect resources first.
+                worker_position = positions[worker_id]
+                worker_action = worker.get_action(
+                    position=worker_position,
+                    positions=positions,
+                    nexus_positions=nexus_positions,
+                )
+                if isinstance(worker_action, Movement):
+                    new_position = tuple(
+                        np.array(worker_position) + np.array(astuple(worker_action))
+                    )
+                    positions[worker_id] = new_position
+                    if building_positions.get(new_position, None) == Building.NEXUS:
+                        for resource in Resource:
+                            if positions[resource] == worker_position:
+                                resources[resource] += 1
+                                remaining[resource] -= 1
+                elif isinstance(worker_action, Building):
+                    building = worker_action
+                    insufficient_resources = Costs[building] - resources
+                    if (
+                        not insufficient_resources
+                        and worker_position not in building_positions
+                    ):
+                        if (
+                            building is Building.ASSIMILATOR
+                            and worker_position == positions[Resource.GAS]
+                        ) or (
+                            building is not Building.ASSIMILATOR
+                            and worker_position
+                            not in (
+                                *building_positions,
+                                positions[Resource.GAS],
+                                positions[Resource.MINERALS],
+                            )
+                        ):
+                            building_positions[worker_position] = building
+                            resources -= Costs[building]
+                else:
+                    raise RuntimeError
+
+            # remove exhausted resources
+            for resource, _remaining in remaining.items():
+                if not _remaining:
+                    del positions[resource]
+
+    def obs_generator(self, *lines: Line):
+        state: State
+        state = yield
+        padded: List[Optional[Line]] = [*lines, *[None] * (self.n_lines - len(lines))]
+        mask = [p is not None for p in padded]
+
+        def render():
+            for i, line in enumerate(lines):
+                print(
+                    "{:2}{}{} ({}) {}".format(
+                        i,
+                        "-" if i == state.pointer else " ",
+                        "*"
+                        if (
+                            line.required
+                            and line.building not in state.building_positions
+                        )
+                        else " ",
+                        [*Building].index(line.building),
+                        str(line.building),
+                    )
+                )
             print("Obs:")
             for string in self.room_strings(array):
                 print(string, end="")
 
+        preprocessed = [*map(self.preprocess_line, lines)]
+
+        def coords():
+            yield from state.positions.items()
+            for p, b in state.building_positions.items():
+                yield b, p
+
         while True:
-            array = build_array(**state)
+            world = np.zeros((len(WorldObjects), *self.world_shape))
+            for o, p in coords():
+                world[(WorldObjects.index(o), *p)] = 1
+            array = world
+            resources = [r.value for r in state.resources]
+            workers = [
+                self.worker_actions.index(w.next_action) for w in state.workers.values()
+            ]
+            # noinspection PyProtectedMember
             obs = OrderedDict(
                 Obs(
                     obs=array,
-                    lines=[self.preprocess_line(l) for l in padded],
-                    mask=[p is not None for p in padded],
-                    inventory=self.inventory_representation(inventory),
+                    resources=resources,
+                    workers=workers,
+                    lines=preprocessed,
+                    mask=mask,
                 )._asdict()
             )
-            state = yield obs, lambda: render(**state)  # perform time-step
-            inventory = state["inventory"]
+            # noinspection PyTypeChecker
+            state = yield obs, lambda: render()  # perform time-step
 
     @staticmethod
     def reward_generator():
@@ -497,85 +441,65 @@ class Env(gym.Env):
             yield reward, lambda: print("Reward:", reward)
 
     def done_generator(self, *lines):
+        state: State
         state = yield
         time_remaining = (
             self.eval_steps - 1 if self.evaluating else self.time_limit(lines)
         )
+
         while True:
-            done = state["success"]
-            done |= time_remaining == 0
+            # noinspection PyTypeChecker
+            state = yield state.success or time_remaining == 0, lambda: print(
+                "Time remaining:", time_remaining
+            )
             time_remaining -= 1
-            state = yield done, lambda: print("Time remaining:", time_remaining + 1)
 
     def time_limit(self, lines):
-        return len(lines) * self.time_per_subtask()
+        return len(lines) * self.time_per_line
 
     def info_generator(self, *lines):
-        state = yield
+        state: State
+        done: bool
+        state, done = yield
         info = dict(len_failure_buffer=float(len(self.failure_buffer)))
-        rooms_complete = 0
         time_limit = self.time_limit(lines)
         time_elapsed = 0
 
-        def update_info(success, done, inventory, subtasks_completed, action, **_):
-            if action is not None and isinstance(action.lower, Interaction):
-                if action.lower == Interaction.COLLECT:
-                    lower_error = action.upper.resource not in inventory
-                elif action.lower == Interaction.REFINE:
-                    lower_error = (
-                        action.upper.interaction != action.lower
-                        or Refined(action.upper.resource.value) not in inventory
-                    )
-                else:
-                    raise RuntimeError
-
-                info.update(lower_error=lower_error)
+        while True:
             if done:
                 info.update(
                     instruction_len=len(lines),
                     len_failure_buffer=len(self.failure_buffer),
-                    rooms_complete=rooms_complete,
-                    progress=rooms_complete / lines.count(CrossWater),
-                    success=float(success),
+                    success=float(state.success),
                     train_time_success=float(time_elapsed <= time_limit),
-                    normalized_elapsed_time=time_elapsed / time_limit
+                    normalized_elapsed_time=time_elapsed / time_limit,
                 )
                 if self.evaluating:
                     bucket = 10 * (len(lines) // 10)
-                    info["time_elapsed" + str(bucket)] = time_elapsed
-                    for key in ["success", "train_time_success", "normalized_elapsed_time"]:
-                        info[key + str(bucket)] = info[key]
-
-                if CrossMountain in subtasks_completed:
-                    info.update(crossing_mountain=1)
-                if Other.MAP in inventory:
-                    info.update(crossing_mountain=int(action.upper == CrossMountain))
-
-        while True:
-            rooms_complete += int(state["room_complete"])
-            update_info(**state)
+                    info[f"time_elapsed{bucket}"] = time_elapsed
+                    for key in [
+                        "success",
+                        "train_time_success",
+                        "normalized_elapsed_time",
+                    ]:
+                        info[f"{key}{bucket}"] = info[key]
             time_elapsed += 1
-            # line_specific_info = {
-            #     f"{k}_{10 * (len(blocks) // 10)}": v for k, v in info.items()
-            # }
-            state = yield info, lambda: None
+            state, done = yield info, lambda: None
             info = {}
 
-    def time_per_subtask(self):
-        return 3 * (self.room_shape.sum() - 2)
-
     @staticmethod
-    def preprocess_line(line):
+    def preprocess_line(line: Optional[Line]):
         if line is None:
             return [0, 0]
-        return [line.interaction.value, SubtaskItems.index(line.resource)]
+        return [1 + int(line.required), 1 + line.building.value]
 
     def room_strings(self, room):
+        grid_size = 4
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
-                assert len(nonzero) <= 2
-                for _, i in zip_longest(range(2), nonzero):
+                assert len(nonzero) <= grid_size
+                for _, i in zip_longest(range(grid_size), nonzero):
                     if i is None:
                         yield " "
                     else:
@@ -583,73 +507,90 @@ class Env(gym.Env):
                         yield Symbols[world_obj]
                 yield RESET
                 yield "|"
-            yield "\n" + "-" * 3 * self.w + "\n"
+            yield "\n" + "-" * (grid_size + 1) * self.world_size + "\n"
 
-    def make_feasible(self, objects):
-        counts = Counter(objects.values())
-        if any(counts[o] == 0 for o in Necessary):
-
-            def get_free_space():
-                for i in range(self.h):
-                    for j in range(self.w):
-                        maybe_object = objects.get((i, j), None)
-                        if maybe_object is None or (
-                            maybe_object not in self.limina and counts[maybe_object] > 1
-                        ):
-                            yield i, j
-
-            free_space = list(get_free_space())
-            assert free_space
-
-            for o in Necessary:
-                if counts[o] == 0:
-                    coord = free_space[self.random.choice(len(free_space))]
-                    objects[coord] = o
-                    counts = Counter(objects.values())
-                    free_space = list(get_free_space())
-
-    def build_rooms(self, *blocks):
-        n_rooms = len(blocks)
-        assert n_rooms > 0
-        h, w = self.room_shape
-        coordinates = list(product(range(h), range(w - 1)))
-
-        def get_objects():
-            max_objects = len(coordinates)
-            num_objects = self.random.choice(max_objects)
-            h, w = self.room_shape
-            positions = [
-                coordinates[i]
-                for i in self.random.choice(len(coordinates), size=num_objects)
-            ] + [(i, w - 1) for i in range(h)]
-            limina = copy.deepcopy(self.limina)
-            self.random.shuffle(limina)
-            assert limina.count(Terrain.WATER) == 1
-            world_objects = (
-                list(self.random.choice(Necessary, size=num_objects)) + limina
+    def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
+        nexus = self.random.choice(self.world_size, size=2)
+        yield Building.NEXUS, nexus
+        for w in WorkerID:
+            yield w, nexus
+        resource_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
+        resource_locations = [
+            *filter(
+                self.world_space.contains,
+                nexus + resource_offsets,
             )
-            assert len(positions) == len(world_objects)
-            return list(zip(positions, world_objects))
+        ]
+        minerals, gas = self.random.choice(
+            len(resource_locations), size=2, replace=False
+        )
+        minerals = resource_locations[minerals]
+        gas = resource_locations[gas]
+        yield Resource.MINERALS, minerals
+        yield Resource.GAS, gas
 
-        rooms = [get_objects() for _ in range(n_rooms)]
-        return rooms
+        occupied = [nexus, minerals, gas]
+        while True:
+            initial_pos = self.random.choice(
+                self.world_size, size=(self.num_initial_buildings, 2)
+            )
+            initial_in_occupied = (
+                np.equal(np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1))
+                .all(axis=-1)
+                .any()
+            )
+            if not initial_in_occupied:
+                initial_buildings = self.random.choice(
+                    Building, size=self.num_initial_buildings
+                )
+                for b, p in zip(initial_buildings, initial_pos):
+                    yield b, gas if b is Building.ASSIMILATOR else p
+                return
 
-    def build_lines(self):
+    def build_lines(self, dependencies: Dependencies) -> List[Line]:
+        def instructions_for(building: Building):
+            if building is None:
+                return
+            yield from instructions_for(dependencies[building])
+            yield building
+
+        def instructions_under(n: int, include_assimilator: bool = True):
+            if n < 0:
+                raise RuntimeError
+            if n == 0:
+                yield []
+                return
+            for building in Building:
+                not_assimilator = building is not Building.ASSIMILATOR
+                if building is not Building.NEXUS and (
+                    include_assimilator or not_assimilator
+                ):
+                    instructions = *first, last = [*instructions_for(building)]
+                    assert last is not Building.NEXUS
+                    if len(instructions) <= n:
+                        for remainder in instructions_under(
+                            n=n - len(instructions),
+                            include_assimilator=include_assimilator and not_assimilator,
+                        ):
+                            yield [
+                                *[Line(False, i) for i in first],
+                                Line(True, last),
+                                *remainder,
+                            ]
+
         n_lines = (
             self.random.random_integers(self.min_eval_lines, self.max_eval_lines)
             if self.evaluating
-            else self.random.random_integers(self.min_lines, self.max_lines)
+            else self.random.randint(self.min_lines, self.max_lines + 1)
         )
-        lines = (
-            list(self.random.choice(self.line_subtasks, size=n_lines - 1))
-            if n_lines - 1
-            else []
-        )
-        return lines + [CrossWater]
-
-    @staticmethod
-    def inventory_representation(inventory):
-        return np.array([int(i in inventory) for i in InventoryItems])
+        potential_instructions = [*instructions_under(n_lines)]
+        instructions = potential_instructions[
+            self.random.choice(len(potential_instructions))
+        ]
+        assert [l.building for l in instructions if l.required].count(
+            Building.ASSIMILATOR
+        ) <= 1
+        return instructions
 
     def seed(self, seed=None):
         assert self.seed == seed
@@ -659,96 +600,61 @@ class Env(gym.Env):
         if pause:
             input("pause")
 
-    def main(self, lower_level_config, lower_level_load_path):
-        import lower_env
-        from lower_agent import Agent
-        import torch
-        import time
-
-        lower_level_params = dict(
-            hidden_size=128,
-            kernel_size=3,
-            num_conv_layers=1,
-            num_layers=1,
-            stride=2,
-            sum_or_max="sum",
-            recurrent=False,
-        )
-
-        if lower_level_config:
-            with open(lower_level_config) as f:
-                params = json.load(f)
-                lower_level_params = {
-                    k: v for k, v in params.items() if k in lower_level_params.keys()
-                }
-        lower_level = Agent(
-            obs_space=lower_env.Env.observation_space_from_upper(
-                self.observation_space
-            ),
-            entropy_coef=0,
-            action_space=spaces.Discrete(Action(*self.action_space.nvec).lower),
-            **lower_level_params,
-        )
-        state_dict = torch.load(lower_level_load_path, map_location="cpu")
-        lower_level.load_state_dict(state_dict["agent"])
-        print(f"Loaded lower_level from {lower_level_load_path}.")
-
+    def main(self):
         def action_fn(string):
-            try:
-                return int(string)
-            except ValueError:
-                return
+            if string == "nn":
+                raw_action = Action(1, 0, 0, 0, 0, 0)
+            elif string == "ns":
+                raw_action = Action(0, 0, 0, 0, 0, 0)
+            else:
+                try:
+                    raw_action = Action(2, 1, *map(int, string.split()), ptr=0)
+                except (ValueError, TypeError) as e:
+                    print(e)
+                    return
+            return np.array(astuple(raw_action))
 
-        s = self.reset()
-        while True:
-            s = Obs(**s)
-            self.render(pause=False)
-            upper = None
-            while upper is None:
-                upper = action_fn(input("act:"))
-            lower = lower_level(
-                lower_env.Obs(
-                    inventory=torch.from_numpy(s.inventory).float().unsqueeze(0),
-                    obs=torch.from_numpy(s.obs).float().unsqueeze(0),
-                    line=torch.Tensor(self.preprocess_line(upper)).float().unsqueeze(0),
-                ),
-                None,
-                None,
-            ).action
-            print(lower)
-            action = Action(upper=upper, lower=lower, delta=0, dg=0, ptr=0)
-
-            s, r, t, i = self.step(action)
-            print("reward", r)
-            if t:
-                self.render(pause=False)
-                print("resetting")
-                time.sleep(0.5)
-                self.reset()
-                print()
+        keyboard_control.run(self, action_fn)
 
     @classmethod
     def add_arguments(cls, p):
         p.add_argument("--min-lines", type=int)
         p.add_argument("--max-lines", type=int)
+        p.add_argument("--min-eval-lines", type=int)
+        p.add_argument("--max-eval-lines", type=int)
+        p.add_argument("--num-initial-buildings", type=int)
         p.add_argument("--break-on-fail", action="store_true")
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--failure-buffer-size", type=int)
-        p.add_argument("--room-side", type=int)
-        p.add_argument("--bridge-failure-prob", type=float)
-        p.add_argument("--map-discovery-prob", type=float)
-        p.add_argument("--bandit-prob", type=float)
-        p.add_argument("--windfall-prob", type=float)
+        p.add_argument("--world-size", type=int)
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
         p.add_argument("--debug-env", action="store_true")
-        p.add_argument("--exact-count", action="store_true")
+
+    @staticmethod
+    def build_trees(dependencies: Dependencies) -> typing.Set[Tree]:
+
+        trees: Dict[Building, Tree] = {}
+
+        def create_nodes(bldg: Building):
+            if bldg in trees:
+                return
+            dependency = dependencies[bldg]
+            if dependency is None:
+                trees[bldg] = Tree()
+            else:
+                create_nodes(dependency)
+                trees[bldg] = trees[dependency]
+            trees[bldg].create_node(bldg.name.capitalize(), bldg, parent=dependency)
+
+        for building in Building:
+            create_nodes(building)
+        return set(trees.values())
 
 
-def main(lower_level_load_path, lower_level_config, debug_env, **kwargs):
-    Env(rank=0, min_eval_lines=0, max_eval_lines=10, **kwargs).main(
-        lower_level_load_path=lower_level_load_path,
-        lower_level_config=lower_level_config,
-    )
+def main(
+    **kwargs,
+):
+    Env(rank=0, eval_steps=500, **kwargs).main()
 
 
 if __name__ == "__main__":
@@ -757,6 +663,4 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    PARSER.add_argument("--lower-level-config", default="lower.json")
-    PARSER.add_argument("--lower-level-load-path", default="lower.pt")
     main(**vars(PARSER.parse_args()))

@@ -3,9 +3,9 @@ from pprint import pprint
 import numpy as np
 
 import upper_env
-from enums import Interaction, Refined, Other, Terrain
+from enums import Interaction, Refined, Terrain
 from lines import Subtask
-from upper_env import Action
+from data_types import Command, Other
 
 
 class Env(upper_env.Env):
@@ -15,7 +15,7 @@ class Env(upper_env.Env):
 
     def state_generator(self, *lines):
         blocks = list(self.get_blocks(*lines))
-        rooms = self.build_rooms(*blocks)
+        rooms = self.place_objects(*blocks)
         assert len(rooms) == len(blocks)
         rooms_iter = iter(rooms)
         blocks_iter = iter(blocks)
@@ -24,12 +24,12 @@ class Env(upper_env.Env):
             block = next(blocks_iter, None)
             if block is not None:
                 for subtask in block:
-                    if subtask.interaction == Interaction.COLLECT:
+                    if subtask.task == Interaction.COLLECT:
                         yield subtask.resource
-                    elif subtask.interaction == Interaction.REFINE:
+                    elif subtask.task == Interaction.REFINE:
                         yield Refined(subtask.resource.value)
                     else:
-                        assert subtask.interaction == Interaction.BUILD
+                        assert subtask.task == Interaction.BUILD
 
         required = Counter(next_required())
         objects = dict(next(rooms_iter))
@@ -77,7 +77,7 @@ class Env(upper_env.Env):
             #
             #         ipdb.set_trace()
             #         space.contains(s[name])
-            action = yield state, render  # type: Action
+            action = yield state, render  # type: Command
             subtasks_completed = set()
             room_complete = False
             if self.random.random() < self.bandit_prob:

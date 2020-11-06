@@ -7,7 +7,7 @@ import networks
 import ours
 from distributions import FixedCategorical
 from networks import AgentOutputs, NNBase
-from upper_env import Action
+from data_types import Command
 
 
 class Agent(networks.Agent, NNBase):
@@ -41,8 +41,8 @@ class Agent(networks.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = Action(
+        X = Command(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        probs = Command(
             upper=hx.a_probs,
             lower=None,
             delta=None if rm.no_pointer else hx.d_probs,

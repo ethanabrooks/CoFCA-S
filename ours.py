@@ -10,9 +10,9 @@ from gym import spaces
 
 import lower_env
 from distributions import FixedCategorical, Categorical
-from upper_env import Action
+from data_types import Command, Obs
 from lower_agent import Agent, get_obs_sections, optimal_padding
-from upper_env import Obs, Env, subtasks
+from upper_env import Env, subtasks
 from networks import MultiEmbeddingBag
 from transformer import TransformerModel
 from utils import init_
@@ -81,7 +81,7 @@ class Recurrence(nn.Module):
         if olsk:
             num_edges = 3
         self.ne = num_edges
-        self.action_space_nvec = Action(*map(int, action_space.nvec))
+        self.action_space_nvec = Command(*map(int, action_space.nvec))
         self.n_a = n_a = self.action_space_nvec.upper
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=task_embed_size
@@ -113,7 +113,7 @@ class Recurrence(nn.Module):
             self.action_space_nvec.lower + 1, lower_embed_size
         )
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.inventory.n, inventory_hidden_size)),
+            init_(nn.Linear(self.obs_spaces.resources.n, inventory_hidden_size)),
             nn.ReLU(),
         )
         m_size = (
@@ -158,7 +158,7 @@ class Recurrence(nn.Module):
             lower_level_params = {
                 k: v for k, v in params.items() if k in lower_level_params.keys()
             }
-        ll_action_space = spaces.Discrete(Action(*action_space.nvec).lower)
+        ll_action_space = spaces.Discrete(Command(*action_space.nvec).lower)
         self.lower_level = Agent(
             obs_space=lower_env.Env.observation_space_from_upper(observation_space),
             entropy_coef=0,
@@ -236,7 +236,7 @@ class Recurrence(nn.Module):
         hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*inputs.actions.unbind(dim=2))
+        actions = Command(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
         L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
@@ -317,7 +317,7 @@ class Recurrence(nn.Module):
                 dim=0,
             ).relu()
             h1 = h1.sum(-1).sum(-1)
-            inventory = state.inventory[t]
+            inventory = state.resources[t]
             embedded_inventory = self.embed_inventory(inventory)
             zeta1_input = torch.cat([m, h1, embedded_inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
@@ -341,7 +341,7 @@ class Recurrence(nn.Module):
                 hx.lh,
                 masks=None,
                 action=None,
-            ).action
+            ).task
             if torch.any(L[0] < 0):
                 assert torch.all(L[0] < 0)
                 L[t] = ll_action.flatten()
