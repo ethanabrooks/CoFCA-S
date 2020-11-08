@@ -587,9 +587,8 @@ class Env(gym.Env):
         instructions = potential_instructions[
             self.random.choice(len(potential_instructions))
         ]
-        assert [l.building for l in instructions if l.required].count(
-            Building.ASSIMILATOR
-        ) <= 1
+        required = [l.building for l in instructions if l.required]
+        assert required.count(Building.ASSIMILATOR) <= 1
         return instructions
 
     def seed(self, seed=None):

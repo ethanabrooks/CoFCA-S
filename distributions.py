@@ -1,4 +1,7 @@
 # third party
+from typing import List
+from torch.distributions import Distribution
+
 import torch
 import torch.nn as nn
 
@@ -64,3 +67,113 @@ class DiagGaussian(nn.Module):
         zeros = torch.zeros_like(action_mean)
         action_logstd = self.logstd(zeros)
         return FixedNormal(action_mean, action_logstd.exp())
+
+
+class JointDistribution(Distribution):
+    def __init__(self, distributions: List[Distribution], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.distributions = distributions
+
+    def expand(self, batch_shape, _instance=None):
+        raise NotImplementedError
+
+    @property
+    def arg_constraints(self):
+        raise NotImplementedError
+
+    @property
+    def support(self):
+        raise NotImplementedError
+
+    @property
+    def mean(self):
+        raise NotImplementedError
+
+    @property
+    def variance(self):
+        raise NotImplementedError
+
+    def sample(self, sample_shape=torch.Size()):
+        return torch.cat([d.sample(sample_shape) for d in self.distributions])
+
+    def rsample(self, sample_shape=torch.Size()):
+        raise NotImplementedError
+
+    def log_prob(self, value):
+        import ipdb
+
+        ipdb.set_trace()
+        return sum([d.log_prob(v) for d, v in zip(self.distributions, value)])
+
+    def cdf(self, value):
+        raise NotImplementedError
+
+    def icdf(self, value):
+        raise NotImplementedError
+
+    def enumerate_support(self, expand=True):
+        raise NotImplementedError
+
+    def entropy(self):
+        return sum([d.entropy() for d in self.distributions])
+
+
+class AutoRegressive(Distribution):
+    def __init__(
+        self, logits: torch.Tensor, children: List[Distribution], *args, **kwargs
+    ):
+        assert logits.size(-1) == len(children)
+        self.children = children
+        self.parent = FixedCategorical(logits=logits)
+        super().__init__(*args, **kwargs)
+
+    def expand(self, batch_shape, _instance=None):
+        raise NotImplementedError
+
+    @property
+    def arg_constraints(self):
+        raise NotImplementedError
+
+    @property
+    def support(self):
+        raise NotImplementedError
+
+    @property
+    def mean(self):
+        raise NotImplementedError
+
+    @property
+    def variance(self):
+        raise NotImplementedError
+
+    def sample(self, sample_shape=torch.Size()):
+        choice = self.parent.sample(sample_shape)
+        import ipdb
+
+        ipdb.set_trace()
+        cat = torch.cat([choice, *self.children[choice].sample(sample_shape)])
+        return cat
+
+    def rsample(self, sample_shape=torch.Size()):
+        raise NotImplementedError
+
+    def log_prob(self, value):
+        head, *tail = value
+        return self.parent.log_prob(head) + self.children[head].log_prob(*tail)
+
+    def cdf(self, value):
+        raise NotImplementedError
+
+    def icdf(self, value):
+        raise NotImplementedError
+
+    def enumerate_support(self, expand=True):
+        raise NotImplementedError
+
+    def entropy(self):
+        import ipdb
+
+        ipdb.set_trace()
+        return self.parent.entropy() + self.parent.probs * torch.stack(
+            [d.entropy() for d in self.children]
+        )

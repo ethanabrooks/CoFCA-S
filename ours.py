@@ -9,12 +9,12 @@ import torch.nn.functional as F
 from gym import spaces
 
 import lower_env
-from distributions import FixedCategorical, Categorical
 from data_types import Command, Obs
+from distributions import FixedCategorical, Categorical
 from lower_agent import Agent, get_obs_sections, optimal_padding
-from upper_env import Env, subtasks
 from networks import MultiEmbeddingBag
 from transformer import TransformerModel
+from upper_env import Env
 from utils import init_
 
 RecurrentState = namedtuple(
