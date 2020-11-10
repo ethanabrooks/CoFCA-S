@@ -1,4 +1,4 @@
-import json
+from collections import namedtuple
 from collections import namedtuple
 from contextlib import contextmanager
 
@@ -8,18 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-import lower_env
 from data_types import Command, Obs
 from distributions import FixedCategorical, Categorical
-from lower_agent import Agent, get_obs_sections, optimal_padding
+from lower_agent import get_obs_sections, optimal_padding
 from networks import MultiEmbeddingBag
 from transformer import TransformerModel
 from upper_env import Env
 from utils import init_
 
-RecurrentState = namedtuple(
-    "RecurrentState", "a l d h dg p v lh a_probs d_probs dg_probs"
-)
+RecurrentState = namedtuple("RecurrentState", "a d h dg p v a_probs d_probs dg_probs")
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
 
@@ -109,9 +106,6 @@ class Recurrence(nn.Module):
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
         self.padding = optimal_padding(h, kernel_size, stride)
-        self.embed_lower = nn.Embedding(
-            self.action_space_nvec.lower + 1, lower_embed_size
-        )
         self.embed_inventory = nn.Sequential(
             init_(nn.Linear(self.obs_spaces.resources.n, inventory_hidden_size)),
             nn.ReLU(),
@@ -121,50 +115,24 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + inventory_hidden_size
-        self.zeta1 = init_(nn.Linear(zeta1_input_size, hidden_size))
-        z2_size = zeta1_input_size + lower_embed_size
+        z_size = m_size + self.conv_hidden_size + inventory_hidden_size
+        self.zeta1 = init_(nn.Linear(z_size, hidden_size))
         if self.olsk:
             assert self.ne == 3
-            self.upsilon = nn.GRUCell(z2_size, hidden_size)
+            self.upsilon = nn.GRUCell(z_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.ne))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(z2_size, hidden_size)
+            self.upsilon = nn.GRUCell(z_size, hidden_size)
             self.beta = init_(nn.Linear(hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(z2_size, self.ne))
+            self.upsilon = init_(nn.Linear(z_size, self.ne))
             in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
             out_size = self.ne * self.d_space() if self.no_scan else self.ne
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = Categorical(z2_size, 2)
+        self.d_gate = Categorical(z_size, 2)
         self.kernel_net = nn.Linear(m_size, conv_hidden_size * kernel_size ** 2 * d)
         self.conv_bias = nn.Parameter(torch.zeros(conv_hidden_size))
         self.critic = init_(nn.Linear(hidden_size, 1))
-        assert lower_level_load_path
-        lower_level_params = dict(
-            conv_hidden_size=32,
-            hidden_size=64,
-            inventory_hidden_size=32,
-            kernel_size=3,
-            num_conv_layers=1,
-            num_layers=1,
-            stride=1,
-            task_embed_size=32,
-            recurrent=False,
-        )
-        if lower_level_config:
-            with open(lower_level_config) as f:
-                params = json.load(f)
-            lower_level_params = {
-                k: v for k, v in params.items() if k in lower_level_params.keys()
-            }
-        ll_action_space = spaces.Discrete(Command(*action_space.nvec).lower)
-        self.lower_level = Agent(
-            obs_space=lower_env.Env.observation_space_from_upper(observation_space),
-            entropy_coef=0,
-            action_space=ll_action_space,
-            **lower_level_params,
-        )
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=n_a,
@@ -175,13 +143,7 @@ class Recurrence(nn.Module):
             v=1,
             dg_probs=2,
             dg=1,
-            l=1,
-            lh=lower_level_params["hidden_size"],
         )
-        if lower_level_load_path is not None:
-            state_dict = torch.load(lower_level_load_path, map_location="cpu")
-            self.lower_level.load_state_dict(state_dict["agent"])
-            print(f"Loaded lower_level from {lower_level_load_path}.")
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = self.state_sizes
@@ -238,7 +200,6 @@ class Recurrence(nn.Module):
         ones = self.ones.expand_as(R)
         actions = Command(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        L = torch.cat([actions.lower, hx.l.view(1, N) - 1], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
@@ -319,8 +280,8 @@ class Recurrence(nn.Module):
             h1 = h1.sum(-1).sum(-1)
             inventory = state.resources[t]
             embedded_inventory = self.embed_inventory(inventory)
-            zeta1_input = torch.cat([m, h1, embedded_inventory], dim=-1)
-            z1 = F.relu(self.zeta1(zeta1_input))
+            z = torch.cat([m, h1, embedded_inventory], dim=-1)
+            z1 = F.relu(self.zeta1(z))
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
@@ -332,71 +293,19 @@ class Recurrence(nn.Module):
             #        break
             #    except (ValueError, AssertionError):
             #        pass
-            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # a = 3 * (it - 1) + (be - 1)
 
-            line = self.subtasks[A[t].clamp(0, len(self.subtasks) - 1)]
-            ll_action = self.lower_level(
-                lower_env.Obs(inventory=inventory, line=line, obs=obs),
-                hx.lh,
-                masks=None,
-                action=None,
-            ).task
-            if torch.any(L[0] < 0):
-                assert torch.all(L[0] < 0)
-                L[t] = ll_action.flatten()
-
-            if self.fuzz:
-                assert not self.debug_obs
-                ac, be, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-                sell = (be == 2).long()
-                channel_index = 3 * sell + (it - 1) * (1 - sell)
-                channel = state.obs[t][R, channel_index]
-                agent_channel = state.obs[t][R, -1]
-                # self.print("channel", channel)
-                # self.print("agent_channel", agent_channel)
-                is_subtask = (ac == 0).flatten()
-                standing_on = (channel * agent_channel).view(N, -1).sum(-1)
-                # correct_action = ((be - 1) == L[t]).float()
-                # self.print("be", be)
-                # self.print("L[t]", L[t])
-                # self.print("correct_action", correct_action)
-                # dg = standing_on * correct_action + not_subtask
-                fuzz = (
-                    is_subtask.long()
-                    * (1 - standing_on).long()
-                    * torch.randint(2, size=(len(standing_on),), device=rnn_hxs.device)
-                )
-                lt = (fuzz * (be - 1) + (1 - fuzz) * L[t]).long()
-                self.print("fuzz", fuzz, lt)
-                # dg = dg.view(N, 1)
-                # correct_action = ((be - 1) == lt).float()
-            else:
-                lt = L[t]
-
-            embedded_lower = self.embed_lower(lt.clone())
-            z2 = torch.cat([zeta1_input, embedded_lower], dim=-1)
-
-            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # index1 = it - 1
-            # index2 = 1 + ((it - 3) % 3)
-            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            # z2 = (channel1 > channel2).unsqueeze(-1).float()
-
-            d_gate = self.d_gate(z2)
+            d_gate = self.d_gate(z)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 
             if self.olsk or self.no_pointer:
-                h = self.upsilon(z2, h)
+                h = self.upsilon(z, h)
                 u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
                 delta = D[t].clone() - 1
             else:
-                u = self.upsilon(z2).softmax(dim=-1)
+                u = self.upsilon(z).softmax(dim=-1)
                 self.print("u", u)
                 d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
@@ -412,8 +321,6 @@ class Recurrence(nn.Module):
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
             yield RecurrentState(
                 a=A[t],
-                l=L[t].detach(),
-                lh=hx.lh,
                 v=self.critic(z1),
                 h=h,
                 p=p,
