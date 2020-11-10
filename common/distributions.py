@@ -4,6 +4,7 @@ from tensorflow.python.ops import math_ops
 
 from baselines.a2c.utils import fc
 import common.tf_util as U
+import distribution_modules
 
 
 class Pd(object):
@@ -453,7 +454,7 @@ def validate_probtype(probtype, pdparam):
     X = probtype.sample_placeholder([N])
     pd = probtype.pdfromflat(M)
     calcloglik = U.function([X, M], pd.logp(X))
-    calcent = U.function([M], pd.entropy())
+    calcent = U.function([M], distribution_modules.entropy())
     Xval = tf.get_default_session().run(pd.sample(), feed_dict={M: Mval})
     logliks = calcloglik(Xval, Mval)
     entval_ll = -logliks.mean()  # pylint: disable=E1101

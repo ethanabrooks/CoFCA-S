@@ -3,14 +3,14 @@ import torch.jit
 from torch import nn as nn
 from torch.nn import functional as F
 
-import networks
+import agents
 import ours
-from distributions import FixedCategorical
-from networks import AgentOutputs, NNBase
+from distribution_modules import FixedCategorical
+from agents import AgentOutputs, NNBase
 from data_types import Command
 
 
-class Agent(networks.Agent, NNBase):
+class Agent(agents.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,

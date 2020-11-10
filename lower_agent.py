@@ -3,10 +3,10 @@ import torch
 from gym import spaces
 from torch import nn as nn
 
-import networks
+import agents
 from layers import Flatten
 from lower_env import Obs
-from networks import NNBase
+from agents import NNBase
 from utils import init_, init, init_normc_
 
 
@@ -23,7 +23,7 @@ def get_obs_sections(obs_spaces):
     return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
-class Agent(networks.Agent):
+class Agent(agents.Agent):
     def build_recurrent_module(
         self, hidden_size, obs_spaces, recurrent, **network_args
     ):
@@ -91,7 +91,7 @@ class LowerLevel(NNBase):
         _init = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
         self.obs_embed.add_module("flatten", Flatten())
 
-        self.line_embed = networks.MultiEmbeddingBag(
+        self.line_embed = agents.MultiEmbeddingBag(
             obs_spaces.line.nvec, embedding_dim=task_embed_size
         )
         self.embed_inventory = nn.Sequential(

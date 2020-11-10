@@ -9,9 +9,9 @@ import torch.nn.functional as F
 from gym import spaces
 
 from data_types import Command, Obs
-from distributions import FixedCategorical, Categorical
+from distribution_modules import FixedCategorical, Categorical
 from lower_agent import get_obs_sections, optimal_padding
-from networks import MultiEmbeddingBag
+from agents import MultiEmbeddingBag
 from transformer import TransformerModel
 from upper_env import Env
 from utils import init_

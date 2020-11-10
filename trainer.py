@@ -21,7 +21,7 @@ from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
 from configs import default
-from networks import Agent, AgentOutputs, MLPBase
+from agents import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import RESET
@@ -259,7 +259,7 @@ class Trainer:
                             dict(
                                 **dict(eval_report.items()),
                                 **dict(eval_infos.items()),
-                                training_iteration=frames['so_far']
+                                training_iteration=frames["so_far"],
                             )
                         )
                     eval_envs.close()

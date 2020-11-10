@@ -8,7 +8,7 @@ import torch.nn as nn
 import ours
 import upper_agent
 import debug_env as _debug_env
-import networks
+import agents
 import upper_env
 from aggregator import InfosAggregator
 from configs import default_upper

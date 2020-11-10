@@ -7,7 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym.spaces import Box, Discrete
 
-from distributions import Categorical, DiagGaussian
+import distribution_modules
+from distribution_modules import Categorical, DiagGaussian
 from layers import Flatten
 from utils import init, init_normc_, init_
 
@@ -89,7 +90,7 @@ class Agent(nn.Module):
             action = action[:, 0]
 
         action_log_probs = dist.log_probs(action)
-        entropy = dist.entropy().mean()
+        entropy = distribution_modules.entropy().mean()
         return AgentOutputs(
             value=value,
             action=action,
