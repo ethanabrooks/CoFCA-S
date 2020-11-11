@@ -3,12 +3,9 @@ import pickle
 from itertools import islice
 from pathlib import Path
 
-import torch.nn as nn
-
+import debug_env as _debug_env
 import ours
 import upper_agent
-import debug_env as _debug_env
-import agents
 import upper_env
 from aggregator import InfosAggregator
 from configs import default_upper
@@ -97,11 +94,6 @@ class UpperTrainer(Trainer):
                 k in inspect.signature(upper_env.Env.__init__).parameters
                 or k in inspect.signature(cls.make_env).parameters
             ):
-                if k == "lower_level":
-                    if v:
-                        print("lower_level specified. Using gridworld env")
-                    else:
-                        print("lower_level not specified. Using debug_env")
                 env_args[k] = v
             if k in inspect.signature(ours.Recurrence.__init__).parameters:
                 agent_args[k] = v
@@ -124,11 +116,8 @@ class UpperTrainer(Trainer):
         parser.add_argument("--debug-obs", action="store_true")
         parser.add_argument("--fuzz", action="store_true")
         parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--hard-code-lower", action="store_true")
         parser.add_argument("--inventory-hidden-size", type=int)
         parser.add_argument("--kernel-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
-        parser.add_argument("--lower-level-config", type=Path)
         parser.add_argument("--olsk", action="store_true")
         parser.add_argument("--num-edges", type=int)
         parser.add_argument("--no-op-coef", type=float)
@@ -143,7 +132,6 @@ class UpperTrainer(Trainer):
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.main.add_argument("--no-eval", action="store_true")
-        parser.main.add_argument("--lower-level-load-path")
         env_parser = parser.main.add_argument_group("env_args")
         cls.add_env_arguments(env_parser)
         cls.add_agent_arguments(parser.agent)

@@ -111,7 +111,8 @@ class Env(gym.Env):
                         i=self.world_size,
                         j=self.world_size,
                         target=len(Building),
-                        ptr=self.n_lines,
+                        delta=2 * self.n_lines,
+                        dg=2,
                     )
                 )
             )
@@ -323,7 +324,7 @@ class Env(gym.Env):
             action: Action
             # noinspection PyTypeChecker
             action = yield state, render
-            ptr = action.ptr
+            ptr += action.delta
             action = action.parse()
 
             if isinstance(action, Command):
@@ -602,12 +603,12 @@ class Env(gym.Env):
     def main(self):
         def action_fn(string):
             if string == "nn":
-                raw_action = Action(1, 0, 0, 0, 0, 0)
+                raw_action = Action(1, 0, 0, 0, 0, 0, 0)
             elif string == "ns":
-                raw_action = Action(0, 0, 0, 0, 0, 0)
+                raw_action = Action(0, 0, 0, 0, 0, 0, 0)
             else:
                 try:
-                    raw_action = Action(2, 1, *map(int, string.split()), ptr=0)
+                    raw_action = Action(2, 1, *map(int, string.split()), delta=0, dg=0)
                 except (ValueError, TypeError) as e:
                     print(e)
                     return

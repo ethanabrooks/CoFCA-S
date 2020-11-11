@@ -1,6 +1,9 @@
+import math
+
 import torch
 from torch import nn as nn
 
+from distributions import ConditionalCategorical, BatchConditionalCategorical
 from utils import init, init_normc_, AddBias
 
 """
@@ -65,16 +68,26 @@ class DiagGaussian(nn.Module):
 
 
 class AutoRegressive(nn.Module):
-    def __init__(self, num_inputs, num_choices, num_outputs):
+    def __init__(
+        self,
+        num_inputs: int,
+        num_choices: int,
+        num_deterministic: int,
+        num_outputs: int,
+    ):
+        super().__init__()
+        self.num_choices = num_choices
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )
         self.num_choices = num_choices
         self.choices_logits = init_(nn.Linear(num_inputs, num_choices))
-        self.chosen = init_(nn.Linear(num_inputs, num_choices * num_outputs))
+        self.options_shape = (num_choices - num_deterministic), (num_outputs - 1)
+        self.options_logits = init_(
+            nn.Linear(num_inputs, math.prod(self.options_shape))
+        )
 
     def forward(self, x):
-        N = x.size(0)
-        R = torch.arange(N, device=x.device)
         choices = self.choices_logits(x)
-        chosen = self.chosen(x).view(N, self.num_choices, -1)[R, choices]
+        options = self.options_logits(x)
+        return BatchConditionalCategorical(choices, options)

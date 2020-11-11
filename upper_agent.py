@@ -8,6 +8,7 @@ import ours
 from distribution_modules import FixedCategorical
 from agents import AgentOutputs, NNBase
 from data_types import Command
+from distributions import JointDistribution, ConditionalCategorical
 
 
 class Agent(agents.Agent, NNBase):
@@ -41,34 +42,26 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = Command(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = Command(
-            upper=hx.a_probs,
-            lower=None,
-            delta=None if rm.no_pointer else hx.d_probs,
-            dg=hx.dg_probs,
-            ptr=None,
+        actions = [hx.d, hx.dg, hx.a]
+        dists = JointDistribution(
+            FixedCategorical(logits=hx.d_probs),
+            FixedCategorical(logits=hx.dg_probs),
+            ConditionalCategorical(hx.options_probs, hx.choices_probs),
         )
 
-        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
-        action_log_probs = sum(
-            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
-        )
-        entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
-        aux_loss = -self.entropy_coef * entropy
-        if probs.dg is not None:
-            aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
+        aux_loss = -self.entropy_coef * dists.entropy()
+        # if probs.dg is not None:
+        #     aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
 
-        rnn_hxs = torch.cat(hx._replace(l=X.lower), dim=-1)
-        action = torch.cat(X, dim=-1)
+        rnn_hxs = torch.cat(hx, dim=-1)
         return AgentOutputs(
             value=hx.v,
-            action=action,
-            action_log_probs=action_log_probs,
+            action=torch.cat(actions, dim=-1),
+            action_log_probs=dists.log_probs(hx.d, hx.dg, hx.a),
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=rnn_hxs,
-            log=dict(entropy=entropy),
+            log=dict(entropy=(dists.entropy())),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):

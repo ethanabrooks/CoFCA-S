@@ -7,6 +7,7 @@ import numpy as np
 import typing
 
 from colored import fg
+from ray.rllib.train import torch
 
 from utils import RESET
 
@@ -55,18 +56,22 @@ class WorkerID(Enum):
     C = auto()
 
 
+X = Union[int, torch.Tensor]
+
+
 @dataclass(frozen=True)
 class Action:
-    type: int
-    worker: int
-    i: int
-    j: int
-    target: int
-    ptr: int
+    delta: X
+    dg: X
+    type: X  # 2
+    worker: X  # 3
+    target: X  # 16
+    i: X  # 8
+    j: X  # 8
 
     def parse(self):
         action_type = ActionTypes[self.type]
-        if isinstance(action_type, NoOp):
+        if action_type is None:
             return action_type
         elif action_type is Command:
             action_target = ActionTargets[self.target]
@@ -137,11 +142,6 @@ class Command:
 
 
 @dataclass(frozen=True)
-class NoOp(Enum):
-    step: bool
-
-
-@dataclass(frozen=True)
 class Resources:
     minerals: int
     gas: int
@@ -153,11 +153,6 @@ class Resources:
 assert set(Resources(0, 0).__annotations__.keys()) == {
     r.lower() for r in Resource.__members__
 }
-
-
-@dataclass(frozen=True)
-class NoOp:
-    step: bool
 
 
 Obs = namedtuple("Obs", "lines mask obs resources workers")
@@ -274,7 +269,7 @@ class State:
 
 WorldObject = Union[Building, Resource, WorkerID]
 WorldObjects = list(Building) + list(Resource) + list(WorkerID)
-ActionTypes = [NoOp(step=True), NoOp(step=False), Command]
+ActionTypes = [None, Command]
 ActionTargets = list(Building) + list(Resource)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
