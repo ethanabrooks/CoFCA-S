@@ -1,3 +1,4 @@
+import math
 from collections import namedtuple
 from contextlib import contextmanager
 from typing import Union
@@ -6,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass
 from gym.spaces import Box, Discrete
 
 import distribution_modules
@@ -298,3 +300,22 @@ class MultiEmbeddingBag(nn.Module):
 
     def forward(self, inputs):
         return self.embedding(self.offset + inputs)
+
+
+@dataclass
+class IntEncoding(nn.Module):
+    d_model: int
+
+    def __post_init__(self):
+        self.div_term = torch.exp(
+            torch.arange(0, self.d_model, 2).float()
+            * (-math.log(10000.0) / self.d_model)
+        )
+
+    def forward(self, x):
+        shape = x.shape
+        div_term = self.div_term.view(*(1 for _ in shape), -1)
+        x = x.unsqueeze(-1)
+        sins = torch.sin(x * div_term)
+        coss = torch.cos(x * div_term)
+        return torch.stack([sins, coss], dim=-1).view(*shape, self.d_model)

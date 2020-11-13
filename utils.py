@@ -108,7 +108,7 @@ def init_(network: nn.Module, non_linearity: nn.Module = nn.ReLU):
         network,
         nn.init.orthogonal_,
         lambda x: nn.init.constant_(x, 0),
-        nn.init.calculate_gain(non_linearity.__name__),
+        nn.init.calculate_gain(non_linearity.__name__.lower()),
     )
 
 

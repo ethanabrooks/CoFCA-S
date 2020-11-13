@@ -3,9 +3,9 @@ import itertools
 import os
 import time
 from argparse import ArgumentParser
-from collections import namedtuple, Counter
+from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, DefaultDict, Union
 
 import gym
 import ray
@@ -16,15 +16,14 @@ from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
 import arguments
+from agents import Agent, AgentOutputs, MLPBase
 from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
 from configs import default
-from agents import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
-from utils import RESET
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
@@ -35,43 +34,39 @@ class Trainer:
     default = default
 
     @classmethod
-    def structure_config(cls, **config):
-        agent_args = {}
-        rollouts_args = {}
-        ppo_args = {}
-        env_args = {}
-        gen_args = {}
-        for k, v in config.items():
-            if k in ["num_processes"]:
-                gen_args[k] = v
-            else:
-                if k in inspect.signature(cls.build_agent).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(Agent.__init__).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(MLPBase.__init__).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(RolloutStorage.__init__).parameters:
-                    rollouts_args[k] = v
-                if k in inspect.signature(PPO.__init__).parameters:
-                    ppo_args[k] = v
-                if k in inspect.signature(cls.make_env).parameters:
-                    env_args[k] = v
-                if k in inspect.signature(cls.run).parameters or k not in (
-                    list(agent_args.keys())
-                    + list(rollouts_args.keys())
-                    + list(ppo_args.keys())
-                    + list(env_args.keys())
-                ):
-                    gen_args[k] = v
-        config = dict(
-            agent_args=agent_args,
-            rollouts_args=rollouts_args,
-            ppo_args=ppo_args,
-            env_args=env_args,
-            **gen_args,
+    def args_to_methods(cls):
+        return dict(
+            agent_args=[
+                cls.build_agent,
+                Agent.__init__,
+                MLPBase.__init__,
+            ],
+            rollouts_args=[RolloutStorage.__init__],
+            ppo_args=[PPO.__init__],
+            env_args=[cls.make_env],
+            run_args=[cls.run],
         )
-        return config
+
+    @classmethod
+    def structure_config(
+        cls, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        def parameters(*ms):
+            for method in ms:
+                yield from inspect.signature(method).parameters
+
+        args = defaultdict(dict)
+        args_to_methods = cls.args_to_methods()
+        for k, v in config.items():
+            assigned = False
+            for arg_name, methods in args_to_methods.items():
+                if k in parameters(*methods):
+                    args[arg_name][k] = v
+                    assigned = True
+            assert assigned
+        run_args = args.pop("run_args")
+        args.update(**run_args)
+        return args
 
     @staticmethod
     def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
@@ -195,7 +190,6 @@ class Trainer:
                 obs_space=train_envs.observation_space,
                 action_space=train_envs.action_space,
                 recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
-                num_processes=num_processes,
                 **rollouts_args,
             )
 

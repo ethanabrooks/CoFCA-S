@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-from agents import MultiEmbeddingBag
+from agents import MultiEmbeddingBag, IntEncoding
 from data_types import (
     Obs,
     RecurrentState,
@@ -29,7 +29,7 @@ def conv_output_dimension(h, padding, kernel, stride, dilation=1):
 
 
 def get_obs_sections(obs_spaces):
-    return [int(np.prod(s.shape)) for s in obs_spaces]
+    return [int(np.prod(s.shape)) for s in astuple(obs_spaces)]
 
 
 def gate(g, new, old):
@@ -37,32 +37,49 @@ def gate(g, new, old):
     return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
-@dataclass
 class Recurrence(nn.Module):
-    action_space: spaces.MultiDiscrete
-    conv_hidden_size: int
-    debug: bool
-    debug_obs: bool
-    gate_coef: float
-    hidden_size: int
-    inventory_hidden_size: int
-    kernel_size: int
-    lower_embed_size: int
-    max_eval_lines: int
-    no_pointer: bool
-    no_roll: bool
-    no_scan: bool
-    num_edges: int
-    observation_space: spaces.Dict
-    olsk: bool
-    stride: int
-    task_embed_size: int
-    transformer: bool
-
-    def __post_init__(self):
+    def __init__(
+        self,
+        action_space: spaces.MultiDiscrete,
+        conv_hidden_size: int,
+        debug: bool,
+        debug_obs: bool,
+        hidden_size: int,
+        resources_hidden_size: int,
+        kernel_size: int,
+        lower_embed_size: int,
+        max_eval_lines: int,
+        no_pointer: bool,
+        no_roll: bool,
+        no_scan: bool,
+        num_edges: int,
+        observation_space: spaces.Dict,
+        olsk: bool,
+        stride: int,
+        task_embed_size: int,
+        transformer: bool,
+    ):
+        self.action_space = action_space
+        self.conv_hidden_size = conv_hidden_size
+        self.debug = debug
+        self.debug_obs = debug_obs
+        self.hidden_size = hidden_size
+        self.resources_hidden_size = resources_hidden_size
+        self.kernel_size = kernel_size
+        self.lower_embed_size = lower_embed_size
+        self.max_eval_lines = max_eval_lines
+        self.no_pointer = no_pointer
+        self.no_roll = no_roll
+        self.no_scan = no_scan
+        self.num_edges = num_edges
+        self.observation_space = observation_space
+        self.olsk = olsk
+        self.stride = stride
+        self.task_embed_size = task_embed_size
+        self.transformer = transformer
         super().__init__()
-        obs_spaces = Obs(**self.observation_space.spaces)
-        self.obs_sections = get_obs_sections(obs_spaces)
+        self.obs_spaces = Obs(**self.observation_space.spaces)
+        self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
@@ -73,7 +90,7 @@ class Recurrence(nn.Module):
         )
         self.task_encoder = (
             TransformerModel(
-                ntoken=self.ne * self.d_space(),
+                ntoken=self.num_edges * self.d_space(),
                 ninp=self.task_embed_size,
                 nhid=self.task_embed_size,
             )
@@ -91,56 +108,56 @@ class Recurrence(nn.Module):
         self.actor_input_size = (
             self.hidden_size + self.lower_embed_size
         )  # TODO: try multiplication
+        A_probs_size = self.action_space.nvec.max()
         self.actor = init(
-            nn.Linear(
-                self.actor_input_size, self.actions_size * self.action_space.nvec.max()
-            ),
+            nn.Linear(self.actor_input_size, A_probs_size),
             nn.init.orthogonal_,
             lambda x: nn.init.constant_(x, 0),
             gain=0.01,
         )  # TODO: try init_
-        actor_nvec = torch.tensor(astuple(action_nvec.a_actions()))
-        self.embed_lower = MultiEmbeddingBag(actor_nvec)
+
+        A_nvec = torch.tensor(astuple(action_nvec.a_actions()))
+        self.embed_lower = MultiEmbeddingBag(
+            1 + A_nvec,  # +1 because of negatives
+            embedding_dim=self.lower_embed_size,
+        )
         self.conv_hidden_size = self.conv_hidden_size
 
-        self.register_buffer("AR", torch.arange(len(actor_nvec)))
+        self.register_buffer("AR", torch.arange(len(A_nvec)))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer(
             "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
         )
 
-        masks = torch.zeros(self.actions_size, self.action_space.nvec.max())
-        masks[
-            torch.arange(self.actions_size).unsqueeze(0) < actor_nvec.unsqueeze(1)
-        ] = 1
+        masks = torch.zeros(len(A_nvec), A_probs_size)
+        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
 
         d, h, w = (2, 1, 1) if self.debug_obs else self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride)
-        self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.resources.n, self.inventory_hidden_size)),
-            nn.ReLU(),
-        )
+        self.embed_resources = IntEncoding(self.resources_hidden_size)
         m_size = (
             2 * self.task_embed_size + self.hidden_size
             if self.no_pointer
             else self.task_embed_size
         )
-        z_size = m_size + self.conv_hidden_size + self.inventory_hidden_size
+        z_size = m_size + self.conv_hidden_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(z_size, self.hidden_size))
         if self.olsk:
-            assert self.ne == 3
+            assert self.num_edges == 3
             self.upsilon = nn.GRUCell(z_size, self.hidden_size)
-            self.beta = init_(nn.Linear(self.hidden_size, self.ne))
+            self.beta = init_(nn.Linear(self.hidden_size, self.num_edges))
         elif self.no_pointer:
             self.upsilon = nn.GRUCell(z_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(z_size, self.ne))
+            self.upsilon = init_(nn.Linear(z_size, self.num_edges))
             in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
-            out_size = self.ne * self.d_space() if self.no_scan else self.ne
+            out_size = (
+                self.num_edges * self.d_space() if self.no_scan else self.num_edges
+            )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = Categorical(z_size, 2)
         self.kernel_net = nn.Linear(
@@ -150,7 +167,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
             a=1,
-            a_probs=actor_nvec.max(),
+            a_probs=A_probs_size,
             d=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
@@ -218,6 +235,10 @@ class Recurrence(nn.Module):
         D = actions.delta.long()
         DG = actions.dg.long()
 
+        embedded_resources = self.embed_resources(state.resources).view(
+            N, 2 * self.resources_hidden_size
+        )
+
         for t in range(T):
 
             if self.no_pointer:
@@ -232,11 +253,11 @@ class Recurrence(nn.Module):
                     )
                     _, H = self.task_encoder(rolled)
                 H = H.transpose(0, 1).reshape(nl, N, -1)
-                P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+                P = self.beta(H).view(nl, N, -1, self.num_edges).softmax(2)
             elif self.transformer:
                 P = (
                     self.task_encoder(M.transpose(0, 1))
-                    .view(nl, N, -1, self.ne)
+                    .view(nl, N, -1, self.num_edges)
                     .softmax(2)
                 )
             else:
@@ -256,13 +277,13 @@ class Recurrence(nn.Module):
                 B = B * mask[p, R]
                 f, b = torch.unbind(B, dim=2)
                 B = torch.stack([f, b.flip(1)], dim=2)
-                B = B.view(N, 2 * nl, self.ne)
+                B = B.view(N, 2 * nl, self.num_edges)
                 rolledB = torch.roll(B, shifts=1, dims=1)
                 assert torch.all(rolledB[:, 0] == 0)
                 C = torch.cumprod(1 - rolledB, dim=1)
                 B = (1 - first) * B + first  # small prob stop on first
                 P = B * C
-                P = P.view(N, nl, 2, self.ne)
+                P = P.view(N, nl, 2, self.num_edges)
                 f, b = torch.unbind(P, dim=2)
                 P = torch.cat([b.flip(1), f], dim=1)
                 # noinspection PyArgumentList
@@ -294,9 +315,7 @@ class Recurrence(nn.Module):
                 dim=0,
             ).relu()
             h1 = h1.sum(-1).sum(-1)
-            inventory = state.resources[t]
-            embedded_inventory = self.embed_inventory(inventory)
-            z = torch.cat([m, h1, embedded_inventory], dim=-1)
+            z = torch.cat([m, h1, embedded_resources[t]], dim=-1)
             z1 = F.relu(self.zeta1(z))
 
             # noinspection PyTypeChecker
@@ -314,7 +333,7 @@ class Recurrence(nn.Module):
             A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
             lower = A[t - 1, R, hx.l]  # previous lower
-            embedded_lower = self.embed_lower(lower)
+            embedded_lower = self.embed_lower(lower + 1)  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
             a_dist = FixedCategorical(probs=a_probs * self.masks[hx.l])

@@ -1,4 +1,3 @@
-import inspect
 import pickle
 from itertools import islice
 from pathlib import Path
@@ -8,7 +7,7 @@ import env
 import our_agent
 import ours
 from aggregator import InfosAggregator
-from configs import default_upper
+from configs import starcraft_default
 from trainer import Trainer
 from wrappers import VecPyTorch
 
@@ -39,7 +38,7 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
 
 class UpperTrainer(Trainer):
     metric = "eval_reward"
-    default = default_upper
+    default = starcraft_default
 
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
@@ -97,30 +96,11 @@ class UpperTrainer(Trainer):
             return env.Env(**kwargs)
 
     @classmethod
-    def structure_config(cls, **config):
-        config = super().structure_config(**config)
-        agent_args = config.pop("agent_args")
-        env_args = config.pop("env_args")
-        gen_args = {}
-
-        # agent_args["eval_lines"] = config["max_eval_lines"]
-        # agent_args["debug"] = config["render"] or config["render_eval"]
-
-        for k, v in config.items():
-            if (
-                k in inspect.signature(env.Env.__init__).parameters
-                or k in inspect.signature(cls.make_env).parameters
-            ):
-                env_args[k] = v
-            if k in inspect.signature(ours.Recurrence.__init__).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(our_agent.Agent.__init__).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(our_agent.Agent.__init__).parameters:
-                agent_args[k] = v
-            if k in inspect.signature(cls.run).parameters:
-                gen_args[k] = v
-        return dict(env_args=env_args, agent_args=agent_args, **gen_args)
+    def args_to_methods(cls):
+        mapping = super().args_to_methods()
+        mapping["env_args"] += [env.Env.__init__]
+        mapping["agent_args"] += [ours.Recurrence.__init__, our_agent.Agent.__init__]
+        return mapping
 
     @classmethod
     def add_env_arguments(cls, parser):
@@ -131,13 +111,11 @@ class UpperTrainer(Trainer):
         parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--debug", action="store_true")
         parser.add_argument("--debug-obs", action="store_true")
-        parser.add_argument("--fuzz", action="store_true")
         parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--inventory-hidden-size", type=int)
+        parser.add_argument("--resources-hidden-size", type=int)
         parser.add_argument("--kernel-size", type=int)
         parser.add_argument("--olsk", action="store_true")
         parser.add_argument("--num-edges", type=int)
-        parser.add_argument("--no-op-coef", type=float)
         parser.add_argument("--no-pointer", action="store_true")
         parser.add_argument("--no-roll", action="store_true")
         parser.add_argument("--no-scan", action="store_true")

@@ -85,20 +85,24 @@ class Env(gym.Env):
                 )
         self.non_failure_random = self.random.get_state()
 
-        self.action_space = np.array(
-            astuple(
-                Action(
-                    delta=2 * self.max_lines,
-                    dg=2,
-                    is_op=2,
-                    target=len(Resource) + len(Building),
-                    ij=self.world_size ** 2,
-                    worker=len(WorkerID),
+        self.action_space = spaces.MultiDiscrete(
+            np.array(
+                astuple(
+                    Action(
+                        delta=2 * self.max_lines,
+                        dg=2,
+                        is_op=2,
+                        target=len(Resource) + len(Building),
+                        ij=self.world_size ** 2,
+                        worker=len(WorkerID),
+                    )
                 )
             )
         )
 
-        lines_space = spaces.MultiDiscrete(np.array([len(Building)] * self.max_lines))
+        lines_space = spaces.MultiDiscrete(
+            np.array([[2, len(Building)]] * self.max_lines)
+        )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
 
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])

@@ -81,10 +81,14 @@ class AActions(typing.Generic[X]):
     ij: X  # 64
 
     def thresholds(self):
-        thresholds = AActions(*(-1 for _ in astuple(self)))
+        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
         thresholds = replace(thresholds, is_op=0, target=len(Resource))
         for i, t in enumerate(ActionTargets):
-            assert t is Resource if i < thresholds.target else t is Building
+            assert (
+                isinstance(t, Resource)
+                if i < thresholds.target
+                else isinstance(t, Building)
+            )
         return thresholds
 
     def targeted(self):
@@ -101,7 +105,7 @@ class Action(AActions):
 
     def a_actions(self):
         return AActions(
-            **{k: v for k, v in asdict(self) if k in super().__annotations__}
+            **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
         )
 
     def parse(self, world_shape: Coord):
