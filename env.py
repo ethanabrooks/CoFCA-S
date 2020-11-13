@@ -52,7 +52,7 @@ def delete_nth(d, n):
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
-    debug_env: bool
+    destroy_building_prob: float
     eval_steps: int
     failure_buffer_load_path: Path
     failure_buffer_size: int
@@ -133,15 +133,15 @@ class Env(gym.Env):
 
     @classmethod
     def add_arguments(cls, p):
+        p.add_argument("--break-on-fail", action="store_true")
+        p.add_argument("--destroy-building-prob", type=float)
+        p.add_argument("--failure-buffer-load-path", type=Path, default=None)
+        p.add_argument("--failure-buffer-size", type=int)
         p.add_argument("--min-lines", type=int)
         p.add_argument("--max-lines", type=int)
         p.add_argument("--num-initial-buildings", type=int)
-        p.add_argument("--break-on-fail", action="store_true")
         p.add_argument("--tgt-success-rate", type=float)
-        p.add_argument("--failure-buffer-size", type=int)
         p.add_argument("--world-size", type=int)
-        p.add_argument("--failure-buffer-load-path", type=Path, default=None)
-        p.add_argument("--debug-env", action="store_true")
 
     def build_dependencies(self):
         n = len(Building)
@@ -363,17 +363,23 @@ class Env(gym.Env):
         mask = np.array([p is not None for p in padded])
 
         def render():
-            for i, line in enumerate(lines):
+            def lines_iterator():
+                buildings = [*state.building_positions.values()]
+                for l in lines:
+                    built = l.building in buildings
+                    yield Line(
+                        required=l.required and not built,
+                        building=l.building,
+                    )
+                    if built and l.required:
+                        buildings.remove(l.building)
+
+            for i, line in enumerate(list(lines_iterator())):
                 print(
                     "{:2}{}{} ({}) {}".format(
                         i,
                         "-" if i == state.pointer else " ",
-                        "*"
-                        if (
-                            line.required
-                            and line.building not in state.building_positions
-                        )
-                        else " ",
+                        "*" if line.required else " ",
                         ActionTargets.index(line.building),
                         str(line.building),
                     )
@@ -562,6 +568,17 @@ class Env(gym.Env):
         ptr: int = 0
 
         while True:
+            destroyed_buildings = [
+                (c, b)
+                for c, b in building_positions.items()
+                if self.random.random() < self.destroy_building_prob
+                and b is not Building.NEXUS
+            ]
+            if destroyed_buildings:
+                destroy_coords, destroyed_buildings = zip(*destroyed_buildings)
+                for coord in destroy_coords:
+                    del building_positions[coord]
+
             success = not required - Counter(building_positions.values())
 
             state = State(
@@ -576,7 +593,9 @@ class Env(gym.Env):
             def render():
                 print("Resources:")
                 pprint(resources)
-                # print("Chance events:", fg("purple_1b"), *chance_events, RESET)
+                if destroyed_buildings:
+                    print(fg("red"), "Destroyed:", sep="")
+                    print(*destroyed_buildings, sep="\n", end=RESET + "\n")
 
             self.render_thunk = render
 
@@ -623,24 +642,15 @@ class Env(gym.Env):
                 elif isinstance(worker_action, Building):
                     building = worker_action
                     insufficient_resources = Costs[building] - resources
-                    if (
-                        not insufficient_resources
-                        and worker_position not in building_positions
+                    if self.building_allowed(
+                        building,
+                        building_positions,
+                        insufficient_resources,
+                        positions,
+                        worker_position,
                     ):
-                        if (
-                            building is Building.ASSIMILATOR
-                            and worker_position == positions[Resource.GAS]
-                        ) or (
-                            building is not Building.ASSIMILATOR
-                            and worker_position
-                            not in (
-                                *building_positions,
-                                positions[Resource.GAS],
-                                positions[Resource.MINERALS],
-                            )
-                        ):
-                            building_positions[worker_position] = building
-                            resources -= Costs[building]
+                        building_positions[worker_position] = building
+                        resources -= Costs[building]
                 else:
                     raise RuntimeError
 
@@ -648,6 +658,24 @@ class Env(gym.Env):
             for resource, _remaining in remaining.items():
                 if not _remaining:
                     del positions[resource]
+
+    @staticmethod
+    def building_allowed(
+        building,
+        building_positions,
+        insufficient_resources,
+        positions,
+        worker_position,
+    ):
+        if not insufficient_resources and worker_position not in building_positions:
+            if building is Building.ASSIMILATOR:
+                return worker_position == positions[Resource.GAS]
+            else:
+                return worker_position not in (
+                    *building_positions,
+                    positions[Resource.GAS],
+                    positions[Resource.MINERALS],
+                )
 
     def step(self, action: np.ndarray):
         return self.iterator.send(Action(*action))

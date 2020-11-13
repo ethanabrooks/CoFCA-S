@@ -4,9 +4,9 @@ from itertools import islice
 from pathlib import Path
 
 import debug_env as _debug_env
-import ours
-import our_agent
 import env
+import our_agent
+import ours
 from aggregator import InfosAggregator
 from configs import default_upper
 from trainer import Trainer

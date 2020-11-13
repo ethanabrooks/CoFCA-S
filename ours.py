@@ -15,10 +15,21 @@ from data_types import (
     Action,
 )
 from distribution_modules import FixedCategorical, Categorical
-from lower_agent import get_obs_sections, optimal_padding
 from transformer import TransformerModel
-from env import ActionSpace
 from utils import init_, init
+
+
+def optimal_padding(h, kernel, stride):
+    n = np.ceil((h - kernel) / stride + 1)
+    return 1 + int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+
+
+def conv_output_dimension(h, padding, kernel, stride, dilation=1):
+    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
+
+
+def get_obs_sections(obs_spaces):
+    return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
 def gate(g, new, old):
@@ -28,7 +39,7 @@ def gate(g, new, old):
 
 @dataclass
 class Recurrence(nn.Module):
-    action_space: ActionSpace
+    action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
     debug_obs: bool

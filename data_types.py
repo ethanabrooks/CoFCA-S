@@ -105,7 +105,7 @@ class Action(AActions):
         )
 
     def parse(self, world_shape: Coord):
-        if not self.is_op:
+        if not self.is_op or any(x < 0 for x in astuple(self)):
             return None
         action_target = self.targeted()
         if action_target in Building:
