@@ -231,7 +231,7 @@ class _Function(object):
     def __init__(self, inputs, outputs, updates, givens):
         for inpt in inputs:
             if not hasattr(inpt, "make_feed_dict") and not (
-                type(inpt) is tf.Tensor and len(inpt.op.inputs) == 0
+                type(inpt) is tf.Tensor and len(inpt.is_op.inputs) == 0
             ):
                 assert (
                     False

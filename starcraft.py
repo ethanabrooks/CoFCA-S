@@ -5,11 +5,12 @@ from pathlib import Path
 
 import debug_env as _debug_env
 import ours
-import upper_agent
-import upper_env
+import our_agent
+import env
 from aggregator import InfosAggregator
 from configs import default_upper
 from trainer import Trainer
+from wrappers import VecPyTorch
 
 
 class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
@@ -57,10 +58,10 @@ class UpperTrainer(Trainer):
             msg = yield
             report(**msg)
 
-    def build_agent(self, envs, debug=False, **agent_args):
+    def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return upper_agent.Agent(
+        return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             debug=debug,
@@ -68,16 +69,32 @@ class UpperTrainer(Trainer):
         )
 
     @staticmethod
-    def make_env(seed, rank, evaluating, debug_env=False, env_id=None, **kwargs):
+    def make_env(
+        seed,
+        rank,
+        evaluating,
+        min_lines=None,
+        max_lines=None,
+        min_eval_lines=None,
+        max_eval_lines=None,
+        debug_env=False,
+        env_id=None,
+        **kwargs
+    ):
+        if evaluating:
+            min_lines = min_eval_lines
+            max_lines = max_eval_lines
         kwargs.update(
-            seed=seed + rank,
-            rank=rank,
             evaluating=evaluating,
+            min_lines=min_lines,
+            max_lines=max_lines,
+            rank=rank,
+            random_seed=seed + rank,
         )
         if debug_env:
             return _debug_env.Env(**kwargs)
         else:
-            return upper_env.Env(**kwargs)
+            return env.Env(**kwargs)
 
     @classmethod
     def structure_config(cls, **config):
@@ -91,15 +108,15 @@ class UpperTrainer(Trainer):
 
         for k, v in config.items():
             if (
-                k in inspect.signature(upper_env.Env.__init__).parameters
+                k in inspect.signature(env.Env.__init__).parameters
                 or k in inspect.signature(cls.make_env).parameters
             ):
                 env_args[k] = v
             if k in inspect.signature(ours.Recurrence.__init__).parameters:
                 agent_args[k] = v
-            if k in inspect.signature(upper_agent.Agent.__init__).parameters:
+            if k in inspect.signature(our_agent.Agent.__init__).parameters:
                 agent_args[k] = v
-            if k in inspect.signature(upper_agent.Agent.__init__).parameters:
+            if k in inspect.signature(our_agent.Agent.__init__).parameters:
                 agent_args[k] = v
             if k in inspect.signature(cls.run).parameters:
                 gen_args[k] = v
@@ -107,7 +124,7 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_env_arguments(cls, parser):
-        upper_env.Env.add_arguments(parser)
+        env.Env.add_arguments(parser)
 
     @classmethod
     def add_agent_arguments(cls, parser):
@@ -132,6 +149,8 @@ class UpperTrainer(Trainer):
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.main.add_argument("--no-eval", action="store_true")
+        parser.main.add_argument("--min-eval-lines", type=int)
+        parser.main.add_argument("--max-eval-lines", type=int)
         env_parser = parser.main.add_argument_group("env_args")
         cls.add_env_arguments(env_parser)
         cls.add_agent_arguments(parser.agent)

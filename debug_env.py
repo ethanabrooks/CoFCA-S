@@ -2,16 +2,17 @@ from collections import Counter
 from pprint import pprint
 import numpy as np
 
-import upper_env
-from enums import Interaction, Refined, Terrain
+import env
 from lines import Subtask
-from data_types import Command, Other
+from data_types import Command
 
 
-class Env(upper_env.Env):
-    def time_per_subtask(self):
-        e = 0.0001
-        return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
+class Env(env.Env):
+    @staticmethod
+    def time_per_subtask():
+        # e = 0.0001
+        # return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
+        return 1
 
     def state_generator(self, *lines):
         blocks = list(self.get_blocks(*lines))

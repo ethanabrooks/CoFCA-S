@@ -19,6 +19,7 @@ def ravel_multi_index(
 
     if validate:
         dims = torch.tensor(dims, device=multi_index.device)
+        # noinspection PyTypeChecker
         assert torch.all(multi_index < dims.view(n, *(1 for _ in shape)))
 
     _, *dims = dims

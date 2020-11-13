@@ -400,9 +400,6 @@ class Trainer:
             c = cls.structure_config(**c)
             cls().run(**c)
 
-        def print_color(string):
-            print(fg("gold_1"), string, RESET, sep="")
-
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
             run(config)

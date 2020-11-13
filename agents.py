@@ -1,5 +1,6 @@
 from collections import namedtuple
 from contextlib import contextmanager
+from typing import Union
 
 import numpy as np
 import torch
@@ -287,7 +288,7 @@ class MLPBase(NNBase):
 
 
 class MultiEmbeddingBag(nn.Module):
-    def __init__(self, nvec: np.ndarray, **kwargs):
+    def __init__(self, nvec: Union[np.ndarray, torch.Tensor], **kwargs):
         super().__init__()
         self.embedding = nn.EmbeddingBag(num_embeddings=nvec.sum(), **kwargs)
         self.register_buffer(

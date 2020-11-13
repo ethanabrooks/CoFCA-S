@@ -1,13 +1,13 @@
-import collections
-from collections import namedtuple, Counter
-from dataclasses import dataclass
-from enum import unique, Enum, auto
-from typing import Tuple, Union, List, Generator, Dict
-import numpy as np
 import typing
+from collections import Counter
+from dataclasses import dataclass, asdict, astuple, replace
+from enum import unique, Enum, auto
+from typing import Tuple, Union, List, Generator, Dict, Generic
 
+import numpy as np
+import torch
 from colored import fg
-from ray.rllib.train import torch
+from gym import Space
 
 from utils import RESET
 
@@ -56,36 +56,66 @@ class WorkerID(Enum):
     C = auto()
 
 
-X = Union[int, torch.Tensor]
+O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
 
 
 @dataclass(frozen=True)
-class Action:
+class Obs(typing.Generic[O]):
+    lines: O
+    mask: O
+    obs: O
+    resources: O
+    workers: O
+
+
+X = typing.TypeVar("X")
+
+ActionTargets = list(Resource) + list(Building)
+
+
+@dataclass(frozen=True)
+class AActions(typing.Generic[X]):
+    is_op: X  # 2
+    target: X  # 16
+    worker: X  # 3
+    ij: X  # 64
+
+    def thresholds(self):
+        thresholds = AActions(*(-1 for _ in astuple(self)))
+        thresholds = replace(thresholds, is_op=0, target=len(Resource))
+        for i, t in enumerate(ActionTargets):
+            assert t is Resource if i < thresholds.target else t is Building
+        return thresholds
+
+    def targeted(self):
+        return ActionTargets[self.target]
+
+    def no_op(self):
+        return not self.is_op
+
+
+@dataclass(frozen=True)
+class Action(AActions):
     delta: X
     dg: X
-    type: X  # 2
-    worker: X  # 3
-    target: X  # 16
-    i: X  # 8
-    j: X  # 8
 
-    def parse(self):
-        action_type = ActionTypes[self.type]
-        if action_type is None:
-            return action_type
-        elif action_type is Command:
-            action_target = ActionTargets[self.target]
-            if action_target in Building:
-                assignment = BuildOrder(
-                    building=action_target, location=(self.i, self.j)
-                )
-            elif action_target in Resource:
-                assignment = action_target
-            else:
-                raise RuntimeError
-            return Command(WorkerID(self.worker + 1), assignment)
+    def a_actions(self):
+        return AActions(
+            **{k: v for k, v in asdict(self) if k in super().__annotations__}
+        )
+
+    def parse(self, world_shape: Coord):
+        if not self.is_op:
+            return None
+        action_target = self.targeted()
+        if action_target in Building:
+            i, j = np.unravel_index(self.ij, world_shape)
+            assignment = BuildOrder(building=action_target, location=(i, j))
+        elif action_target in Resource:
+            assignment = action_target
         else:
             raise RuntimeError
+        return Command(WorkerID(self.worker + 1), assignment)
 
 
 @dataclass(frozen=True)
@@ -155,11 +185,10 @@ assert set(Resources(0, 0).__annotations__.keys()) == {
 }
 
 
-Obs = namedtuple("Obs", "lines mask obs resources workers")
-
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
-assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
+annotations = Obs.__annotations__
+assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
@@ -269,8 +298,6 @@ class State:
 
 WorldObject = Union[Building, Resource, WorkerID]
 WorldObjects = list(Building) + list(Resource) + list(WorkerID)
-ActionTypes = [None, Command]
-ActionTargets = list(Building) + list(Resource)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PYLON: "p",
@@ -295,3 +322,30 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
 }
 
 assert set(Symbols) == set(WorldObjects)
+
+
+@dataclass
+class RecurrentState(Generic[X]):
+    a: X
+    d: X
+    h: X
+    dg: X
+    p: X
+    v: X
+    l: X
+    a_probs: X
+    d_probs: X
+    dg_probs: X
+
+
+@dataclass
+class ParsedInput(Generic[X]):
+    obs: X
+    actions: X
+
+
+@dataclass
+class RawAction(Generic[X]):
+    d: X
+    dg: X
+    a: X
