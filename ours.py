@@ -1,3 +1,4 @@
+from collections import Hashable
 from contextlib import contextmanager
 from dataclasses import replace, astuple, dataclass, asdict
 
@@ -37,47 +38,32 @@ def gate(g, new, old):
     return FixedCategorical(probs=g * new + (1 - g) * old)
 
 
+@dataclass
 class Recurrence(nn.Module):
-    def __init__(
-        self,
-        action_space: spaces.MultiDiscrete,
-        conv_hidden_size: int,
-        debug: bool,
-        debug_obs: bool,
-        hidden_size: int,
-        resources_hidden_size: int,
-        kernel_size: int,
-        lower_embed_size: int,
-        max_eval_lines: int,
-        no_pointer: bool,
-        no_roll: bool,
-        no_scan: bool,
-        num_edges: int,
-        observation_space: spaces.Dict,
-        olsk: bool,
-        stride: int,
-        task_embed_size: int,
-        transformer: bool,
-    ):
-        self.action_space = action_space
-        self.conv_hidden_size = conv_hidden_size
-        self.debug = debug
-        self.debug_obs = debug_obs
-        self.hidden_size = hidden_size
-        self.resources_hidden_size = resources_hidden_size
-        self.kernel_size = kernel_size
-        self.lower_embed_size = lower_embed_size
-        self.max_eval_lines = max_eval_lines
-        self.no_pointer = no_pointer
-        self.no_roll = no_roll
-        self.no_scan = no_scan
-        self.num_edges = num_edges
-        self.observation_space = observation_space
-        self.olsk = olsk
-        self.stride = stride
-        self.task_embed_size = task_embed_size
-        self.transformer = transformer
-        super().__init__()
+    action_space: spaces.MultiDiscrete
+    conv_hidden_size: int
+    debug: bool
+    debug_obs: bool
+    hidden_size: int
+    resources_hidden_size: int
+    kernel_size: int
+    lower_embed_size: int
+    max_eval_lines: int
+    no_pointer: bool
+    no_roll: bool
+    no_scan: bool
+    num_edges: int
+    observation_space: spaces.Dict
+    olsk: bool
+    stride: int
+    task_embed_size: int
+    transformer: bool
+
+    def __hash__(self):
+        return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
+
+    def __post_init__(self):
+        nn.Module.__init__(self)
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.train_lines = len(self.obs_spaces.lines.nvec)

@@ -101,7 +101,7 @@ class Env(gym.Env):
         )
 
         lines_space = spaces.MultiDiscrete(
-            np.array([[2, len(Building)]] * self.max_lines)
+            1 + np.array([[2, len(Building)]] * self.max_lines)
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
 
@@ -111,7 +111,7 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        shape = (len(Building) + len(WorkerID), *world_shape)
+        shape = (len(WorldObjects), *world_shape)
         obs_space = spaces.Box(
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
@@ -392,7 +392,7 @@ class Env(gym.Env):
             for string in self.room_strings(array):
                 print(string, end="")
 
-        preprocessed = np.array([*map(self.preprocess_line, lines)])
+        preprocessed = np.array([*map(self.preprocess_line, padded)])
 
         def coords():
             yield from state.positions.items()
@@ -404,7 +404,7 @@ class Env(gym.Env):
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
-            resources = np.array([r.value for r in state.resources])
+            resources = np.array([state.resources[r] for r in Resource])
             workers = np.array(
                 [
                     self.worker_actions.index(w.next_action)
@@ -422,6 +422,14 @@ class Env(gym.Env):
                     )
                 )
             )
+            for (k, space), (n, o) in zip(
+                self.observation_space.spaces.items(), obs.items()
+            ):
+                if not space.contains(o):
+                    import ipdb
+
+                    ipdb.set_trace()
+                    space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
 

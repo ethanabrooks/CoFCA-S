@@ -5,6 +5,7 @@ import time
 from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
+from pprint import pprint
 from typing import Dict, Optional, DefaultDict, Union
 
 import gym
@@ -337,6 +338,7 @@ class Trainer:
             writer = SummaryWriter(logdir=log_dir) if log_dir else None
 
             def report(training_iteration, **args):
+                pprint(args)
                 if writer:
                     for k, v in args.items():
                         writer.add_scalar(k, v, global_step=training_iteration)

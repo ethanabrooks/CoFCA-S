@@ -86,6 +86,7 @@ starcraft_default = {
     "num_batch": 1,
     "num_edges": 2,
     "num_frames": 200,
+    "num_initial_buildings": 2,
     "num_layers": 0,
     "num_processes": 150,
     "olsk": False,

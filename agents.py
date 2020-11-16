@@ -7,7 +7,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
 from gym.spaces import Box, Discrete
 
 import distribution_modules
@@ -302,14 +301,12 @@ class MultiEmbeddingBag(nn.Module):
         return self.embedding(self.offset + inputs)
 
 
-@dataclass
 class IntEncoding(nn.Module):
-    d_model: int
-
-    def __post_init__(self):
+    def __init__(self, d_model: int):
+        self.d_model = d_model
+        nn.Module.__init__(self)
         self.div_term = torch.exp(
-            torch.arange(0, self.d_model, 2).float()
-            * (-math.log(10000.0) / self.d_model)
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
         )
 
     def forward(self, x):
