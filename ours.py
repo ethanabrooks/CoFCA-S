@@ -37,6 +37,7 @@ class Recurrence(nn.Module):
         conv_hidden_size,
         debug,
         debug_obs,
+        max_eval_lines,
         fuzz,
         gate_coef,
         hidden_size,

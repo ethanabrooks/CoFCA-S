@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import os
+import sys
 import time
 from argparse import ArgumentParser
 from collections import namedtuple, Counter
@@ -124,7 +125,7 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
 
-        if tune.is_session_enabled():
+        if use_tune:
             with tune.checkpoint_dir(0) as _dir:
                 log_dir = str(Path(_dir).parent)
 
@@ -204,7 +205,7 @@ class Trainer:
                 rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
-            train_report = EpisodeAggregator()
+            train_report = SumAcrossEpisode()
             train_infos = self.build_infos_aggregator()
             train_results = {}
             if load_path:
@@ -217,8 +218,9 @@ class Trainer:
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
-                done = frames["so_far"] >= num_frames
-                eval_report = EvalWrapper(EpisodeAggregator())
+                if frames["so_far"] >= num_frames:
+                    break
+                eval_report = EvalWrapper(SumAcrossEpisode())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if done or (
                     not no_eval
@@ -325,11 +327,37 @@ class Trainer:
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
 
+                if frames["since_log"] > log_interval:
+                    tick = time.time()
+                    frames["since_log"] = 0
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
+                    )
+                    train_report = SumAcrossEpisode()
+                    train_infos = self.build_infos_aggregator()
+                    time_spent["logging"] += time.time() - tick
+
+                if save_interval and frames["since_save"] > save_interval:
+                    tick = time.time()
+                    frames["since_save"] = 0
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    time_spent["saving"] += time.time() - tick
+
         finally:
             train_envs.close()
 
     @staticmethod
-    def report_generator(log_dir: Optional[str]):
+    def report_generator(use_tune: bool, log_dir: Optional[str]):
 
         if tune.is_session_enabled():
             report = tune.report
@@ -349,13 +377,8 @@ class Trainer:
         return InfosAggregator()
 
     @staticmethod
-    def build_agent(envs, activation=nn.ReLU(), **agent_args):
-        return Agent(
-            envs.observation_space.shape,
-            envs.action_space,
-            activation=activation,
-            **agent_args,
-        )
+    def build_agent(envs, **agent_args):
+        return Agent(envs.observation_space.shape, envs.action_space, **agent_args)
 
     @staticmethod
     def make_env(env_id, seed, rank, evaluating, **kwargs):
@@ -375,11 +398,7 @@ class Trainer:
         seed: Optional[int],
         **kwargs,
     ):
-        if config is None:
-            config = cls.default
-            if seed is not None:
-                config[seed] = seed
-
+        assert config is not None
         for k, v in kwargs.items():
             if k not in config or v is not None:
                 if isinstance(v, bool):  # handle store_{true, false} differently

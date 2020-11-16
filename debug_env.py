@@ -9,37 +9,24 @@ from upper_env import Action
 
 
 class Env(upper_env.Env):
-    def time_per_subtask(self):
-        e = 0.0001
-        return 2 * int(np.round(np.log(e) / np.log(e + self.bridge_failure_prob)))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.observation_space.spaces.update(
+            inventory=spaces.MultiBinary(1),
+            obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
+        )
 
-    def state_generator(self, *lines):
-        blocks = list(self.get_blocks(*lines))
-        rooms = self.build_rooms(*blocks)
-        assert len(rooms) == len(blocks)
-        rooms_iter = iter(rooms)
-        blocks_iter = iter(blocks)
+    def srti_generator(
+        self, objects: ObjectMap, agent_pos: Coord, lines: List[Line], **kwargs
+    ) -> Generator[State, Tuple[int, int], None]:
 
-        def next_required():
-            block = next(blocks_iter, None)
-            if block is not None:
-                for subtask in block:
-                    if subtask.interaction == Interaction.COLLECT:
-                        yield subtask.resource
-                    elif subtask.interaction == Interaction.REFINE:
-                        yield Refined(subtask.resource.value)
-                    else:
-                        assert subtask.interaction == Interaction.BUILD
-
-        required = Counter(next_required())
-        objects = dict(next(rooms_iter))
-        agent_pos = int(self.random.choice(self.h)), int(self.random.choice(self.w - 1))
-        build_supplies = Counter()
-        inventory = self.initialize_inventory()
-        success = False
-        action = None
-        subtasks_completed = set()
-        room_complete = False
+        line_iterator = self.line_generator(lines)
+        condition_bit = self.random.choice(2)
+        subtask_iterator = self.subtask_generator(
+            line_iterator, lines, condition_bit=condition_bit
+        )
+        prev, ptr = 0, next(subtask_iterator)
+        term = False
 
         while True:
             self.make_feasible(objects)

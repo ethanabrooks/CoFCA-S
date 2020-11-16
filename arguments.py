@@ -2,7 +2,8 @@ import json
 from collections import namedtuple
 from pathlib import Path
 
-from configs import configs
+from configs import configs, default_upper
+from trainer import Trainer
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
