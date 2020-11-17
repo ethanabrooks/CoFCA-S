@@ -154,6 +154,7 @@ class Env(gym.Env):
         self.num_subtasks = num_subtasks
         self.time_to_waste = time_to_waste
         self.i = 0
+        self.t = 0
         self.success_count = 0
 
         self.min_lines = min_lines
@@ -413,12 +414,13 @@ class Env(gym.Env):
             # noinspection PyTupleAssignmentBalance
             s = state(term)
 
+            key = f"{self.t},state"
             if self.lead:
-                self.r.set(f"{self.i},state", pickle.dumps(s))
+                self.r.set(key, pickle.dumps(s))
             else:
-                lead_state = pickle.loads(self.r.get(f"{self.i},state"))
-                for (k, o), l in zip(s._asdict().items(), lead_state):
-                    assert np.all(np.array(o) == np.array(l)), k
+                lead = pickle.loads(self.r.get(key))
+                for (k, x), l in zip(s._asdict().items(), lead):
+                    assert np.all(np.array(x) == np.array(l)), (k, x, l)
 
             subtask_id, lower_level_index = yield s
             subtask_complete = False
@@ -801,6 +803,7 @@ class Env(gym.Env):
         action = None
         lower_level_action = None
         while True:
+            self.t += 1
             success = state.ptr is None
             self.success_count += success
 
@@ -877,12 +880,17 @@ class Env(gym.Env):
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
+            key = f"{self.t},obs"
             if self.lead:
-                self.r.set(f"{self.i},obs", pickle.dumps(obs))
+                self.r.set(key, pickle.dumps(obs))
+                lead_obs = pickle.loads(self.r.get(key))
+                print(key, lead_obs)
             else:
-                lead_obs = pickle.loads(self.r.get(f"{self.i},obs"))
+                lead_obs = pickle.loads(self.r.get(key))
                 for (k, o), l in zip(obs._asdict().items(), lead_obs):
-                    assert np.all(np.array(o) == np.array(l)), k
+                    assert np.all(np.array(o) == np.array(l)), (k, o, l)
+            if self.t >= 2:
+                exit()
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
