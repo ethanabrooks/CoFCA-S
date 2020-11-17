@@ -107,6 +107,7 @@ class Trainer:
         synchronous: bool,
         train_steps: int,
         use_tune: bool,
+        lead: bool,
         eval_interval: int = None,
         eval_steps: int = None,
         no_eval: bool = False,
@@ -138,6 +139,8 @@ class Trainer:
             next(report_iterator)
 
         r = redis.Redis(host="localhost", port=8000, db=0)
+        if lead:
+            r.flushall()
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -154,7 +157,14 @@ class Trainer:
             )
 
         def run_epoch(
-            obs, rnn_hxs, masks, envs, num_steps, i: int = None, r: redis.Redis = None
+            obs,
+            rnn_hxs,
+            masks,
+            envs,
+            num_steps,
+            i: int = None,
+            r: redis.Redis = None,
+            lead=False,
         ):
             for j in range(num_steps):
                 with torch.no_grad():
@@ -162,8 +172,12 @@ class Trainer:
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
                 if r is not None:
-                    lead_act = pickle.loads(r.get(f"{i},{j},act"))
-                    assert torch.equal(act.action, lead_act)
+                    key = f"{i},{j},act"
+                    if lead:
+                        r.set(key, pickle.dumps(act.action))
+                    else:
+                        lead_act = pickle.loads(r.get(key))
+                        assert torch.equal(act.action, lead_act)
 
                 action = envs.preprocess(act.action)
                 # Observe reward and next obs
@@ -268,6 +282,7 @@ class Trainer:
                     num_steps=train_steps,
                     i=i,
                     r=r,
+                    lead=lead,
                 ):
                     train_report.update(
                         reward=output.reward.cpu().numpy(),

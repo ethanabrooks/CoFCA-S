@@ -90,6 +90,7 @@ class Env(gym.Env):
     def __init__(
         self,
         r: redis.Redis,
+        lead: bool,
         max_world_resamples: int,
         max_while_loops: int,
         use_water: bool,
@@ -118,6 +119,7 @@ class Env(gym.Env):
         term_on=None,
         world_size=6,
     ):
+        self.lead = lead
         self.r = r
         if control_flow_types is None:
             control_flow_types = [Subtask, If, While, Else]
@@ -411,10 +413,12 @@ class Env(gym.Env):
             # noinspection PyTupleAssignmentBalance
             s = state(term)
 
-            # self.r.set(f"{self.i},state", pickle.dumps(s))
-            lead_state = pickle.loads(self.r.get(f"{self.i},state"))
-            for (k, o), l in zip(s._asdict().items(), lead_state):
-                assert np.all(np.array(o) == np.array(l)), k
+            if self.lead:
+                self.r.set(f"{self.i},state", pickle.dumps(s))
+            else:
+                lead_state = pickle.loads(self.r.get(f"{self.i},state"))
+                for (k, o), l in zip(s._asdict().items(), lead_state):
+                    assert np.all(np.array(o) == np.array(l)), k
 
             subtask_id, lower_level_index = yield s
             subtask_complete = False
@@ -873,10 +877,12 @@ class Env(gym.Env):
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
-            # self.r.set(f"{self.i},obs", pickle.dumps(obs))
-            lead_obs = pickle.loads(self.r.get(f"{self.i},obs"))
-            for (k, o), l in zip(obs._asdict().items(), lead_obs):
-                assert np.all(np.array(o) == np.array(l)), k
+            if self.lead:
+                self.r.set(f"{self.i},obs", pickle.dumps(obs))
+            else:
+                lead_obs = pickle.loads(self.r.get(f"{self.i},obs"))
+                for (k, o), l in zip(obs._asdict().items(), lead_obs):
+                    assert np.all(np.array(o) == np.array(l)), k
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
