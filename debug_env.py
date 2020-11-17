@@ -63,7 +63,6 @@ class Env(env.Env):
         self,
         state,
         action,
-        lower_level_action,
         reward,
     ):
         if action is not None and action < len(self.subtasks):
