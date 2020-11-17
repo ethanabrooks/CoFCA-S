@@ -154,12 +154,56 @@ class Recurrence(nn.Module):
             dg=1,
         )
 
-    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
+    def d_space(self):
+        if self.olsk:
+            return 3
+        elif self.transformer or self.no_scan or self.no_pointer:
+            return 2 * self.eval_lines
+        else:
+            return 2 * self.train_lines
+
+    # noinspection PyProtectedMember
+    @contextmanager
+    def evaluating(self, eval_obs_space):
+        obs_spaces = self.obs_spaces
+        obs_sections = self.obs_sections
         state_sizes = self.state_sizes
-        # noinspection PyArgumentList
-        if hx.size(-1) == sum(self.state_sizes):
-            state_sizes = self.state_sizes
-        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
+        train_lines = self.train_lines
+        self.obs_spaces = eval_obs_space.spaces
+        self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
+        self.train_lines = len(self.obs_spaces["lines"].nvec)
+        # noinspection PyProtectedMember
+        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
+        self.obs_spaces = Obs(**self.obs_spaces)
+        yield self
+        self.obs_spaces = obs_spaces
+        self.obs_sections = obs_sections
+        self.state_sizes = state_sizes
+        self.train_lines = train_lines
+
+    def forward(self, inputs, rnn_hxs):
+        hxs = self.inner_loop(inputs, rnn_hxs)
+
+        def pack():
+            for name, size, hx in zip(
+                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            ):
+                x = torch.stack(hx).float()
+                assert np.prod(x.shape[2:]) == size
+                yield x.view(*x.shape[:2], -1)
+
+        rnn_hxs = torch.cat(list(pack()), dim=-1)
+        return rnn_hxs, rnn_hxs[-1:]
+
+    @staticmethod
+    def get_lines_space(n_eval_lines, train_lines_space):
+        return spaces.MultiDiscrete(
+            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
+        )
+
+    @property
+    def gru_in_size(self):
+        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
 
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
@@ -354,10 +398,6 @@ class Recurrence(nn.Module):
                 dg_probs=d_gate.probs,
             )
 
-    @property
-    def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
-
     def P_shape(self):
         lines = (
             self.obs_spaces["lines"]
@@ -369,57 +409,12 @@ class Recurrence(nn.Module):
         else:
             return np.array([len(lines.nvec), self.d_space(), self.ne])
 
-    def d_space(self):
-        if self.olsk:
-            return 3
-        elif self.transformer or self.no_scan or self.no_pointer:
-            return 2 * self.eval_lines
-        else:
-            return 2 * self.train_lines
-
-    # noinspection PyProtectedMember
-    @contextmanager
-    def evaluating(self, eval_obs_space):
-        obs_spaces = self.obs_spaces
-        obs_sections = self.obs_sections
+    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = self.state_sizes
-        train_lines = self.train_lines
-        self.obs_spaces = eval_obs_space.spaces
-        self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
-        self.train_lines = len(self.obs_spaces["lines"].nvec)
-        # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
-        self.obs_spaces = Obs(**self.obs_spaces)
-        yield self
-        self.obs_spaces = obs_spaces
-        self.obs_sections = obs_sections
-        self.state_sizes = state_sizes
-        self.train_lines = train_lines
-
-    @staticmethod
-    def get_lines_space(n_eval_lines, train_lines_space):
-        return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-        )
-
-    @staticmethod
-    def sample_new(x, dist):
-        new = x < 0
-        x[new] = dist.sample()[new].flatten()
-
-    def forward(self, inputs, rnn_hxs):
-        hxs = self.inner_loop(inputs, rnn_hxs)
-
-        def pack():
-            for name, size, hx in zip(
-                RecurrentState._fields, self.state_sizes, zip(*hxs)
-            ):
-                x = torch.stack(hx).float()
-                assert np.prod(x.shape[2:]) == size
-                yield x.view(*x.shape[:2], -1)
-
-        rnn_hxs = torch.cat(list(pack()), dim=-1)
-        return rnn_hxs, rnn_hxs[-1:]
+        # noinspection PyArgumentList
+        if hx.size(-1) == sum(self.state_sizes):
+            state_sizes = self.state_sizes
+        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):
         args = [
@@ -430,3 +425,8 @@ class Recurrence(nn.Module):
         ]
         if self.debug:
             print(*args, **kwargs)
+
+    @staticmethod
+    def sample_new(x, dist):
+        new = x < 0
+        x[new] = dist.sample()[new].flatten()
