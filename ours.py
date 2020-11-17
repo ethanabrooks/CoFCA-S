@@ -222,6 +222,13 @@ class Recurrence(nn.Module):
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
             N, -1, self.task_embed_size
         )
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+        first = torch.zeros(2 * nl, device=raw_inputs.device)
+        first[0] = 0.1
+        first = first.view(1, -1, 1)
+
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
