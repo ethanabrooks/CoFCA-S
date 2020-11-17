@@ -178,7 +178,10 @@ class Trainer:
                         r.set(key, pickle.dumps(act.action))
                     else:
                         lead_act = pickle.loads(r.get(key))
-                        assert torch.equal(act.action, lead_act)
+                        if not torch.equal(act.action, lead_act):
+                            import ipdb
+
+                            ipdb.set_trace()
 
                 action = envs.preprocess(act.action)
                 # Observe reward and next obs

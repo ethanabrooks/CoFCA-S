@@ -419,7 +419,10 @@ class Env(gym.Env):
             else:
                 lead = pickle.loads(self.r.get(key))
                 for (k, x), l in zip(s._asdict().items(), lead):
-                    assert np.all(np.array(x) == np.array(l)), (k, x, l)
+                    if not np.all(np.array(x) == np.array(l)):
+                        import ipdb
+
+                        ipdb.set_trace()
 
             subtask_id, lower_level_index = yield s
             subtask_complete = False
@@ -879,9 +882,12 @@ class Env(gym.Env):
             else:
                 lead_obs = pickle.loads(self.r.get(key))
                 for (k, o), l in zip(obs._asdict().items(), lead_obs):
-                    assert np.all(np.array(o) == np.array(l)), (k, o, l)
+                    if not np.all(np.array(o) == np.array(l)):
+                        import ipdb
+
+                        ipdb.set_trace()
             # if self.t >= 200:
-                # exit()
+            # exit()
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
