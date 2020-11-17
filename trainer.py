@@ -1,6 +1,7 @@
 import inspect
 import itertools
 import os
+import pickle
 import sys
 from collections import namedtuple
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Dict, Optional
 
 import gym
 import ray
+import redis
 import torch
 from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
@@ -135,10 +137,12 @@ class Trainer:
             report_iterator = report_generator()
             next(report_iterator)
 
+        r = redis.Redis(host="localhost", port=6379, db=0)
+
         def make_vec_envs(evaluating):
             def env_thunk(rank):
                 return lambda: self.make_env(
-                    rank=rank, evaluating=evaluating, **env_args
+                    rank=rank, evaluating=evaluating, r=r, **env_args
                 )
 
             env_fns = [env_thunk(i) for i in range(num_processes)]
@@ -149,12 +153,16 @@ class Trainer:
                 else SubprocVecEnv(env_fns)
             )
 
-        def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
-            for _ in range(num_steps):
+        def run_epoch(
+            obs, rnn_hxs, masks, envs, num_steps, i: int = None, r: redis.Redis = None
+        ):
+            for j in range(num_steps):
                 with torch.no_grad():
                     act = agent(
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
+                if r is not None:
+                    r.set(f"{i},{j},act", pickle.dumps(act.action))
 
                 action = envs.preprocess(act.action)
                 # Observe reward and next obs
@@ -257,6 +265,8 @@ class Trainer:
                     masks=rollouts.masks[0],
                     envs=train_envs,
                     num_steps=train_steps,
+                    i=i,
+                    r=r,
                 ):
                     train_report.update(
                         reward=output.reward.cpu().numpy(),

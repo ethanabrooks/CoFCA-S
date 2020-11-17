@@ -1,10 +1,12 @@
 import functools
 import itertools
+import pickle
 from collections import Counter, namedtuple, deque, OrderedDict, defaultdict
 from copy import deepcopy
 
 import gym
 import numpy as np
+import redis
 from gym import spaces
 from gym.utils import seeding
 from utils import (
@@ -87,6 +89,7 @@ class Env(gym.Env):
 
     def __init__(
         self,
+        r: redis.Redis,
         max_world_resamples: int,
         max_while_loops: int,
         use_water: bool,
@@ -115,6 +118,7 @@ class Env(gym.Env):
         term_on=None,
         world_size=6,
     ):
+        self.r = r
         if control_flow_types is None:
             control_flow_types = [Subtask, If, While, Else]
         if term_on is None:
@@ -862,6 +866,7 @@ class Env(gym.Env):
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
+            self.r.set(f"{self.i},obs", pickle.dumps(obs))
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
