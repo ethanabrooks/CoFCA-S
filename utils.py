@@ -1,6 +1,7 @@
 # third party
 import csv
 import re
+from collections import namedtuple
 from io import StringIO
 import random
 import subprocess
@@ -215,6 +216,9 @@ def asdict(obj):
         for f in fields(obj):
             yield f.name, asdict(getattr(obj, f.name))
 
+    if hasattr(obj, "_asdict"):
+        # noinspection PyProtectedMember
+        return obj._asdict()
     if is_dataclass(obj):
         return dict(gen())
     return obj

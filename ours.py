@@ -158,7 +158,7 @@ class Recurrence(nn.Module):
         else:
             return 2 * self.train_lines
 
-    # noinspection PyProtectedMember
+    # PyAttributeOutsideInit
     @contextmanager
     def evaluating(self, eval_obs_space):
         obs_spaces = self.obs_spaces
@@ -181,8 +181,10 @@ class Recurrence(nn.Module):
         hxs = self.inner_loop(inputs, rnn_hxs)
 
         def pack():
-            for name, size, hx in zip(
-                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            states = RecurrentState(*zip(*map(astuple, hxs)))
+            for size, (name, hx) in zip(
+                astuple(self.state_sizes),
+                asdict(states).items(),
             ):
                 x = torch.stack(hx).float()
                 assert np.prod(x.shape[2:]) == size
