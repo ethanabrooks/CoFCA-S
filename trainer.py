@@ -180,7 +180,7 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(cuda, cuda_deterministic, seed)
+        set_seeds(seed)
 
         if cuda:
             device = torch.device("cuda") if name else get_device(name)
