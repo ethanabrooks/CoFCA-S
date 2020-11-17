@@ -866,7 +866,10 @@ class Env(gym.Env):
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
-            self.r.set(f"{self.i},obs", pickle.dumps(obs))
+            # self.r.set(f"{self.i},obs", pickle.dumps(obs))
+            lead_obs = pickle.loads(self.r.get(f"{self.i},obs"))
+            for (k, o), l in zip(obs._asdict().items(), lead_obs):
+                assert np.all(np.array(o) == np.array(l)), k
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #

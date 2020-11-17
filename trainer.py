@@ -162,7 +162,8 @@ class Trainer:
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
                     )  # type: AgentOutputs
                 if r is not None:
-                    r.set(f"{i},{j},act", pickle.dumps(act.action))
+                    lead_act = pickle.loads(r.get(f"{i},{j},act"))
+                    assert torch.equal(act.action, lead_act)
 
                 action = envs.preprocess(act.action)
                 # Observe reward and next obs
