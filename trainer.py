@@ -95,7 +95,7 @@ class Trainer:
         log_interval: int,
         name: str,
         normalize: float,
-        num_iterations: int,
+        num_frames: int,
         num_processes: int,
         ppo_args: dict,
         render_eval: bool,
@@ -215,7 +215,7 @@ class Trainer:
 
             rollouts.obs[0].copy_(train_envs.reset())
 
-            for i in range(start, num_iterations + 1):
+            for i in range(start, num_frames + 1):
                 eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
