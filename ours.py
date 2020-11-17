@@ -6,18 +6,24 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass
 from gym import spaces
 
+from data_types import ParsedInput, RecurrentState
 from distributions import FixedCategorical, Categorical
 from env import Action
 from env import Obs
 from transformer import TransformerModel
-from utils import init_
+from utils import init_, astuple, asdict
 
-RecurrentState = namedtuple("RecurrentState", "a d h dg p v a_probs d_probs dg_probs")
 
-ParsedInput = namedtuple("ParsedInput", "obs actions")
+def optimal_padding(h, kernel, stride):
+    n = np.ceil((h - kernel) / stride + 1)
+    return 1 + int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+
+
+def conv_output_dimension(h, padding, kernel, stride, dilation=1):
+    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
 def get_obs_sections(obs_spaces):
@@ -27,15 +33,6 @@ def get_obs_sections(obs_spaces):
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
     return FixedCategorical(probs=g * new + (1 - g) * old)
-
-
-def optimal_padding(h, kernel, stride):
-    n = np.ceil((h - kernel) / stride + 1)
-    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
-
-
-def conv_output_dimension(h, padding, kernel, stride, dilation=1):
-    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
 @dataclass
@@ -157,7 +154,7 @@ class Recurrence(nn.Module):
         else:
             return 2 * self.train_lines
 
-    # noinspection PyProtectedMember
+    # PyAttributeOutsideInit
     @contextmanager
     def evaluating(self, eval_obs_space):
         obs_spaces = self.obs_spaces
@@ -180,8 +177,10 @@ class Recurrence(nn.Module):
         hxs = self.inner_loop(inputs, rnn_hxs)
 
         def pack():
-            for name, size, hx in zip(
-                RecurrentState._fields, self.state_sizes, zip(*hxs)
+            states = RecurrentState(*zip(*map(astuple, hxs)))
+            for size, (name, hx) in zip(
+                astuple(self.state_sizes),
+                asdict(states).items(),
             ):
                 x = torch.stack(hx).float()
                 assert np.prod(x.shape[2:]) == size
@@ -206,7 +205,9 @@ class Recurrence(nn.Module):
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
-                ParsedInput(obs=sum(self.obs_sections), actions=self.action_size),
+                astuple(
+                    ParsedInput(obs=sum(self.obs_sections), actions=self.action_size)
+                ),
                 dim=-1,
             )
         )
@@ -226,7 +227,7 @@ class Recurrence(nn.Module):
         ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        hx = RecurrentState(*[_x.squeeze(0) for _x in hx])
+        hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
 
         if self.no_pointer:
             _, G = self.task_encoder(M)
@@ -407,10 +408,7 @@ class Recurrence(nn.Module):
             return np.array([len(lines.nvec), self.d_space(), self.num_edges])
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        state_sizes = self.state_sizes
-        # noinspection PyArgumentList
-        if hx.size(-1) == sum(self.state_sizes):
-            state_sizes = self.state_sizes
+        state_sizes = astuple(self.state_sizes)
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):

@@ -8,6 +8,7 @@ import subprocess
 import argparse
 import numpy as np
 import torch
+from dataclasses import fields, is_dataclass
 from torch import nn as nn
 import torch.jit
 import torch.nn as nn
@@ -197,3 +198,23 @@ def get_device(name):
         device_num = get_random_gpu()
 
     return torch.device("cuda", device_num)
+
+
+def astuple(obj):
+    def gen():
+        for f in fields(obj):
+            yield astuple(getattr(obj, f.name))
+
+    if is_dataclass(obj):
+        return tuple(gen())
+    return obj
+
+
+def asdict(obj):
+    def gen():
+        for f in fields(obj):
+            yield f.name, asdict(getattr(obj, f.name))
+
+    if is_dataclass(obj):
+        return dict(gen())
+    return obj
