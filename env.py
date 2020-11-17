@@ -485,7 +485,7 @@ class Env(gym.Env):
         object_list = []
         for i in range(self.max_world_resamples):
             max_random_objects = self.world_size ** 2
-            num_random_objects = np.random.randint(max_random_objects)
+            num_random_objects = self.random.randint(max_random_objects)
             object_list = [self.agent] + list(
                 self.random.choice(
                     self.items + [self.merchant], size=num_random_objects
