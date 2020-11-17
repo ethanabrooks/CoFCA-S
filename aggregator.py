@@ -20,6 +20,7 @@ class EpisodeAggregator(Aggregator):
         self.incomplete_episodes = defaultdict(list)
 
     def update(self, dones: Collection[bool], **values):
+        values.update(time_steps=[1 for _ in dones])
         for k, vs in values.items():
             incomplete_episodes = self.incomplete_episodes[k]
             if not incomplete_episodes:
@@ -34,6 +35,9 @@ class EpisodeAggregator(Aggregator):
     def items(self):
         for k, v in self.complete_episodes.items():
             yield k, np.mean(v)
+
+    def reset(self):
+        self.complete_episodes = defaultdict(list)
 
 
 class InfosAggregator(EpisodeAggregator):
@@ -52,9 +56,9 @@ class InfosAggregator(EpisodeAggregator):
                     incomplete_episodes[i] = []
 
 
+@dataclass(frozen=True)
 class EvalWrapper(Aggregator):
-    def __init__(self, aggregator: Aggregator):
-        self.aggregator = aggregator
+    aggregator: Aggregator
 
     def update(self, *args, **kwargs):
         self.aggregator.update(*args, **kwargs)
