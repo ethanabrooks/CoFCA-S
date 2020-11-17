@@ -834,7 +834,11 @@ class Env(gym.Env):
             padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
             mask = [int(not isinstance(l, Padding)) for l in padded]
-            mask = [1 for l in padded]
+            mask = (
+                [1 for l in padded if not isinstance(l, Padding)]
+                + [1]
+                + [0 for l in padded[:-1] if isinstance(l, Padding)]
+            )
             truthy = [
                 self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)

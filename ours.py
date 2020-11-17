@@ -216,7 +216,6 @@ class Recurrence(nn.Module):
         )
         # mask[:, :, 0] = 0  # prevent self-loops
         mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
-        assert torch.all(mask == 1)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
