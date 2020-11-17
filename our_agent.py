@@ -1,6 +1,5 @@
 import torch
 import torch.jit
-from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
@@ -9,6 +8,7 @@ import ours
 from agents import AgentOutputs, NNBase
 from env import Action
 from distributions import FixedCategorical
+from utils import astuple
 
 
 class Agent(agents.Agent, NNBase):
@@ -33,7 +33,7 @@ class Agent(agents.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        return sum(astuple(self.recurrent_module.state_sizes))
 
     @property
     def is_recurrent(self):
@@ -46,7 +46,6 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        t = type(rm)
         X = Action(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
         probs = Action(
             upper=hx.a_probs,
@@ -66,7 +65,7 @@ class Agent(agents.Agent, NNBase):
         if probs.dg is not None:
             aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
-        rnn_hxs = torch.cat(hx, dim=-1)
+        rnn_hxs = torch.cat(astuple(hx), dim=-1)
         action = torch.cat(X, dim=-1)
         return AgentOutputs(
             value=hx.v,
