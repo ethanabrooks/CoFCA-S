@@ -64,7 +64,6 @@ starcraft_default = {
     "eval_interval": 100,
     "eval_steps": 500,
     "failure_buffer_size": 500,
-    "fuzz": False,
     "gamma": 0.99,
     "gate_coef": 0.01,
     "hidden_size": 256,

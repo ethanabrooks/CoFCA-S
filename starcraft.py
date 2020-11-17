@@ -117,7 +117,6 @@ class UpperTrainer(Trainer):
         parser.add_argument("--no-pointer", action="store_true")
         parser.add_argument("--olsk", action="store_true")
         parser.add_argument("--transformer", action="store_true")
-        parser.add_argument("--fuzz", action="store_true")
         parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--task-embed-size", type=int)
         parser.add_argument("--inventory-hidden-size", type=int)

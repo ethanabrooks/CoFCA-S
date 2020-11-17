@@ -18,9 +18,11 @@ class Agent(agents.Agent, NNBase):
         observation_space,
         no_op_coef,
         action_space,
+        gate_coef,
         **network_args,
     ):
         nn.Module.__init__(self)
+        self.gate_coef = gate_coef
         self.no_op_coef = no_op_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = ours.Recurrence(
@@ -62,7 +64,7 @@ class Agent(agents.Agent, NNBase):
         if probs.upper is not None:
             aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
-            aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
+            aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
         rnn_hxs = torch.cat(hx, dim=-1)
         action = torch.cat(X, dim=-1)
