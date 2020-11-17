@@ -138,6 +138,7 @@ class Trainer:
             next(report_iterator)
 
         r = redis.Redis(host="localhost", port=8000, db=0)
+        r.flushall()
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
