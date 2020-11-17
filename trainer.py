@@ -14,11 +14,11 @@ from ray import tune
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
-from aggregator import SumAcrossEpisode, InfosAggregator, EvalWrapper
+from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from networks import Agent, AgentOutputs, MLPBase
+from agents import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from utils import get_device
@@ -207,7 +207,7 @@ class Trainer:
                 rollouts.to(device)
 
             ppo = PPO(agent=agent, **ppo_args)
-            train_report = SumAcrossEpisode()
+            train_report = EpisodeAggregator()
             train_infos = InfosAggregator()
             start = 0
             if load_path:
@@ -216,7 +216,7 @@ class Trainer:
             rollouts.obs[0].copy_(train_envs.reset())
 
             for i in range(start, num_iterations + 1):
-                eval_report = EvalWrapper(SumAcrossEpisode())
+                eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
                 if eval_interval and not no_eval and i % eval_interval == 0:
                     # vec_norm = get_vec_normalize(eval_envs)
@@ -299,7 +299,7 @@ class Trainer:
                     else:
                         assert report_iterator is not None
                         report_iterator.send(report)
-                    train_report = SumAcrossEpisode()
+                    train_report = EpisodeAggregator()
                     train_infos = InfosAggregator()
                 if save_interval and i % save_interval == 0:
                     if use_tune:

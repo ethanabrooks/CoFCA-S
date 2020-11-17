@@ -4,14 +4,14 @@ from gym.spaces import Box
 from torch import nn as nn
 from torch.nn import functional as F
 
-import networks
+import agents
 import ours
-from networks import AgentOutputs, NNBase
+from agents import AgentOutputs, NNBase
 from env import Action
 from distributions import FixedCategorical
 
 
-class Agent(networks.Agent, NNBase):
+class Agent(agents.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,

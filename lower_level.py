@@ -5,8 +5,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 from layers import Flatten
-import networks
-from networks import NNBase
+import agents
+from agents import NNBase
 from lines import Subtask
 from env import Obs, Env, subtasks
 from utils import init_, init, init_normc_
@@ -16,7 +16,7 @@ def get_obs_sections(obs_spaces):
     return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
-class Agent(networks.Agent):
+class Agent(agents.Agent):
     def build_recurrent_module(self, hidden_size, network_args, obs_spaces, recurrent):
         return LowerLevel(
             obs_space=obs_spaces,
