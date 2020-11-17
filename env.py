@@ -929,35 +929,35 @@ class Env(gym.Env):
         if pause:
             input("pause")
 
-
-def add_arguments(p):
-    p.add_argument("--min-lines", type=int)
-    p.add_argument("--max-lines", type=int)
-    p.add_argument("--max-loops", type=int, default=3)
-    p.add_argument("--no-op-limit", type=int)
-    p.add_argument("--eval-condition-size", action="store_true")
-    p.add_argument("--single-control-flow-type", action="store_true")
-    p.add_argument("--max-nesting-depth", type=int, default=1)
-    p.add_argument("--subtasks-only", action="store_true")
-    p.add_argument("--break-on-fail", action="store_true")
-    p.add_argument("--time-to-waste", type=int)
-    p.add_argument(
-        "--control-flow-types",
-        nargs="*",
-        type=lambda s: dict(Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop)[
-            s
-        ],
-    )
-    p.add_argument("--no-water", dest="use_water", action="store_false")
-    p.add_argument("--1condition", dest="one_condition", action="store_true")
-    p.add_argument("--long-jump", action="store_true")
-    p.add_argument("--max-failure-sample-prob", type=float)
-    p.add_argument("--failure-buffer-size", type=int)
-    p.add_argument("--reject-while-prob", type=float)
-    p.add_argument("--max-world-resamples", type=int)
-    p.add_argument("--max-while-loops", type=int)
-    p.add_argument("--world-size", type=int)
-    p.add_argument("--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto])
+    @staticmethod
+    def add_arguments(p):
+        p.add_argument("--min-lines", type=int)
+        p.add_argument("--max-lines", type=int)
+        p.add_argument("--max-loops", type=int, default=3)
+        p.add_argument("--no-op-limit", type=int)
+        p.add_argument("--eval-condition-size", action="store_true")
+        p.add_argument("--single-control-flow-type", action="store_true")
+        p.add_argument("--max-nesting-depth", type=int, default=1)
+        p.add_argument("--subtasks-only", action="store_true")
+        p.add_argument("--break-on-fail", action="store_true")
+        p.add_argument("--time-to-waste", type=int)
+        p.add_argument(
+            "--control-flow-types",
+            nargs="*",
+            type=lambda s: dict(
+                Subtask=Subtask, If=If, Else=Else, While=While, Loop=Loop
+            )[s],
+        )
+        p.add_argument("--no-water", dest="use_water", action="store_false")
+        p.add_argument("--1condition", dest="one_condition", action="store_true")
+        p.add_argument("--long-jump", action="store_true")
+        p.add_argument("--max-failure-sample-prob", type=float)
+        p.add_argument("--failure-buffer-size", type=int)
+        p.add_argument("--reject-while-prob", type=float)
+        p.add_argument("--max-world-resamples", type=int)
+        p.add_argument("--max-while-loops", type=int)
+        p.add_argument("--world-size", type=int)
+        p.add_argument("--term-on", nargs="+", choices=[Env.sell, Env.mine, Env.goto])
 
 
 def main(env):
