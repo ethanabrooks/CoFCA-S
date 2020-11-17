@@ -16,9 +16,14 @@ from env import Obs
 from transformer import TransformerModel
 from utils import init_, astuple, asdict
 
-RecurrentState = namedtuple("RecurrentState", "a d h dg p v a_probs d_probs dg_probs")
 
-ParsedInput = namedtuple("ParsedInput", "obs actions")
+def optimal_padding(h, kernel, stride):
+    n = np.ceil((h - kernel) / stride + 1)
+    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+
+
+def conv_output_dimension(h, padding, kernel, stride, dilation=1):
+    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
 def get_obs_sections(obs_spaces):
@@ -28,15 +33,6 @@ def get_obs_sections(obs_spaces):
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
     return FixedCategorical(probs=g * new + (1 - g) * old)
-
-
-def optimal_padding(h, kernel, stride):
-    n = np.ceil((h - kernel) / stride + 1)
-    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
-
-
-def conv_output_dimension(h, padding, kernel, stride, dilation=1):
-    return int(1 + (h + 2 * padding - dilation * (kernel - 1) - 1) / stride)
 
 
 @dataclass
