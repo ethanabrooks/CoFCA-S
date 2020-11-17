@@ -67,11 +67,7 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        # networks
-        if self.olsk:
-            num_edges = 3
-        self.action_space_nvec = Action(*map(int, self.action_space.nvec))
-        self.n_a = n_a = self.action_space_nvec.upper
+        self.n_a = n_a = Action(*map(int, self.action_space.nvec)).upper
         self.embed_task = nn.EmbeddingBag(
             self.obs_spaces.lines.nvec[0].sum(), self.task_embed_size
         )
