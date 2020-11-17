@@ -86,5 +86,4 @@ def set_seeds(cuda, cuda_deterministic, seed):
     if cuda and cuda_deterministic:
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-        torch.set_deterministic()
     torch.set_num_threads(1)
