@@ -194,7 +194,6 @@ class Recurrence(nn.Module):
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
-        nl = len(self.obs_spaces.lines.nvec)
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
@@ -208,93 +207,89 @@ class Recurrence(nn.Module):
         # parse non-action inputs
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
-        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
-        mask = state.mask[0].view(N, nl)
-        mask = F.pad(mask, [0, nl])  # pad for backward mask
-        mask = torch.stack(
-            [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
-        )
-        mask[:, :, 0] = 0  # prevent self-loops
-        mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
+        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
 
         # build memory
-        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
-            N, -1, self.task_embed_size
-        )
-        rolled = torch.stack(
-            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-        )
-        first = torch.zeros(2 * nl, device=raw_inputs.device)
-        first[0] = 0.1
-        first = first.view(1, -1, 1)
-
+        nl = len(self.obs_spaces.lines.nvec)
+        M = self.embed_task(
+            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]).view(
+                -1, self.obs_spaces.lines.nvec[0].size
+            )
+        ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        hx = RecurrentState(*[x.squeeze(0) for x in astuple(hx)])
+        hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
+
+        if self.no_pointer:
+            _, G = self.task_encoder(M)
+            return G.transpose(0, 1).reshape(N, -1)
+        if self.no_scan:
+            if self.no_roll:
+                H, _ = self.task_encoder(M)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                _, H = self.task_encoder(rolled)
+            H = H.transpose(0, 1).reshape(nl, N, -1)
+            P = self.beta(H).view(nl, N, -1, self.num_edges).softmax(2)
+        elif self.transformer:
+            P = (
+                self.task_encoder(M.transpose(0, 1))
+                .view(nl, N, -1, self.num_edges)
+                .softmax(2)
+            )
+        else:
+            if self.no_roll:
+                G, _ = self.task_encoder(M)
+                G = torch.cat(
+                    [
+                        G.unsqueeze(1).expand(-1, nl, -1, -1),
+                        G.unsqueeze(2).expand(-1, -1, nl, -1),
+                    ],
+                    dim=-1,
+                ).transpose(0, 1)
+            else:
+                rolled = torch.cat(
+                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+                )
+                G, _ = self.task_encoder(rolled)
+            G = G.view(nl, N, nl, 2, -1)
+            B = self.beta(G).sigmoid()
+            # arange = torch.zeros(6).float()
+            # arange[0] = 1
+            # arange[1] = 1
+            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
+            # B[:, :, :, 1] = 1
+            f, b = torch.unbind(B, dim=3)
+            B = torch.stack([f, b.flip(2)], dim=-2)
+            B = B.view(nl, N, 2 * nl, self.num_edges)
+            last = torch.zeros(nl, N, 2 * nl, self.num_edges, device=rnn_hxs.device)
+            last[:, :, -1] = 1
+            B = (1 - last).flip(2) * B  # this ensures the first B is 0
+            zero_last = (1 - last) * B
+            B = zero_last + last  # this ensures that the last B is 1
+            rolled = torch.roll(zero_last, shifts=1, dims=2)
+            C = torch.cumprod(1 - rolled, dim=2)
+            P = B * C
+            P = P.view(nl, N, nl, 2, self.num_edges)
+            f, b = torch.unbind(P, dim=3)
+            P = torch.cat([b.flip(2), f], dim=2)
+            # noinspection PyArgumentList
+            half = P.size(2) // 2 if self.no_scan else nl
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
         hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-
         actions = Action(*inputs.actions.unbind(dim=2))
-        A = actions.upper.long()
-        D = actions.delta.long()
-        DG = actions.dg.long()
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
+        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
-
-            if self.no_pointer:
-                _, G = self.task_encoder(M)
-                return G.transpose(0, 1).reshape(N, -1)
-            if self.no_scan:
-                if self.no_roll:
-                    H, _ = self.task_encoder(M)
-                else:
-                    rolled = torch.cat(
-                        [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                    )
-                    _, H = self.task_encoder(rolled)
-                H = H.transpose(0, 1).reshape(nl, N, -1)
-                P = self.beta(H).view(nl, N, -1, self.num_edges).softmax(2)
-            elif self.transformer:
-                P = (
-                    self.task_encoder(M.transpose(0, 1))
-                    .view(nl, N, -1, self.num_edges)
-                    .softmax(2)
-                )
-            else:
-                if self.no_roll:
-                    G, _ = self.task_encoder(M)
-                    G = torch.cat(
-                        [
-                            G.unsqueeze(1).expand(-1, nl, -1, -1),
-                            G.unsqueeze(2).expand(-1, -1, nl, -1),
-                        ],
-                        dim=-1,
-                    ).transpose(0, 1)
-                else:
-                    G, _ = self.task_encoder(rolled[p, R])
-                G = G.view(N, nl, 2, -1)
-                B = self.beta(G).sigmoid()
-                B = B * mask[p, R]
-                f, b = torch.unbind(B, dim=2)
-                B = torch.stack([f, b.flip(1)], dim=2)
-                B = B.view(N, 2 * nl, self.num_edges)
-                rolledB = torch.roll(B, shifts=1, dims=1)
-                assert torch.all(rolledB[:, 0] == 0)
-                C = torch.cumprod(1 - rolledB, dim=1)
-                B = (1 - first) * B + first  # small prob stop on first
-                P = B * C
-                P = P.view(N, nl, 2, self.num_edges)
-                f, b = torch.unbind(P, dim=2)
-                P = torch.cat([b.flip(1), f], dim=1)
-                # noinspection PyArgumentList
-            # noinspection PyArgumentList
-            half = P.size(1) // 2 if self.no_scan else nl
-
-            self.print("P", P)
+            self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
             conv_kernel = self.kernel_net(m).view(
                 N,
@@ -337,6 +332,7 @@ class Recurrence(nn.Module):
             # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
             # a = 3 * (it - 1) + (be - 1)
 
+            self.print("lines[R, p]", lines[t][R, p])
             # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
             # sell = (be == 2).long()
             # index1 = it - 1
@@ -358,7 +354,8 @@ class Recurrence(nn.Module):
             else:
                 u = self.upsilon(zeta1_input).softmax(dim=-1)
                 self.print("u", u)
-                d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+                w = P[p, R]
+                d_probs = (w @ u.unsqueeze(-1)).squeeze(-1)
 
                 self.print("dg prob", d_gate.probs[:, 1])
                 self.print("dg", dg)
@@ -368,6 +365,7 @@ class Recurrence(nn.Module):
                 # D[:] = float(input("D:")) + half
                 delta = D[t].clone() - half
                 self.print("D[t], delta", D[t], delta)
+                P.view(N, *self.P_shape())
             self.print("old p", p)
             p = p + delta
             self.print("new p", p)
