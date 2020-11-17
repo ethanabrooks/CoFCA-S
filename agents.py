@@ -92,7 +92,7 @@ class Agent(nn.Module):
             action = action[:, 0]
 
         action_log_probs = dist.log_probs(action)
-        entropy = distribution_modules.entropy().mean()
+        entropy = dist.entropy().mean()
         return AgentOutputs(
             value=value,
             action=action,
