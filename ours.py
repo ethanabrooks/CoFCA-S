@@ -194,6 +194,7 @@ class Recurrence(nn.Module):
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
+        nl = len(self.obs_spaces.lines.nvec)
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
@@ -207,15 +208,20 @@ class Recurrence(nn.Module):
         # parse non-action inputs
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
-        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
+        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
+        mask = state.mask[0].view(N, nl)
+        mask = F.pad(mask, [0, nl])  # pad for backward mask
+        mask = torch.stack(
+            [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+        mask[:, :, 0] = 0  # prevent self-loops
+        mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.embed_task(
-            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]).view(
-                -1, self.obs_spaces.lines.nvec[0].size
-            )
-        ).view(N, -1, self.task_embed_size)
+        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
+            N, -1, self.task_embed_size
+        )
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
@@ -329,17 +335,6 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             a = A[t]
             self.print("a_probs", a_dist.probs)
-            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # a = 3 * (it - 1) + (be - 1)
-
-            self.print("lines[R, p]", lines[t][R, p])
-            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # index1 = it - 1
-            # index2 = 1 + ((it - 3) % 3)
-            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            # z2 = (channel1 > channel2).unsqueeze(-1).float()
 
             d_gate = self.d_gate(zeta1_input)
             self.sample_new(DG[t], d_gate)
