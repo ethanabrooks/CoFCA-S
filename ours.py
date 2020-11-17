@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from gym import spaces
 
+from agents import MultiEmbeddingBag
 from data_types import ParsedInput, RecurrentState
 from distributions import FixedCategorical, Categorical
 from env import Action
@@ -67,9 +68,10 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
+        # networks
         self.n_a = n_a = Action(*map(int, self.action_space.nvec)).upper
-        self.embed_task = nn.EmbeddingBag(
-            self.obs_spaces.lines.nvec[0].sum(), self.task_embed_size
+        self.embed_task = MultiEmbeddingBag(
+            self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -89,10 +91,6 @@ class Recurrence(nn.Module):
         self.actor = Categorical(self.hidden_size, n_a)
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer(
-            "offset",
-            F.pad(torch.tensor(self.obs_spaces.lines.nvec[0, :-1]).cumsum(0), [1, 0]),
-        )
         d, h, w = (2, 1, 1)
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
@@ -214,10 +212,9 @@ class Recurrence(nn.Module):
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
         M = self.embed_task(
-            (
-                state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]
-                + self.offset
-            ).view(-1, self.obs_spaces.lines.nvec[0].size)
+            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0, :, :]).view(
+                -1, self.obs_spaces.lines.nvec[0].size
+            )
         ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
