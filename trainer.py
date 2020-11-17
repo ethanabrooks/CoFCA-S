@@ -111,6 +111,7 @@ class Trainer:
         load_path: Path = None,
         render: bool = False,
     ):
+        assert no_eval
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
