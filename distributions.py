@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 
 # first party
+from torch.distributions import Distribution
+
 from utils import AddBias, init, init_normc_
 
 """
@@ -64,3 +66,73 @@ class DiagGaussian(nn.Module):
         zeros = torch.zeros_like(action_mean)
         action_logstd = self.logstd(zeros)
         return FixedNormal(action_mean, action_logstd.exp())
+
+
+class JointCategorical(Categorical):
+    def __init__(
+        self, distribution: Categorical, *distributions: Categorical, **kwargs
+    ):
+        *shape, _ = distribution.probs.shape
+        probs = distribution.probs.unsqueeze(-1)
+        for i, distribution in enumerate(distributions):
+            probs = probs * distribution.probs.unsqueeze(-2)
+            probs = probs.view(*shape, -1)
+        super().__init__(probs=probs, **kwargs)
+
+    def rsample(self, sample_shape=torch.Size()):
+        raise NotImplementedError
+
+    def cdf(self, value):
+        raise NotImplementedError
+
+    def icdf(self, value):
+        raise NotImplementedError
+
+
+class JointDistribution(Distribution):
+    def __init__(self, *distributions: Distribution):
+        super().__init__()
+        self.distributions = distributions
+
+    def sample(self, sample_shape=torch.Size()):
+        return [d.sample() for d in self.distributions]
+
+    def log_probs(self, *values):
+        return sum([d.log_probs(v) for d, v in zip(self.distributions, values)])
+
+    def log_prob(self, choices, *chosen):
+        raise NotImplementedError
+
+    def entropy(self):
+        return sum(d.entropy() for d in self.distributions)
+
+    def expand(self, batch_shape, _instance=None):
+        raise NotImplementedError
+
+    @property
+    def arg_constraints(self):
+        raise NotImplementedError
+
+    @property
+    def support(self):
+        raise NotImplementedError
+
+    @property
+    def mean(self):
+        raise NotImplementedError
+
+    @property
+    def variance(self):
+        raise NotImplementedError
+
+    def rsample(self, sample_shape=torch.Size()):
+        raise NotImplementedError
+
+    def cdf(self, value):
+        raise NotImplementedError
+
+    def icdf(self, value):
+        raise NotImplementedError
+
+    def enumerate_support(self, expand=True):
+        raise NotImplementedError

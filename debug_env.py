@@ -2,10 +2,12 @@ from collections import Counter
 from pprint import pprint
 import numpy as np
 
-import upper_env
-from enums import Interaction, Refined, Other, Terrain
-from lines import Subtask
-from upper_env import Action
+from lines import If, While
+from utils import hierarchical_parse_args, RESET
+
+import env
+import keyboard_control
+from env import ObjectMap, Coord, Line, State, Action, Obs
 
 
 class Env(upper_env.Env):
@@ -48,6 +50,79 @@ class Env(upper_env.Env):
                 room_complete=room_complete,
                 required=required,
             )
+            subtask_id, lower_level_index = yield state
+            term = subtask_id != self.subtasks.index(lines[ptr].id)
+            condition_bit = self.random.choice(2)
+            prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
+
+    def inventory_representation(self, state):
+        return np.array([0])
+
+    def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
+        return bool(condition_bit)
+
+    def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
+        return (0, 0), {}
+
+    def feasible(self, objects, lines) -> bool:
+        return True
+
+    def render_world(
+        self,
+        state,
+        action,
+        reward,
+    ):
+        if action is not None and action < len(self.subtasks):
+            print("Selected:", self.subtasks[action], action)
+        print("Action:", action)
+        print("Reward", reward)
+        for i, subtask in enumerate(self.subtasks):
+            print(i, subtask)
+
+    def render_instruction(
+        self,
+        term,
+        success,
+        lines,
+        state,
+        agent_ptr,
+    ):
+
+        if term:
+            print(env.GREEN if success else env.RED)
+        indent = 0
+        for i, line in enumerate(lines):
+            if i == state.ptr and i == agent_ptr:
+                pre = "+ "
+            elif i == agent_ptr:
+                pre = "- "
+            elif i == state.ptr:
+                pre = "| "
+            else:
+                pre = "  "
+            indent += line.depth_change[0]
+            if type(line) in (If, While):
+                evaluation = state.counts
+                line_str = f"{line} {evaluation}"
+            else:
+                line_str = str(line)
+            print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
+            indent += line.depth_change[1]
+        print("Condition bit:", state.counts)
+        print(RESET)
+
+
+def main(env: Env):
+    def action_fn(string):
+        try:
+            action = int(string)
+            if action > env.num_subtasks:
+                raise ValueError
+        except ValueError:
+            return None
+
+        return np.array(Action(upper=action, lower=0, delta=0, dg=0, ptr=0))
 
             def render():
                 print("Inventory:")

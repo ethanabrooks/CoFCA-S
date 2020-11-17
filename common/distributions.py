@@ -4,6 +4,7 @@ from tensorflow.python.ops import math_ops
 
 from baselines.a2c.utils import fc
 import common.tf_util as U
+import distribution_modules
 
 
 class Pd(object):
