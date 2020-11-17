@@ -209,13 +209,13 @@ class Recurrence(nn.Module):
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
-        mask = state.mask[0].view(N, nl)
-        mask = F.pad(mask, [0, nl], value=1)  # pad for backward mask
-        mask = torch.stack(
-            [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
-        )
+        # mask = state.mask[0].view(N, nl)
+        # mask = F.pad(mask, [0, nl], value=1)  # pad for backward mask
+        # mask = torch.stack(
+        #     [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
+        # )
         # mask[:, :, 0] = 0  # prevent self-loops
-        mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
+        # mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -225,9 +225,12 @@ class Recurrence(nn.Module):
         rolled = torch.stack(
             [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
         )
-        first = torch.zeros(2 * nl, device=raw_inputs.device)
-        first[0] = 0.1
-        first = first.view(1, -1, 1)
+        # first = torch.zeros(2 * nl, device=raw_inputs.device)
+        # first[0] = 0.1
+        # first = first.view(1, -1, 1)
+        last = torch.zeros(2 * nl, device=rnn_hxs.device)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
 
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
@@ -277,22 +280,14 @@ class Recurrence(nn.Module):
                     G, _ = self.task_encoder(rolled[p, R])
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
-                B = B * mask[p, R]
-                # arange = torch.zeros(6).float()
-                # arange[0] = 1
-                # arange[1] = 1
-                # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-                # B[:, :, :, 1] = 1
+                # B = B * mask[p, R]
                 f, b = torch.unbind(B, dim=-2)
                 B = torch.stack([f, b.flip(-2)], dim=-2)
                 B = B.view(N, 2 * nl, self.num_edges)
-                last = torch.zeros(N, 2 * nl, self.num_edges, device=rnn_hxs.device)
-                last[:, -1] = 1
                 B = (1 - last).flip(-2) * B  # this ensures the first B is 0
                 zero_last = (1 - last) * B
                 B = zero_last + last  # this ensures that the last B is 1
-                _rolled = torch.roll(zero_last, shifts=1, dims=-2)
-                C = torch.cumprod(1 - _rolled, dim=-2)
+                C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
                 P = B * C
                 P = P.view(N, nl, 2, self.num_edges)
                 f, b = torch.unbind(P, dim=-2)
