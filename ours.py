@@ -269,7 +269,7 @@ class Recurrence(nn.Module):
                 G, _ = self.task_encoder(rolled)
             G = G.view(nl, N, nl, 2, -1)
             B = self.beta(G).sigmoid()
-            B = B * mask
+            # B = B * mask
             # arange = torch.zeros(6).float()
             # arange[0] = 1
             # arange[1] = 1
