@@ -884,13 +884,12 @@ class Env(gym.Env):
             if self.lead:
                 self.r.set(key, pickle.dumps(obs))
                 lead_obs = pickle.loads(self.r.get(key))
-                print(key, lead_obs)
             else:
                 lead_obs = pickle.loads(self.r.get(key))
                 for (k, o), l in zip(obs._asdict().items(), lead_obs):
                     assert np.all(np.array(o) == np.array(l)), (k, o, l)
-            if self.t >= 2:
-                exit()
+            # if self.t >= 200:
+                # exit()
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
