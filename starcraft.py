@@ -10,7 +10,6 @@ import env
 import agents
 import ours
 from env import Action
-from lower_level import LowerLevel
 from arguments import add_arguments
 from trainer import Trainer
 

@@ -10,7 +10,6 @@ from gym import spaces
 
 from distributions import FixedCategorical, Categorical
 from env import Action
-from lower_level import Agent, get_obs_sections
 from env import Obs
 from transformer import TransformerModel
 from utils import init_
@@ -18,6 +17,10 @@ from utils import init_
 RecurrentState = namedtuple("RecurrentState", "a d h dg p v a_probs d_probs dg_probs")
 
 ParsedInput = namedtuple("ParsedInput", "obs actions")
+
+
+def get_obs_sections(obs_spaces):
+    return [int(np.prod(s.shape)) for s in obs_spaces]
 
 
 def gate(g, new, old):
