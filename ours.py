@@ -210,12 +210,13 @@ class Recurrence(nn.Module):
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
         mask = state.mask[0].view(N, nl)
-        mask = F.pad(mask, [0, nl])  # pad for backward mask
+        mask = F.pad(mask, [0, nl], value=1)  # pad for backward mask
         mask = torch.stack(
             [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
         )
-        mask[:, :, 0] = 0  # prevent self-loops
+        # mask[:, :, 0] = 0  # prevent self-loops
         mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
+        assert torch.all(mask == 1)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
@@ -277,6 +278,7 @@ class Recurrence(nn.Module):
                     G, _ = self.task_encoder(rolled[p, R])
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
+                B = B * mask[p, R]
                 # arange = torch.zeros(6).float()
                 # arange[0] = 1
                 # arange[1] = 1
