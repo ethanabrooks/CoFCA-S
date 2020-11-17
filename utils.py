@@ -100,29 +100,15 @@ def get_freer_gpu():
     return int(np.argmax(free_memory))
 
 
-def init_(network, nonlinearity=nn.ReLU):
-    nonlinearity_str = {
-        nn.Linear: "linear",
-        nn.Conv1d: "conv1d",
-        nn.Conv2d: "conv2d",
-        nn.Conv3d: "conv3d",
-        nn.ConvTranspose1d: "conv_transpose1d",
-        nn.ConvTranspose2d: "conv_transpose2d",
-        nn.ConvTranspose3d: "conv_transpose3d",
-        nn.Sigmoid: "sigmoid",
-        nn.Tanh: "tanh",
-        nn.ReLU: "relu",
-        nn.LeakyReLU: "leaky_relu",
-    }.get(nonlinearity.__class__, "linear")
-
-    if nonlinearity is None:
+def init_(network: nn.Module, non_linearity: nn.Module = nn.ReLU):
+    if non_linearity is None:
         return init(network, init_normc_, lambda x: nn.init.constant_(x, 0))
         # return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
     return init(
         network,
         nn.init.orthogonal_,
         lambda x: nn.init.constant_(x, 0),
-        nn.init.calculate_gain(nonlinearity_str),
+        nn.init.calculate_gain(non_linearity.__name__.lower()),
     )
 
 
@@ -143,21 +129,6 @@ def trace(module_fn, in_size):
     return torch.jit.trace(module_fn(in_size), example_inputs=torch.rand(1, in_size))
 
 
-BLACK = "\033[30m"
-RED = "\033[31m"
-GREEN = "\033[32m"
-ORANGE = "\033[33m"
-BLUE = "\033[34m"
-PURPLE = "\033[35m"
-CYAN = "\033[36m"
-LIGHTGREY = "\033[37m"
-DARKGREY = "\033[90m"
-LIGHTRED = "\033[91m"
-LIGHTGREEN = "\033[92m"
-YELLOW = "\033[93m"
-LIGHTBLUE = "\033[94m"
-PINK = "\033[95m"
-LIGHTCYAN = "\033[96m"
 RESET = "\033[0m"
 
 

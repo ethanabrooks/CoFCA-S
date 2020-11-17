@@ -4,7 +4,7 @@ from gym import spaces
 import numpy as np
 
 from lines import If, While
-from utils import hierarchical_parse_args, RESET, GREEN, RED
+from utils import hierarchical_parse_args, RESET
 
 import env
 import keyboard_control
@@ -83,7 +83,7 @@ class Env(env.Env):
     ):
 
         if term:
-            print(GREEN if success else RED)
+            print(env.GREEN if success else env.RED)
         indent = 0
         for i, line in enumerate(lines):
             if i == state.ptr and i == agent_ptr:
