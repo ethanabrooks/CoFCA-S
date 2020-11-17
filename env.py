@@ -45,7 +45,7 @@ Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
 )
-Action = namedtuple("Action", "upper lower delta dg ptr")
+Action = namedtuple("Action", "upper delta dg ptr")
 
 
 def objective(interaction, obj):
@@ -196,7 +196,6 @@ class Env(gym.Env):
                     upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
                     dg=2,
-                    lower=len(self.lower_level_actions),
                     ptr=self.n_lines,
                 )
             )
@@ -636,18 +635,12 @@ class Env(gym.Env):
         self,
         state,
         action,
-        lower_level_action,
         reward,
     ):
 
         if action is not None and action < len(self.subtasks):
             print("Selected:", self.subtasks[action], action)
         print("Action:", action)
-        if lower_level_action is not None:
-            print(
-                "Lower Level Action:",
-                self.lower_level_actions[lower_level_action],
-            )
         print("Reward", reward)
         print("Time remaining", state.time_remaining)
         print("Obs:")
@@ -851,7 +844,6 @@ class Env(gym.Env):
                 self.render_world(
                     state=state,
                     action=action,
-                    lower_level_action=lower_level_action,
                     reward=reward,
                 )
 
@@ -902,12 +894,11 @@ class Env(gym.Env):
             }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
-                action = Action(upper=0, lower=action, delta=0, dg=0, ptr=0)
+                action = Action(upper=0, delta=0, dg=0, ptr=0)
 
             action = Action(*action)
-            action, lower_level_action, agent_ptr = (
+            action, agent_ptr = (
                 int(action.upper),
-                int(action.lower),
                 int(action.ptr),
             )
 
