@@ -17,24 +17,13 @@ from trainer import Trainer
 
 def main(**kwargs):
     class ControlFlowTrainer(Trainer):
-        def build_agent(
-            self, envs, lower_level="train-alone", debug=False, **agent_args
-        ):
+        def build_agent(self, envs, debug=False, **agent_args):
             obs_space = envs.observation_space
-            ll_action_space = spaces.Discrete(Action(*envs.action_space.nvec).lower)
-            if lower_level == "train-alone":
-                return agents.Agent(
-                    lower_level=True,
-                    obs_spaces=obs_space,
-                    action_space=ll_action_space,
-                    **agent_args,
-                )
             del agent_args["recurrent"]
             del agent_args["num_layers"]
             return our_agent.Agent(
                 observation_space=obs_space,
                 action_space=envs.action_space,
-                lower_level=lower_level,
                 debug=debug,
                 **agent_args,
             )
