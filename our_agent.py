@@ -8,8 +8,7 @@ from torch.nn import functional as F
 import agents
 import ours
 from agents import AgentOutputs, NNBase
-from distribution_modules import FixedCategorical
-from distributions import JointDistribution
+from distributions import JointDistribution, FixedCategorical
 
 
 class Agent(agents.Agent, NNBase):

@@ -15,7 +15,7 @@ from data_types import (
     ParsedInput,
     Action,
 )
-from distribution_modules import FixedCategorical, Categorical
+from distributions import FixedCategorical, Categorical
 from transformer import TransformerModel
 from utils import init_, init
 

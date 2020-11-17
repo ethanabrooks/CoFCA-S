@@ -9,8 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym.spaces import Box, Discrete
 
-import distribution_modules
-from distribution_modules import Categorical, DiagGaussian
+from distributions import Categorical, DiagGaussian
 from layers import Flatten
 from utils import init, init_normc_, init_
 

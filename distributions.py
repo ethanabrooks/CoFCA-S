@@ -1,31 +1,71 @@
+# third party
 import torch
-from torch.distributions import Distribution, Categorical
+import torch.nn as nn
+
+# first party
+from torch.distributions import Distribution
+
+from utils import AddBias, init, init_normc_
+
+"""
+Modify standard PyTorch distributions so they are compatible with this code.
+"""
+
+FixedCategorical = torch.distributions.Categorical
+
+old_sample = FixedCategorical.sample
+FixedCategorical.sample = lambda self: old_sample(self).unsqueeze(-1)
+
+log_prob_cat = FixedCategorical.log_prob
+FixedCategorical.log_probs = lambda self, actions: log_prob_cat(
+    self, actions.squeeze(-1)
+).unsqueeze(-1)
+
+FixedCategorical.mode = lambda self: self.probs.argmax(dim=1, keepdim=True)
+
+FixedNormal = torch.distributions.Normal
+log_prob_normal = FixedNormal.log_prob
+FixedNormal.log_probs = lambda self, actions: log_prob_normal(self, actions).sum(
+    -1, keepdim=True
+)
+
+entropy = FixedNormal.entropy
+FixedNormal.entropy = lambda self: entropy(self).sum(-1)
+
+FixedNormal.mode = lambda self: self.mean
 
 
-def unravel_index(indices: torch.Tensor, *shape: int):
-    def unravel(ind):
-        for dim in reversed(shape):
-            yield ind % dim
-            ind = indices // dim
+class Categorical(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super(Categorical, self).__init__()
 
-    return tuple(reversed(list(unravel(indices))))
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
+        )
+
+        self.linear = init_(nn.Linear(num_inputs, num_outputs))
+
+    def forward(self, x):
+        x = self.linear(x)
+        return FixedCategorical(logits=x)
 
 
-def ravel_multi_index(
-    multi_index: torch.Tensor, *dims: int, validate=False
-) -> torch.Tensor:
-    n, *shape = multi_index.shape
+class DiagGaussian(nn.Module):
+    def __init__(self, num_inputs, num_outputs):
+        super(DiagGaussian, self).__init__()
 
-    if validate:
-        dims = torch.tensor(dims, device=multi_index.device)
-        # noinspection PyTypeChecker
-        assert torch.all(multi_index < dims.view(n, *(1 for _ in shape)))
+        init_ = lambda m: init(m, init_normc_, lambda x: nn.init.constant_(x, 0))
 
-    _, *dims = dims
-    dims = torch.tensor([*dims, 1], device=multi_index.device)
-    dims = torch.cumprod(dims.flip(0), 0).flip(0)
-    dims = dims.view(n, *(1 for _ in shape))
-    return torch.sum(dims * multi_index, dim=0)
+        self.fc_mean = init_(nn.Linear(num_inputs, num_outputs))
+        self.logstd = AddBias(torch.zeros(num_outputs))
+
+    def forward(self, x):
+        action_mean = self.fc_mean(x)
+
+        #  An ugly hack for my KFAC implementation.
+        zeros = torch.zeros_like(action_mean)
+        action_logstd = self.logstd(zeros)
+        return FixedNormal(action_mean, action_logstd.exp())
 
 
 class JointCategorical(Categorical):
