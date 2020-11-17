@@ -137,7 +137,7 @@ class Trainer:
             report_iterator = report_generator()
             next(report_iterator)
 
-        r = redis.Redis(host="localhost", port=6379, db=0)
+        r = redis.Redis(host="localhost", port=8000, db=0)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
