@@ -43,8 +43,7 @@ class Recurrence(nn.Module):
         action_space,
         conv_hidden_size,
         debug,
-        debug_obs,
-        eval_lines,
+        max_eval_lines,
         fuzz,
         kernel_size,
         gate_coef,
@@ -61,7 +60,6 @@ class Recurrence(nn.Module):
         transformer,
     ):
         super().__init__()
-        self.debug_obs = debug_obs
         self.fuzz = fuzz
         self.gate_coef = gate_coef
         self.conv_hidden_size = conv_hidden_size
@@ -80,7 +78,7 @@ class Recurrence(nn.Module):
         self.task_embed_size = task_embed_size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
-        self.eval_lines = eval_lines
+        self.eval_lines = max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
@@ -111,7 +109,8 @@ class Recurrence(nn.Module):
             "offset",
             F.pad(torch.tensor(self.obs_spaces.lines.nvec[0, :-1]).cumsum(0), [1, 0]),
         )
-        d, h, w = (2, 1, 1) if self.debug_obs else observation_space.obs.shape
+        d, h, w = (2, 1, 1)
+        # if self.debug_obs else observation_space.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, kernel_size)
         self.padding = optimal_padding(h, kernel_size, stride) + 1
@@ -272,8 +271,8 @@ class Recurrence(nn.Module):
                 )
                 .unsqueeze(-1)
                 .unsqueeze(-1)
-                if self.debug_obs
-                else state.obs[t]
+                # if self.debug_obs
+                # else state.obs[t]
             )
 
             h1 = torch.cat(

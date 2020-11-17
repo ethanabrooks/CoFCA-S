@@ -80,13 +80,15 @@ class UpperTrainer(Trainer):
         env_id=None,
         **kwargs
     ):
-        if evaluating:
-            min_lines = min_eval_lines
-            max_lines = max_eval_lines
+        # if evaluating:
+        #     min_lines = min_eval_lines
+        #     max_lines = max_eval_lines
         kwargs.update(
             evaluating=evaluating,
             min_lines=min_lines,
             max_lines=max_lines,
+            min_eval_lines=min_eval_lines,
+            max_eval_lines=max_eval_lines,
             rank=rank,
             random_seed=seed + rank,
         )
@@ -108,7 +110,6 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--lower-level-config", type=Path)
         parser.add_argument("--no-debug", dest="debug", action="store_false")
         parser.add_argument("--debug-obs", action="store_true")
         parser.add_argument("--no-scan", action="store_true")
@@ -119,7 +120,6 @@ class UpperTrainer(Trainer):
         parser.add_argument("--fuzz", action="store_true")
         parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--task-embed-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
         parser.add_argument("--inventory-hidden-size", type=int)
         parser.add_argument("--num-edges", type=int)
         parser.add_argument("--gate-coef", type=float)
@@ -133,10 +133,6 @@ class UpperTrainer(Trainer):
         parser.main.add_argument("--min-eval-lines", type=int)
         parser.main.add_argument("--max-eval-lines", type=int)
         parser.main.add_argument("--no-eval", action="store_true")
-        parser.main.add_argument(
-            "--lower-level", choices=["train-alone", "train-with-upper"]
-        )
-        parser.main.add_argument("--lower-level-load-path")
         env_parser = parser.main.add_argument_group("env_args")
         cls.add_env_arguments(env_parser)
         cls.add_agent_arguments(parser.agent)

@@ -107,11 +107,10 @@ class Env(gym.Env):
         break_on_fail: bool,
         max_loops: int,
         rank: int,
-        lower_level: str,
         control_flow_types=None,
         evaluating=False,
         max_nesting_depth=1,
-        seed=0,
+        random_seed=0,
         term_on=None,
         world_size=6,
     ):
@@ -133,7 +132,6 @@ class Env(gym.Env):
         num_subtasks = len(self.subtasks)
         self.min_eval_lines = min_eval_lines
         self.max_eval_lines = max_eval_lines
-        self.lower_level = lower_level
         if Subtask not in control_flow_types:
             control_flow_types.append(Subtask)
         self.control_flow_types = control_flow_types
@@ -157,7 +155,7 @@ class Env(gym.Env):
         else:
             self.n_lines = max_lines
         self.n_lines += 1
-        self.random, self.seed = seeding.np_random(seed)
+        self.random, self.seed = seeding.np_random(random_seed)
         self.evaluating = evaluating
         self.iterator = None
         self._render = None
@@ -357,10 +355,7 @@ class Env(gym.Env):
         initial_objects = deepcopy(objects)
         initial_agent_pos = deepcopy(agent_pos)
         line_iterator = self.line_generator(lines)
-        if self.lower_level == "train-alone":
-            time_remaining = 0
-        else:
-            time_remaining = 200 if self.evaluating else self.time_to_waste
+        time_remaining = 200 if self.evaluating else self.time_to_waste
         inventory = Counter()
         subtask_complete = False
         subtask_iterator = self.subtask_generator(
@@ -369,11 +364,7 @@ class Env(gym.Env):
 
         def update_time():
             time_delta = 3 * self.world_size
-            return (
-                time_delta + self.time_to_waste
-                if self.lower_level == "train-alone"
-                else time_remaining + time_delta
-            )
+            return time_remaining + time_delta
 
         prev, ptr = 0, next(subtask_iterator)
         if ptr is not None:
@@ -783,10 +774,7 @@ class Env(gym.Env):
             self.success_count += success
 
             term = term or success or state.term
-            if self.lower_level == "train-alone":
-                reward = 1 if state.subtask_complete else 0
-            else:
-                reward = int(success)
+            reward = int(success)
             subtasks_complete += state.subtask_complete
             if term:
                 if not success and self.break_on_fail:
@@ -935,6 +923,7 @@ class Env(gym.Env):
         p.add_argument("--max-lines", type=int)
         p.add_argument("--max-loops", type=int, default=3)
         p.add_argument("--no-op-limit", type=int)
+        p.add_argument("--debug-env", action="store_true")
         p.add_argument("--eval-condition-size", action="store_true")
         p.add_argument("--single-control-flow-type", action="store_true")
         p.add_argument("--max-nesting-depth", type=int, default=1)
