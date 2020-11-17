@@ -209,7 +209,9 @@ class Recurrence(nn.Module):
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
-                ParsedInput(obs=sum(self.obs_sections), actions=self.action_size),
+                astuple(
+                    ParsedInput(obs=sum(self.obs_sections), actions=self.action_size)
+                ),
                 dim=-1,
             )
         )
@@ -229,7 +231,7 @@ class Recurrence(nn.Module):
         ).view(N, -1, self.task_embed_size)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
-        hx = RecurrentState(*[_x.squeeze(0) for _x in hx])
+        hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
 
         if self.no_pointer:
             _, G = self.task_encoder(M)
@@ -410,10 +412,7 @@ class Recurrence(nn.Module):
             return np.array([len(lines.nvec), self.d_space(), self.num_edges])
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        state_sizes = self.state_sizes
-        # noinspection PyArgumentList
-        if hx.size(-1) == sum(self.state_sizes):
-            state_sizes = self.state_sizes
+        state_sizes = astuple(self.state_sizes)
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
 
     def print(self, *args, **kwargs):
