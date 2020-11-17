@@ -274,20 +274,20 @@ class Recurrence(nn.Module):
             # arange[1] = 1
             # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
             # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
+            f, b = torch.unbind(B, dim=-2)
+            B = torch.stack([f, b.flip(-2)], dim=-2)
             B = B.view(nl, N, 2 * nl, self.num_edges)
             last = torch.zeros(nl, N, 2 * nl, self.num_edges, device=rnn_hxs.device)
             last[:, :, -1] = 1
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
+            B = (1 - last).flip(-2) * B  # this ensures the first B is 0
             zero_last = (1 - last) * B
             B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
+            rolled = torch.roll(zero_last, shifts=1, dims=-2)
+            C = torch.cumprod(1 - rolled, dim=-2)
             P = B * C
             P = P.view(nl, N, nl, 2, self.num_edges)
-            f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
+            f, b = torch.unbind(P, dim=-2)
+            P = torch.cat([b.flip(-2), f], dim=-2)
             # noinspection PyArgumentList
             half = P.size(2) // 2 if self.no_scan else nl
 
