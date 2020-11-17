@@ -6,14 +6,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass
 from gym import spaces
 
+from data_types import ParsedInput, RecurrentState
 from distributions import FixedCategorical, Categorical
 from env import Action
 from env import Obs
 from transformer import TransformerModel
-from utils import init_
+from utils import init_, astuple, asdict
 
 RecurrentState = namedtuple("RecurrentState", "a d h dg p v a_probs d_probs dg_probs")
 
