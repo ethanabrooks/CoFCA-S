@@ -60,8 +60,7 @@ class Recurrence(nn.Module):
 
     def __post_init__(self):
         super().__init__()
-        observation_space = Obs(**self.observation_space.spaces)
-        self.obs_spaces = observation_space
+        self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_size = self.action_space.nvec.size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
@@ -113,22 +112,21 @@ class Recurrence(nn.Module):
         )
         zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
-        z2_size = zeta1_input_size
         if self.olsk:
             assert self.num_edges == 3
-            self.upsilon = nn.GRUCell(z2_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.num_edges))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(z2_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(z2_size, self.num_edges))
+            self.upsilon = init_(nn.Linear(zeta1_input_size, self.num_edges))
             in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
             out_size = (
                 self.num_edges * self.d_space() if self.no_scan else self.num_edges
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = Categorical(z2_size, 2)
+        self.d_gate = Categorical(zeta1_input_size, 2)
         self.kernel_net = nn.Linear(
             m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
         )
