@@ -409,7 +409,14 @@ class Env(gym.Env):
                 )
 
             # noinspection PyTupleAssignmentBalance
-            subtask_id, lower_level_index = yield state(term)
+            s = state(term)
+
+            # self.r.set(f"{self.i},state", pickle.dumps(s))
+            lead_state = pickle.loads(self.r.get(f"{self.i},state"))
+            for (k, o), l in zip(s._asdict().items(), lead_state):
+                assert np.all(np.array(o) == np.array(l)), k
+
+            subtask_id, lower_level_index = yield s
             subtask_complete = False
             # for i, a in enumerate(self.lower_level_actions):
             # print(i, a)
@@ -866,10 +873,6 @@ class Env(gym.Env):
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
             )
-            # self.r.set(f"{self.i},obs", pickle.dumps(obs))
-            lead_obs = pickle.loads(self.r.get(f"{self.i},obs"))
-            for (k, o), l in zip(obs._asdict().items(), lead_obs):
-                assert np.all(np.array(o) == np.array(l)), k
             # if not self.observation_space.contains(obs):
             #     import ipdb
             #
