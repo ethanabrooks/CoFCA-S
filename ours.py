@@ -41,9 +41,8 @@ class Recurrence(nn.Module):
     conv_hidden_size: int
     debug: bool
     hidden_size: int
-    inventory_hidden_size: int
     kernel_size: int
-    # lower_embed_size: int
+    lower_embed_size: int
     max_eval_lines: int
     no_pointer: bool
     no_roll: bool
@@ -51,6 +50,7 @@ class Recurrence(nn.Module):
     num_edges: int
     observation_space: spaces.Dict
     olsk: bool
+    resources_hidden_size: int
     stride: int
     task_embed_size: int
     transformer: bool
@@ -103,7 +103,7 @@ class Recurrence(nn.Module):
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.inventory.n, self.inventory_hidden_size)),
+            init_(nn.Linear(self.obs_spaces.inventory.n, self.resources_hidden_size)),
             nn.ReLU(),
         )
         m_size = (
@@ -111,7 +111,7 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + self.inventory_hidden_size
+        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         z2_size = zeta1_input_size
         if self.olsk:
