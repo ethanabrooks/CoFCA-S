@@ -338,7 +338,7 @@ class RecurrentState(Generic[X]):
     dg: X
     p: X
     v: X
-    # l: X
+    l: X
     a_probs: X
     d_probs: X
     dg_probs: X
