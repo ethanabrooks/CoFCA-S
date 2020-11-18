@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import gym
 import numpy as np
+from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
 from utils import (
@@ -994,6 +995,6 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("--min-eval-lines", type=int)
     PARSER.add_argument("--max-eval-lines", type=int)
-    add_arguments(PARSER)
+    Env.add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))
+    main(Env(rank=0, **hierarchical_parse_args(PARSER)))

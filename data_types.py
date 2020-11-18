@@ -75,20 +75,21 @@ ActionTargets = list(Resource) + list(Building)
 
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
-    is_op: X  # 2
-    target: X  # 16
-    worker: X  # 3
-    ij: X  # 64
+    upper: X
+    # is_op: X  # 2
+    # target: X  # 16
+    # worker: X  # 3
+    # ij: X  # 64
 
     def thresholds(self):
         thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(thresholds, is_op=0, target=len(Resource))
-        for i, t in enumerate(ActionTargets):
-            assert (
-                isinstance(t, Resource)
-                if i < thresholds.target
-                else isinstance(t, Building)
-            )
+        # thresholds = replace(thresholds, is_op=0, target=len(Resource))
+        # for i, t in enumerate(ActionTargets):
+        #     assert (
+        #         isinstance(t, Resource)
+        #         if i < thresholds.target
+        #         else isinstance(t, Building)
+        #     )
         return thresholds
 
     def targeted(self):
@@ -102,6 +103,7 @@ class AActions(typing.Generic[X]):
 class Action(AActions):
     delta: X
     dg: X
+    ptr: X
 
     def a_actions(self):
         return AActions(
