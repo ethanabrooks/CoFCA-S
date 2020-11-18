@@ -372,7 +372,7 @@ class Recurrence(nn.Module):
             # a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_logits = self.actor(z1)
             a_probs = F.softmax(a_logits, dim=-1)
-            a_dist = FixedCategorical(probs=a_probs)  # * self.masks[l])
+            a_dist = FixedCategorical(probs=a_probs * self.masks[l])
             self.sample_new(A[t], a_dist)
 
             self.print("a_probs", a_dist.probs)
