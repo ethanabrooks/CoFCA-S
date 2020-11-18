@@ -84,5 +84,5 @@ def set_seeds(seed):
     np.random.seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
-    torch.set_deterministic(True)
+    # torch.set_deterministic(True)
     torch.set_num_threads(1)

@@ -104,7 +104,7 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.task_embed_size + self.resources_hidden_size
+        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -121,7 +121,10 @@ class Recurrence(nn.Module):
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = Categorical(zeta1_input_size, 2)
-        self.embed_obs = nn.Linear(2, self.task_embed_size)
+        self.kernel_net = nn.Linear(
+            m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
+        )
+        self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
             a=1,
@@ -293,13 +296,37 @@ class Recurrence(nn.Module):
                 half = P.size(2) // 2 if self.no_scan else nl
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
-
-            obs = torch.stack(
-                [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
-                dim=-1,
+            conv_kernel = self.kernel_net(m).view(
+                N,
+                self.conv_hidden_size,
+                self.obs_dim,
+                self.kernel_size,
+                self.kernel_size,
             )
-            h1 = self.embed_obs(obs)
-            # h1 = h1 * m
+
+            obs = (
+                torch.stack(
+                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
+                    dim=-1,
+                )
+                .unsqueeze(-1)
+                .unsqueeze(-1)
+            )
+
+            h1 = torch.cat(
+                [
+                    F.conv2d(
+                        input=o.unsqueeze(0),
+                        weight=k,
+                        bias=self.conv_bias,
+                        stride=self.stride,
+                        padding=self.padding,
+                    )
+                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
+                ],
+                dim=0,
+            ).relu()
+            h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
