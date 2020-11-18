@@ -22,7 +22,7 @@ from utils import init_, init
 
 def optimal_padding(h, kernel, stride):
     n = np.ceil((h - kernel) / stride + 1)
-    return 1 + int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
 
 
 def conv_output_dimension(h, padding, kernel, stride, dilation=1):
@@ -194,8 +194,10 @@ class Recurrence(nn.Module):
         hxs = self.inner_loop(inputs, rnn_hxs)
 
         def pack():
+            states = RecurrentState(*zip(*map(astuple, hxs)))
             for size, (name, hx) in zip(
-                self.state_sizes, asdict(RecurrentState(*zip(*hxs)))
+                astuple(self.state_sizes),
+                asdict(states).items(),
             ):
                 x = torch.stack(hx).float()
                 assert np.prod(x.shape[2:]) == size
