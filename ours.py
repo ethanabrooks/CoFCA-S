@@ -14,7 +14,7 @@ from data_types import ParsedInput, RecurrentState, Action
 from distributions import FixedCategorical, Categorical
 from env import Obs
 from transformer import TransformerModel
-from utils import init_, astuple, asdict
+from utils import init_, astuple, asdict, init
 
 
 def optimal_padding(h, kernel, stride):
@@ -68,9 +68,16 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
-        self.n_a = n_a = Action(*map(int, self.action_space.nvec)).upper
+        action_nvec = Action(*map(int, self.action_space.nvec))
+        A_nvec = action_nvec.a_actions()
+        self.n_a = n_a = action_nvec.upper
+        A_probs_size = max(astuple(A_nvec))
+
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
+        )
+        self.embed_lower = MultiEmbeddingBag(
+            1 + np.array([n_a]), embedding_dim=self.lower_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -90,6 +97,17 @@ class Recurrence(nn.Module):
         self.actor = Categorical(self.hidden_size, n_a)
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
+        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        self.register_buffer(
+            "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
+        )
+
+        masks = torch.zeros(len(astuple(A_nvec)), A_probs_size)
+        A_nvec = torch.tensor(astuple(A_nvec))
+        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
+        self.register_buffer("masks", masks)
+
         d, h, w = (2, 1, 1)
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
@@ -129,6 +147,7 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=n_a,
             d=1,
+            l=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
             p=1,
@@ -331,7 +350,7 @@ class Recurrence(nn.Module):
             z1 = F.relu(self.zeta1(zeta1_input))
             a_dist = self.actor(z1)
             self.sample_new(A[t], a_dist)
-            a = A[t]
+            l = hx.l
             self.print("a_probs", a_dist.probs)
 
             d_gate = self.d_gate(zeta1_input)
@@ -370,6 +389,7 @@ class Recurrence(nn.Module):
                 v=self.critic(z1),
                 h=h,
                 p=p,
+                l=l,
                 d=D[t],
                 dg=dg,
                 a_probs=a_dist.probs,

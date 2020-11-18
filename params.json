@@ -23,7 +23,7 @@
   "log_dir": "/home/ethanbro/ppo/.runs/logdir/control-flow/debug-version/deterministic/conv/search",
   "log_interval": 37500,
   "long_jump": false,
-  "lower_embed_size": null,
+  "lower_embed_size": 64,
   "max_eval_lines": 50,
   "max_failure_sample_prob": 0.2,
   "max_grad_norm": 0.5,
