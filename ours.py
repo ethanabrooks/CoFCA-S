@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, Action
+from data_types import ParsedInput, RecurrentState
 from distributions import FixedCategorical, Categorical
+from env import Action
 from env import Obs
 from transformer import TransformerModel
 from utils import init_, astuple, asdict

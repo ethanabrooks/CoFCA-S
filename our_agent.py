@@ -54,9 +54,9 @@ class Agent(agents.Agent, NNBase):
             ptr=None,
         )
 
-        dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
+        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
         action_log_probs = sum(
-            dist.log_probs(x) for dist, x in zip(dists, astuple(X)) if dist is not None
+            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
@@ -66,7 +66,7 @@ class Agent(agents.Agent, NNBase):
             aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
         rnn_hxs = torch.cat(astuple(hx), dim=-1)
-        action = torch.cat(astuple(X), dim=-1)
+        action = torch.cat(X, dim=-1)
         return AgentOutputs(
             value=hx.v,
             action=action,

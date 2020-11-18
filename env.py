@@ -5,11 +5,8 @@ from copy import deepcopy
 
 import gym
 import numpy as np
-from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
-
-from data_types import Action
 from utils import (
     hierarchical_parse_args,
     RESET,
@@ -40,6 +37,7 @@ Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
 )
+Action = namedtuple("Action", "upper delta dg ptr")
 
 
 def objective(interaction, obj):
@@ -196,13 +194,11 @@ class Env(gym.Env):
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array(
-                astuple(
-                    Action(
-                        upper=num_subtasks + 1,
-                        delta=2 * self.n_lines,
-                        dg=2,
-                        ptr=self.n_lines,
-                    )
+                Action(
+                    upper=num_subtasks + 1,
+                    delta=2 * self.n_lines,
+                    dg=2,
+                    ptr=self.n_lines,
                 )
             )
         )
@@ -987,7 +983,7 @@ def main(env):
         action = mapping2.get(string, None)
         if action is None:
             return None
-        return np.array(astuple(Action(upper=0, delta=0, dg=0, ptr=0)))
+        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 
@@ -998,6 +994,6 @@ if __name__ == "__main__":
     PARSER = argparse.ArgumentParser()
     PARSER.add_argument("--min-eval-lines", type=int)
     PARSER.add_argument("--max-eval-lines", type=int)
-    Env.add_arguments(PARSER)
+    add_arguments(PARSER)
     PARSER.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, **hierarchical_parse_args(PARSER)))
+    main(Env(rank=0, lower_level="train-alone", **hierarchical_parse_args(PARSER)))
