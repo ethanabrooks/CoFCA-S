@@ -94,7 +94,10 @@ class Recurrence(nn.Module):
             )
         )
 
-        self.actor = Categorical(self.hidden_size, n_a)
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
+        )  # TODO: try init
+        self.actor = init_(nn.Linear(self.hidden_size, n_a))
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
@@ -348,9 +351,30 @@ class Recurrence(nn.Module):
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
-            a_dist = self.actor(z1)
+
+            # noinspection PyTypeChecker
+            above_threshold: torch.Tensor = (
+                A[t - 1] >= -1  # TODO self.thresholds
+            )  # meets condition to progress to next action
+            sampled = A[t - 1] >= 0  # sampled on a previous time step
+            above_threshold[~sampled] = True  # ignore unsampled
+            # assert torch.all(sampled.sum(-1) == l + 1)
+            above_thresholds = above_threshold.prod(-1)  # met all thresholds
+            next_l = sampled.sum(-1) % A.size(-1)  # next l if all thresholds are met
+            l: torch.Tensor = above_thresholds * next_l  # otherwise go back to 0
+            AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
+            copy = AR < l.unsqueeze(1)  # actions accumulated from prev time steps
+            # A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
+
+            l = hx.l.long().flatten()
+            # previous lower
+            embedded_lower = self.embed_lower(A[t - 1] + 1)  # +1 to deal with negatives
+            # a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
+            a_logits = self.actor(z1)
+            a_probs = F.softmax(a_logits, dim=-1)
+            a_dist = FixedCategorical(probs=a_probs)  # * self.masks[l])
             self.sample_new(A[t], a_dist)
-            l = hx.l
+
             self.print("a_probs", a_dist.probs)
 
             d_gate = self.d_gate(zeta1_input)
