@@ -299,7 +299,7 @@ class Recurrence(nn.Module):
                 dim=-1,
             )
             h1 = self.embed_obs(obs)
-            h1 = h1 * m
+            # h1 = h1 * m
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
