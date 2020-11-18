@@ -1,14 +1,16 @@
 from typing import List, Generator, Tuple, Optional
 
+from dataclasses import astuple
 from gym import spaces
 import numpy as np
 
+from data_types import Action
 from lines import If, While
 from utils import hierarchical_parse_args, RESET
 
 import env
 import keyboard_control
-from env import ObjectMap, Coord, Line, State, NAction, Obs
+from env import ObjectMap, Coord, Line, State, Obs
 
 
 class Env(env.Env):
@@ -114,7 +116,7 @@ def main(env: Env):
         except ValueError:
             return None
 
-        return np.array(NAction(upper=action, lower=0, delta=0, dg=0, ptr=0))
+        return np.array(astuple(Action(upper=action, delta=0, dg=0, ptr=0)))
 
     keyboard_control.run(env, action_fn=action_fn)
 

@@ -16,6 +16,7 @@ FixedCategorical = torch.distributions.Categorical
 old_sample = FixedCategorical.sample
 FixedCategorical.sample = lambda self: old_sample(self).unsqueeze(-1)
 
+
 # log_prob_cat = FixedCategorical.log_prob
 def log_prob_cat(self, value):
     if self._validate_args:

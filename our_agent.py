@@ -6,7 +6,7 @@ from torch.nn import functional as F
 import agents
 import ours
 from agents import AgentOutputs, NNBase
-from env import NAction
+from data_types import Action
 from distributions import FixedCategorical
 from utils import astuple
 
@@ -46,8 +46,8 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = NAction(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = NAction(
+        X = Action(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        probs = Action(
             upper=hx.a_probs,
             delta=None if rm.no_pointer else hx.d_probs,
             dg=hx.dg_probs,
