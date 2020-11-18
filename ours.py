@@ -367,12 +367,13 @@ class Recurrence(nn.Module):
             A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
             l = hx.l.long().flatten()
-            # previous lower
             embedded_lower = self.embed_lower(A[t - 1] + 1)  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
             a_dist = FixedCategorical(probs=a_probs * self.masks[l])
-            self.sample_new(A[t], a_dist)
+            # self.sample_new(A[t, R, l], a_dist)
+            new = A[t, R, l] < 0
+            A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
 
             self.print("a_probs", a_dist.probs)
 
@@ -408,7 +409,7 @@ class Recurrence(nn.Module):
             # except ValueError:
             # pass
             yield RecurrentState(
-                a=A[t],
+                a=A[t, R, l],
                 v=self.critic(z1),
                 h=h,
                 p=p,
