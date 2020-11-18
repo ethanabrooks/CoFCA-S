@@ -364,7 +364,7 @@ class Recurrence(nn.Module):
             l: torch.Tensor = above_thresholds * next_l  # otherwise go back to 0
             AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
             copy = AR < l.unsqueeze(1)  # actions accumulated from prev time steps
-            # A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
+            A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
             l = hx.l.long().flatten()
             # previous lower
