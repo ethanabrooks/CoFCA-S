@@ -97,7 +97,7 @@ class Recurrence(nn.Module):
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
-        self.actor = init_(nn.Linear(self.hidden_size, n_a))
+        self.actor = init_(nn.Linear(self.hidden_size + self.task_embed_size, n_a))
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
@@ -369,8 +369,7 @@ class Recurrence(nn.Module):
             l = hx.l.long().flatten()
             # previous lower
             embedded_lower = self.embed_lower(A[t - 1] + 1)  # +1 to deal with negatives
-            # a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
-            a_logits = self.actor(z1)
+            a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
             a_dist = FixedCategorical(probs=a_probs * self.masks[l])
             self.sample_new(A[t], a_dist)
