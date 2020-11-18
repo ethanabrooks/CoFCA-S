@@ -260,9 +260,9 @@ class Recurrence(nn.Module):
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
-        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
+        D = torch.cat([actions.delta], dim=0).long()
+        DG = torch.cat([actions.dg], dim=0).long()
 
         for t in range(T):
             if self.no_pointer:
