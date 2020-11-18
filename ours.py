@@ -12,7 +12,7 @@ from gym import spaces
 from agents import MultiEmbeddingBag
 from data_types import ParsedInput, RecurrentState
 from distributions import FixedCategorical, Categorical
-from env import Action
+from env import NAction
 from env import Obs
 from transformer import TransformerModel
 from utils import init_, astuple, asdict
@@ -69,7 +69,7 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
-        self.n_a = n_a = Action(*map(int, self.action_space.nvec)).upper
+        self.n_a = n_a = NAction(*map(int, self.action_space.nvec)).upper
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
@@ -241,7 +241,7 @@ class Recurrence(nn.Module):
         hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*inputs.actions.unbind(dim=2))
+        actions = NAction(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()

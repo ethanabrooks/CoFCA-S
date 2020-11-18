@@ -6,7 +6,7 @@ from torch.nn import functional as F
 import agents
 import ours
 from agents import AgentOutputs, NNBase
-from env import Action
+from env import NAction
 from distributions import FixedCategorical
 from utils import astuple
 
@@ -46,17 +46,17 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = Action(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = Action(
+        X = NAction(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        probs = NAction(
             upper=hx.a_probs,
             delta=None if rm.no_pointer else hx.d_probs,
             dg=hx.dg_probs,
             ptr=None,
         )
 
-        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
+        dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
         action_log_probs = sum(
-            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+            dist.log_probs(x) for dist, x in zip(dists, astuple(X)) if dist is not None
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
@@ -66,7 +66,7 @@ class Agent(agents.Agent, NNBase):
             aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
         rnn_hxs = torch.cat(astuple(hx), dim=-1)
-        action = torch.cat(X, dim=-1)
+        action = torch.cat(astuple(X), dim=-1)
         return AgentOutputs(
             value=hx.v,
             action=action,

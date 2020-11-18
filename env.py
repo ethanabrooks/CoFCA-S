@@ -38,7 +38,7 @@ Last = namedtuple("Last", "action active reward terminal selected")
 State = namedtuple(
     "State", "obs prev ptr term subtask_complete time_remaining counts inventory"
 )
-Action = namedtuple("Action", "upper delta dg ptr")
+NAction = namedtuple("Action", "upper delta dg ptr")
 
 
 def objective(interaction, obj):
@@ -195,7 +195,7 @@ class Env(gym.Env):
         self.lower_level_actions = list(lower_level_actions())
         self.action_space = spaces.MultiDiscrete(
             np.array(
-                Action(
+                NAction(
                     upper=num_subtasks + 1,
                     delta=2 * self.n_lines,
                     dg=2,
@@ -871,9 +871,9 @@ class Env(gym.Env):
             }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.size == 1:
-                action = Action(upper=0, delta=0, dg=0, ptr=0)
+                action = NAction(upper=0, delta=0, dg=0, ptr=0)
 
-            action = Action(*action)
+            action = NAction(*action)
             action, agent_ptr = (
                 int(action.upper),
                 int(action.ptr),
@@ -984,7 +984,7 @@ def main(env):
         action = mapping2.get(string, None)
         if action is None:
             return None
-        return np.array(Action(upper=0, lower=action, delta=0, dg=0, ptr=0))
+        return np.array(NAction(upper=0, lower=action, delta=0, dg=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 

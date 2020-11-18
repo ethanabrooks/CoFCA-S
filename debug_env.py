@@ -8,7 +8,7 @@ from utils import hierarchical_parse_args, RESET
 
 import env
 import keyboard_control
-from env import ObjectMap, Coord, Line, State, Action, Obs
+from env import ObjectMap, Coord, Line, State, NAction, Obs
 
 
 class Env(env.Env):
@@ -114,7 +114,7 @@ def main(env: Env):
         except ValueError:
             return None
 
-        return np.array(Action(upper=action, lower=0, delta=0, dg=0, ptr=0))
+        return np.array(NAction(upper=action, lower=0, delta=0, dg=0, ptr=0))
 
     keyboard_control.run(env, action_fn=action_fn)
 
