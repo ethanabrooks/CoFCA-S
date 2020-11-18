@@ -74,7 +74,6 @@ starcraft_default = {
     "log_dir": "/home/ethanbro/ppo/.runs/logdir/control-flow/debug-version/search",
     "log_interval": 10,
     "long_jump": False,
-    "lower_embed_size": 128,
     "max_eval_lines": 50,
     "max_failure_sample_prob": 0.2,
     "max_grad_norm": 0.5,

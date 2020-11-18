@@ -14,7 +14,7 @@ from data_types import ParsedInput, RecurrentState, Action
 from distributions import FixedCategorical, Categorical
 from env import Obs
 from transformer import TransformerModel
-from utils import init_, astuple, asdict, init
+from utils import init_, astuple, asdict
 
 
 def optimal_padding(h, kernel, stride):
@@ -68,16 +68,9 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
-        action_nvec = Action(*map(int, self.action_space.nvec))
-        A_nvec = action_nvec.a_actions()
-        self.n_a = n_a = action_nvec.upper
-        A_probs_size = max(astuple(A_nvec))
-
+        self.n_a = n_a = Action(*map(int, self.action_space.nvec)).upper
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
-        )
-        self.embed_lower = MultiEmbeddingBag(
-            1 + np.array([n_a]), embedding_dim=self.lower_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -94,23 +87,9 @@ class Recurrence(nn.Module):
             )
         )
 
-        init_ = lambda m: init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )  # TODO: try init
-        self.actor = init_(nn.Linear(self.hidden_size + self.task_embed_size, n_a))
+        self.actor = Categorical(self.hidden_size, n_a)
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer(
-            "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
-        )
-
-        masks = torch.zeros(len(astuple(A_nvec)), A_probs_size)
-        A_nvec = torch.tensor(astuple(A_nvec))
-        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
-        self.register_buffer("masks", masks)
-
         d, h, w = (2, 1, 1)
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
@@ -150,7 +129,6 @@ class Recurrence(nn.Module):
             a=1,
             a_probs=n_a,
             d=1,
-            l=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
             p=1,
@@ -263,9 +241,9 @@ class Recurrence(nn.Module):
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
-        D = torch.cat([actions.delta], dim=0).long()
-        DG = torch.cat([actions.dg], dim=0).long()
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
+        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
+        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
         for t in range(T):
             if self.no_pointer:
@@ -351,29 +329,9 @@ class Recurrence(nn.Module):
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
-
-            # noinspection PyTypeChecker
-            above_threshold: torch.Tensor = (
-                A[t - 1] >= -1  # TODO self.thresholds
-            )  # meets condition to progress to next action
-            sampled = A[t - 1] >= 0  # sampled on a previous time step
-            above_threshold[~sampled] = True  # ignore unsampled
-            # assert torch.all(sampled.sum(-1) == l + 1)
-            above_thresholds = above_threshold.prod(-1)  # met all thresholds
-            next_l = sampled.sum(-1) % A.size(-1)  # next l if all thresholds are met
-            l: torch.Tensor = above_thresholds * next_l  # otherwise go back to 0
-            AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
-            copy = AR < l.unsqueeze(1)  # actions accumulated from prev time steps
-            A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
-
-            l = hx.l.long().flatten()
-            # previous lower
-            embedded_lower = self.embed_lower(A[t - 1] + 1)  # +1 to deal with negatives
-            a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
-            a_probs = F.softmax(a_logits, dim=-1)
-            a_dist = FixedCategorical(probs=a_probs * self.masks[l])
-            self.sample_new(A[t, R, l], a_dist)
-
+            a_dist = self.actor(z1)
+            self.sample_new(A[t], a_dist)
+            a = A[t]
             self.print("a_probs", a_dist.probs)
 
             d_gate = self.d_gate(zeta1_input)
@@ -408,11 +366,10 @@ class Recurrence(nn.Module):
             # except ValueError:
             # pass
             yield RecurrentState(
-                a=A[t, R, l],
+                a=A[t],
                 v=self.critic(z1),
                 h=h,
                 p=p,
-                l=l,
                 d=D[t],
                 dg=dg,
                 a_probs=a_dist.probs,
