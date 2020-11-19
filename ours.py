@@ -100,13 +100,13 @@ class Recurrence(nn.Module):
         self.actor = init_(nn.Linear(self.hidden_size + self.task_embed_size, n_a))
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
+        A_size = len(astuple(A_nvec))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer(
             "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
         )
 
-        masks = torch.zeros(len(astuple(A_nvec)), A_probs_size)
+        masks = torch.zeros(A_size, A_probs_size)
         A_nvec = torch.tensor(astuple(A_nvec))
         masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
@@ -147,8 +147,8 @@ class Recurrence(nn.Module):
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=n_a,
+            a=A_size,
+            a_probs=A_probs_size,
             d=1,
             l=1,
             d_probs=(self.d_space()),
@@ -258,13 +258,15 @@ class Recurrence(nn.Module):
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
-        # hx.a[new_episode] = self.n_a - 1
+        hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
-        D = torch.cat([actions.delta], dim=0).long()
-        DG = torch.cat([actions.dg], dim=0).long()
+        a = torch.stack(astuple(actions.a_actions()), dim=-1)
+        prev_a = hx.a.view(1, N, -1)
+        A = torch.cat([a, prev_a], dim=0).long()
+        D = actions.delta.long()
+        DG = actions.dg.long()
 
         for t in range(T):
             if self.no_pointer:
