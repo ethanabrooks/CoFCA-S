@@ -112,7 +112,7 @@ class Recurrence(nn.Module):
         masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
 
-        d, h, w = (2, 1, 1)
+        d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
@@ -143,8 +143,12 @@ class Recurrence(nn.Module):
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
 
-        self.kernel_net = nn.Linear(
-            m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
+        self.embed_obs = nn.Conv2d(
+            d,
+            self.conv_hidden_size,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
         )
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
@@ -320,36 +324,7 @@ class Recurrence(nn.Module):
                 half = P.size(2) // 2 if self.no_scan else nl
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
-            conv_kernel = self.kernel_net(m).view(
-                N,
-                self.conv_hidden_size,
-                self.obs_dim,
-                self.kernel_size,
-                self.kernel_size,
-            )
-
-            obs = (
-                torch.stack(
-                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
-                    dim=-1,
-                )
-                .unsqueeze(-1)
-                .unsqueeze(-1)
-            )
-
-            h1 = torch.cat(
-                [
-                    F.conv2d(
-                        input=o.unsqueeze(0),
-                        weight=k,
-                        bias=self.conv_bias,
-                        stride=self.stride,
-                        padding=self.padding,
-                    )
-                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
-                ],
-                dim=0,
-            ).relu()
+            h1 = self.embed_obs(state.obs[t]).relu()
             h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
