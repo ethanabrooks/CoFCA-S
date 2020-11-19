@@ -107,24 +107,25 @@ starcraft_default = {
     "world_size": 4,
 }
 
-search_upper = copy.deepcopy(starcraft_default)
-search_upper.update(
-    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64]),
+search_starcraft = copy.deepcopy(starcraft_default)
+search_starcraft.update(
+    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015]),
-    hidden_size=hp.choice("hidden_size", [512, 1024]),
-    resources_hidden_size=hp.choice("resources_hidden_size", [256, 512]),
-    learning_rate=hp.choice("learning_rate", [0.002, 0.0025, 0.003]),
-    lower_embed_size=hp.choice("lower_embed_size", [32, 128]),
+    hidden_size=hp.choice("hidden_size", [64, 128, 256, 512, 1024]),
+    resources_hidden_size=hp.choice("resources_hidden_size", [64, 128, 256, 512]),
+    learning_rate=hp.choice("learning_rate", [0.001, 0.002, 0.0025, 0.003, 0.01, 0.1]),
+    lower_embed_size=hp.choice("lower_embed_size", [32, 64, 128, 256]),
     num_batch=hp.choice("num_batch", [1, 2]),
-    num_edges=hp.choice("num_edges", [2, 4, 6]),
-    ppo_epoch=hp.choice("ppo_epoch", [2, 3, 4]),
+    num_edges=hp.choice("num_edges", [1]),
+    num_processes=hp.choice("num_processes", [150, 16]),
+    ppo_epoch=hp.choice("ppo_epoch", [2, 3, 4, 10, 15]),
     tgt_success_rate=hp.choice("tgt_success_rate", [0.8, 0.9]),
-    task_embed_size=hp.choice("task_embed_size", [64, 128]),
+    task_embed_size=hp.choice("task_embed_size", [32, 64, 128, 256]),
     train_steps=hp.choice("train_steps", [30, 35, 40]),
 )
 
 
-search_debug = copy.deepcopy(search_upper)
+search_debug = copy.deepcopy(search_starcraft)
 search_debug.update(
     kernel_size=1,
     stride=1,
@@ -137,7 +138,7 @@ debug_default.update(
     world_size=1,
 )
 configs = dict(
-    search_upper=search_upper,
+    search_starcraft=search_starcraft,
     search_debug=search_debug,
     starcraft_default=starcraft_default,
     debug_default=debug_default,
