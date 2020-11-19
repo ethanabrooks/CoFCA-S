@@ -215,7 +215,6 @@ class Recurrence(nn.Module):
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
-        nl = len(self.obs_spaces.lines.nvec)
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
@@ -353,8 +352,8 @@ class Recurrence(nn.Module):
             z1 = F.relu(self.zeta1(zeta1_input))
 
             # noinspection PyTypeChecker
-            above_threshold: torch.Tensor = (
-                A[t - 1] >= -1  # TODO self.thresholds
+            above_threshold: torch.Tensor = A[t - 1] >= self.thresholds.unsqueeze(
+                0
             )  # meets condition to progress to next action
             sampled = A[t - 1] >= 0  # sampled on a previous time step
             above_threshold[~sampled] = True  # ignore unsampled
@@ -410,7 +409,7 @@ class Recurrence(nn.Module):
             # except ValueError:
             # pass
             yield RecurrentState(
-                a=A[t, R, l],
+                a=A[t],
                 v=self.critic(z1),
                 h=h,
                 p=p,
@@ -421,17 +420,6 @@ class Recurrence(nn.Module):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
             )
-
-    def P_shape(self):
-        lines = (
-            self.obs_spaces["lines"]
-            if isinstance(self.obs_spaces, dict)
-            else self.obs_spaces.lines
-        )
-        if self.olsk or self.no_pointer:
-            return np.zeros(1, dtype=int)
-        else:
-            return np.array([len(lines.nvec), self.d_space(), self.num_edges])
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = astuple(self.state_sizes)

@@ -9,7 +9,7 @@ from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action
+from data_types import Action, RawAction
 from utils import (
     hierarchical_parse_args,
     RESET,
