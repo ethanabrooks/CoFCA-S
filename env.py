@@ -92,9 +92,8 @@ class Env(gym.Env):
                         delta=2 * self.max_lines,
                         dg=2,
                         is_op=2,
-                        target=len(Resource) + len(Building),
+                        worker_target=len(WorkerID) * len(ActionTargets),
                         ij=self.world_size ** 2,
-                        worker=len(WorkerID),
                         ptr=self.max_lines,
                     )
                 )
@@ -102,7 +101,7 @@ class Env(gym.Env):
         )
 
         lines_space = spaces.MultiDiscrete(
-            1 + np.array([[2, len(Building)]] * self.max_lines)
+            np.array([[2, len(Building)]] * self.max_lines)
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
 
@@ -477,7 +476,7 @@ class Env(gym.Env):
     def preprocess_line(line: Optional[Line]):
         if line is None:
             return [0, 0]
-        return [1 + int(line.required), 1 + line.building.value]
+        return [int(line.required), line.building.value - 1]
 
     def render(self, mode="human", pause=True):
         self.render_thunk()
@@ -580,7 +579,6 @@ class Env(gym.Env):
         remaining: Dict[Resource, int] = self.max.as_dict()
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
-
         while True:
             destroyed_buildings = [
                 (c, b)
@@ -616,6 +614,7 @@ class Env(gym.Env):
             nexus_positions: List[Coord] = [
                 p for p, b in building_positions.items() if b is Building.NEXUS
             ]
+            assert nexus_positions
             for worker_id, worker in workers.items():
                 worker.next_action = worker.get_action(
                     position=positions[worker_id],

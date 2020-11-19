@@ -76,23 +76,24 @@ ActionTargets = list(Resource) + list(Building)
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
     is_op: X  # 2
-    target: X  # 16
-    worker: X  # 3
+    worker_target: X  # 3 * 16
     ij: X  # 64
 
     def thresholds(self):
         thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(thresholds, is_op=0, target=len(Resource))
-        for i, t in enumerate(ActionTargets):
-            assert (
-                isinstance(t, Resource)
-                if i < thresholds.target
-                else isinstance(t, Building)
-            )
+        thresholds = replace(
+            thresholds, is_op=0, worker_target=len(WorkerID) * len(Resource)
+        )
         return thresholds
 
+    def unravel_worker_target(self):
+        return np.unravel_index(
+            int(self.worker_target), (len(WorkerID), len(ActionTargets))
+        )
+
     def targeted(self):
-        return ActionTargets[self.target]
+        worker, target = self.unravel_worker_target()
+        return ActionTargets[int(target)]
 
     def no_op(self):
         return not self.is_op or any(x < 0 for x in astuple(self))
@@ -122,13 +123,14 @@ class Action(AActions, NonAAction):
             return None
         action_target = self.targeted()
         if action_target in Building:
-            i, j = np.unravel_index(self.ij, world_shape)
+            i, j = np.unravel_index(int(self.ij), world_shape)
             assignment = BuildOrder(building=action_target, location=(i, j))
         elif action_target in Resource:
             assignment = action_target
         else:
             raise RuntimeError
-        return Command(WorkerID(self.worker + 1), assignment)
+        worker, target = self.unravel_worker_target()
+        return Command(WorkerID(worker + 1), assignment)
 
 
 @dataclass(frozen=True)

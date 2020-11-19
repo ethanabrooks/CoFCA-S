@@ -13,6 +13,7 @@ from agents import MultiEmbeddingBag, IntEncoding
 from data_types import ParsedInput, RecurrentState, Action
 from distributions import FixedCategorical, Categorical
 from env import Obs
+from layers import Flatten
 from transformer import TransformerModel
 from utils import init_, astuple, asdict, init
 
@@ -112,11 +113,17 @@ class Recurrence(nn.Module):
         masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
 
-        d, h, w = (2, 1, 1)
+        d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
-        self.embed_resources = IntEncoding(self.resources_hidden_size)
+        self.embed_resources = nn.Sequential(
+            IntEncoding(self.resources_hidden_size),
+            Flatten(),
+            init_(
+                nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
+            ),
+        )
         m_size = (
             2 * self.task_embed_size + self.hidden_size
             if self.no_pointer
