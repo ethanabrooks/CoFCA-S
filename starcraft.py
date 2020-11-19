@@ -110,7 +110,6 @@ class UpperTrainer(Trainer):
     def add_agent_arguments(cls, parser):
         parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--debug", action="store_true")
-        parser.add_argument("--debug-obs", action="store_true")
         parser.add_argument("--gate-coef", type=float)
         parser.add_argument("--resources-hidden-size", type=int)
         parser.add_argument("--kernel-size", type=int)

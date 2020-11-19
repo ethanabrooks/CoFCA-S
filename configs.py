@@ -55,7 +55,7 @@ starcraft_default = {
     "cuda": True,
     "cuda_deterministic": False,
     "debug": False,
-    "debug_obs": False,
+    "debug_env": False,
     "destroy_building_prob": 0.01,
     "entropy_coef": 0.01,
     "env_id": "control-flow",

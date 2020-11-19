@@ -95,14 +95,23 @@ class AActions(typing.Generic[X]):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op
+        return not self.is_op or any(x < 0 for x in astuple(self))
 
 
 @dataclass(frozen=True)
-class Action(AActions):
+class NonAAction(typing.Generic[X]):
     delta: X
     dg: X
+    ptr: X
 
+
+@dataclass(frozen=True)
+class RawAction(NonAAction):
+    a: X
+
+
+@dataclass(frozen=True)
+class Action(AActions, NonAAction):
     def a_actions(self):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
@@ -346,10 +355,3 @@ class RecurrentState(Generic[X]):
 class ParsedInput(Generic[X]):
     obs: X
     actions: X
-
-
-@dataclass
-class RawAction(Generic[X]):
-    d: X
-    dg: X
-    a: X

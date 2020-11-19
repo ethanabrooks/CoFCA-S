@@ -95,6 +95,7 @@ class Env(gym.Env):
                         target=len(Resource) + len(Building),
                         ij=self.world_size ** 2,
                         worker=len(WorkerID),
+                        ptr=self.max_lines,
                     )
                 )
             )
@@ -138,6 +139,7 @@ class Env(gym.Env):
     @classmethod
     def add_arguments(cls, p):
         p.add_argument("--break-on-fail", action="store_true")
+        p.add_argument("--debug-env", action="store_true")
         p.add_argument("--destroy-building-prob", type=float)
         p.add_argument("--failure-buffer-load-path", type=Path, default=None)
         p.add_argument("--failure-buffer-size", type=int)
@@ -696,9 +698,7 @@ class Env(gym.Env):
         return len(lines) * self.time_per_line
 
 
-def main(
-    **kwargs,
-):
+def main(**kwargs):
     Env(rank=0, eval_steps=500, **kwargs).main()
 
 
