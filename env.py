@@ -560,7 +560,7 @@ class Env(gym.Env):
             action: Optional[Action]
             # noinspection PyTypeChecker
             action = yield s, r, t, i
-            if action.is_op:
+            if not action.no_op():
                 state, render_state = state_iterator.send(action)
 
     def state_generator(self, *lines: Line) -> Generator[State, Action, None]:
