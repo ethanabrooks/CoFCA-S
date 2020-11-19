@@ -99,7 +99,6 @@ class Recurrence(nn.Module):
         self.actor = init_(
             nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
         )
-        self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         A_size = len(astuple(A_nvec))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
@@ -125,7 +124,7 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
+        zeta1_input_size = m_size + self.task_embed_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -145,7 +144,7 @@ class Recurrence(nn.Module):
 
         self.embed_obs = nn.Conv2d(
             d,
-            self.conv_hidden_size,
+            self.task_embed_size,
             kernel_size=self.kernel_size,
             stride=self.stride,
             padding=self.padding,
@@ -216,7 +215,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+        return self.hidden_size + self.task_embed_size + self.encoder_hidden_size
 
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
@@ -325,7 +324,7 @@ class Recurrence(nn.Module):
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
             h1 = self.embed_obs(state.obs[t]).relu()
-            h1 = h1.sum(-1).sum(-1)
+            h1 = m * h1.sum(-1).sum(-1) 
             inventory = self.embed_inventory(state.inventory[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
