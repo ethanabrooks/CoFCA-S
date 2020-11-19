@@ -70,14 +70,13 @@ class Recurrence(nn.Module):
         # networks
         action_nvec = Action(*map(int, self.action_space.nvec))
         A_nvec = action_nvec.a_actions()
-        self.n_a = n_a = action_nvec.upper
         A_probs_size = max(astuple(A_nvec))
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            1 + np.array([n_a]), embedding_dim=self.lower_embed_size
+            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -97,7 +96,9 @@ class Recurrence(nn.Module):
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
-        self.actor = init_(nn.Linear(self.hidden_size + self.task_embed_size, n_a))
+        self.actor = init_(
+            nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
+        )
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         A_size = len(astuple(A_nvec))

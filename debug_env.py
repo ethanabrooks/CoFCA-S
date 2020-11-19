@@ -5,7 +5,7 @@ from gym import spaces
 import numpy as np
 
 from data_types import Action
-from lines import If, While
+from lines import If, While, Subtask
 from utils import hierarchical_parse_args, RESET
 
 import env
@@ -44,10 +44,15 @@ class Env(env.Env):
                 counts=condition_bit,
                 inventory=None,
             )
-            subtask_id, lower_level_index = yield state
-            term = subtask_id != self.subtasks.index(lines[ptr].id)
-            condition_bit = self.random.choice(2)
-            prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
+            verb, noun, lower_level_index = yield state
+            verb = self.behaviors[int(verb)]
+            noun = self.items[int(noun)]
+            term = (verb, noun) != lines[ptr].id
+            if not term:
+                condition_bit = self.random.choice(2)
+                prev, ptr = ptr, subtask_iterator.send(
+                    dict(condition_bit=condition_bit)
+                )
 
     def inventory_representation(self, state):
         return np.array([0])
@@ -71,8 +76,6 @@ class Env(env.Env):
         # print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
-        for i, subtask in enumerate(self.subtasks):
-            print(i, subtask)
 
     def render_instruction(
         self,
@@ -100,7 +103,11 @@ class Env(env.Env):
                 evaluation = state.counts
                 line_str = f"{line} {evaluation}"
             else:
-                line_str = str(line)
+                if isinstance(line, Subtask):
+                    verb, noun = line.id
+                    line_str = f"{verb} ({self.behaviors.index(verb)}) {noun} ({self.items.index(noun)})"
+                else:
+                    line_str = str(line)
             print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
             indent += line.depth_change[1]
         print("Condition bit:", state.counts)

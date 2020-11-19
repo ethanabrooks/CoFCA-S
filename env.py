@@ -198,7 +198,8 @@ class Env(gym.Env):
             np.array(
                 astuple(
                     Action(
-                        upper=num_subtasks + 1,
+                        verb=len(self.behaviors),
+                        noun=len(self.items),
                         is_op=2,
                         delta=2 * self.n_lines,
                         dg=2,
@@ -874,15 +875,8 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            # if action.size == 1:
-            #     action = Action(upper=0, is_op=1, delta=0, dg=0, ptr=0)
-
             action = Action(*action)
             agent_ptr = action.ptr
-            # action, agent_ptr = (
-            #     int(action.upper),
-            #     int(action.ptr),
-            # )
 
             info = dict(
                 use_failure_buf=use_failure_buf,
@@ -899,7 +893,9 @@ class Env(gym.Env):
             elif state.ptr is not None:
                 step += 1
                 # noinspection PyUnresolvedReferences
-                state = state_iterator.send((action.upper, lower_level_action))
+                state = state_iterator.send(
+                    (action.verb, action.noun, lower_level_action)
+                )
 
     def inventory_representation(self, state):
         return np.array([state.inventory[i] for i in self.items])
@@ -989,7 +985,7 @@ def main(env):
         action = mapping2.get(string, None)
         if action is None:
             return None
-        return np.array(astuple(Action(upper=0, delta=0, dg=0, ptr=0)))
+        return np.array(astuple(Action(noun=0, verb=0, is_op=1, delta=0, dg=0, ptr=0)))
 
     keyboard_control.run(env, action_fn=action_fn)
 

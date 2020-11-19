@@ -76,7 +76,8 @@ ActionTargets = list(Resource) + list(Building)
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
     is_op: X  # 2
-    upper: X
+    verb: X
+    noun: X
     # target: X  # 16
     # worker: X  # 3
     # ij: X  # 64
