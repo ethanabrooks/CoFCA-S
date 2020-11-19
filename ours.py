@@ -100,13 +100,13 @@ class Recurrence(nn.Module):
         self.actor = init_(nn.Linear(self.hidden_size + self.task_embed_size, n_a))
         self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = len(astuple(A_nvec))
+        self.register_buffer("AR", torch.arange(len(astuple(A_nvec))))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer(
             "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
         )
 
-        masks = torch.zeros(A_size, A_probs_size)
+        masks = torch.zeros(len(astuple(A_nvec)), A_probs_size)
         A_nvec = torch.tensor(astuple(A_nvec))
         masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
@@ -147,8 +147,8 @@ class Recurrence(nn.Module):
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
-            a=A_size,
-            a_probs=A_probs_size,
+            a=1,
+            a_probs=n_a,
             d=1,
             l=1,
             d_probs=(self.d_space()),
@@ -215,6 +215,7 @@ class Recurrence(nn.Module):
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
+        nl = len(self.obs_spaces.lines.nvec)
         inputs = ParsedInput(
             *torch.split(
                 raw_inputs,
@@ -258,15 +259,13 @@ class Recurrence(nn.Module):
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
-        hx.a[new_episode] = -1
+        # hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
-        a = torch.stack(astuple(actions.a_actions()), dim=-1)
-        prev_a = hx.a.view(1, N, -1)
-        A = torch.cat([a, prev_a], dim=0).long()
-        D = actions.delta.long()
-        DG = actions.dg.long()
+        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
+        D = torch.cat([actions.delta], dim=0).long()
+        DG = torch.cat([actions.dg], dim=0).long()
 
         for t in range(T):
             if self.no_pointer:
@@ -354,8 +353,8 @@ class Recurrence(nn.Module):
             z1 = F.relu(self.zeta1(zeta1_input))
 
             # noinspection PyTypeChecker
-            above_threshold: torch.Tensor = A[t - 1] >= self.thresholds.unsqueeze(
-                0
+            above_threshold: torch.Tensor = (
+                A[t - 1] >= -1  # TODO self.thresholds
             )  # meets condition to progress to next action
             sampled = A[t - 1] >= 0  # sampled on a previous time step
             above_threshold[~sampled] = True  # ignore unsampled
@@ -411,7 +410,7 @@ class Recurrence(nn.Module):
             # except ValueError:
             # pass
             yield RecurrentState(
-                a=A[t],
+                a=A[t, R, l],
                 v=self.critic(z1),
                 h=h,
                 p=p,
@@ -422,6 +421,17 @@ class Recurrence(nn.Module):
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
             )
+
+    def P_shape(self):
+        lines = (
+            self.obs_spaces["lines"]
+            if isinstance(self.obs_spaces, dict)
+            else self.obs_spaces.lines
+        )
+        if self.olsk or self.no_pointer:
+            return np.zeros(1, dtype=int)
+        else:
+            return np.array([len(lines.nvec), self.d_space(), self.num_edges])
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = astuple(self.state_sizes)

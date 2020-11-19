@@ -75,16 +75,15 @@ ActionTargets = list(Resource) + list(Building)
 
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
-    is_op: X  # 2
     upper: X
+    # is_op: X  # 2
     # target: X  # 16
     # worker: X  # 3
     # ij: X  # 64
 
-    @staticmethod
-    def thresholds():
+    def thresholds(self):
         thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(thresholds, is_op=0)  # , target=len(Resource))
+        # thresholds = replace(thresholds, is_op=0, target=len(Resource))
         # for i, t in enumerate(ActionTargets):
         #     assert (
         #         isinstance(t, Resource)
@@ -97,23 +96,15 @@ class AActions(typing.Generic[X]):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
+        return not self.is_op
 
 
 @dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
+class Action(AActions):
     delta: X
     dg: X
     ptr: X
 
-
-@dataclass(frozen=True)
-class RawAction(NonAAction):
-    a: X
-
-
-@dataclass(frozen=True)
-class Action(AActions, NonAAction):
     def a_actions(self):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
@@ -357,3 +348,10 @@ class RecurrentState(Generic[X]):
 class ParsedInput(Generic[X]):
     obs: X
     actions: X
+
+
+@dataclass
+class RawAction(Generic[X]):
+    d: X
+    dg: X
+    a: X
