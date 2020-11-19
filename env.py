@@ -9,7 +9,7 @@ from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action
+from data_types import Action, RawAction
 from utils import (
     hierarchical_parse_args,
     RESET,
@@ -199,6 +199,7 @@ class Env(gym.Env):
                 astuple(
                     Action(
                         upper=num_subtasks + 1,
+                        is_op=2,
                         delta=2 * self.n_lines,
                         dg=2,
                         ptr=self.n_lines,
@@ -873,21 +874,22 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            if action.size == 1:
-                action = Action(upper=0, delta=0, dg=0, ptr=0)
+            # if action.size == 1:
+            #     action = Action(upper=0, is_op=1, delta=0, dg=0, ptr=0)
 
             action = Action(*action)
-            action, agent_ptr = (
-                int(action.upper),
-                int(action.ptr),
-            )
+            agent_ptr = action.ptr
+            # action, agent_ptr = (
+            #     int(action.upper),
+            #     int(action.ptr),
+            # )
 
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            if action == self.num_subtasks:
+            if action.no_op():
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -897,7 +899,7 @@ class Env(gym.Env):
             elif state.ptr is not None:
                 step += 1
                 # noinspection PyUnresolvedReferences
-                state = state_iterator.send((action, lower_level_action))
+                state = state_iterator.send((action.upper, lower_level_action))
 
     def inventory_representation(self, state):
         return np.array([state.inventory[i] for i in self.items])
