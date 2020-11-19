@@ -304,8 +304,11 @@ class IntEncoding(nn.Module):
     def __init__(self, d_model: int):
         self.d_model = d_model
         nn.Module.__init__(self)
-        self.div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        self.register_buffer(
+            "div_term",
+            torch.exp(
+                torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+            ),
         )
 
     def forward(self, x):

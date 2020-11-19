@@ -113,7 +113,7 @@ search_starcraft.update(
     entropy_coef=hp.choice("entropy_coef", [0.01, 0.015]),
     hidden_size=hp.choice("hidden_size", [64, 128, 256, 512, 1024]),
     resources_hidden_size=hp.choice("resources_hidden_size", [64, 128, 256, 512]),
-    learning_rate=hp.choice("learning_rate", [0.001, 0.002, 0.0025, 0.003, 0.01, 0.1]),
+    learning_rate=hp.choice("learning_rate", [0.001, 0.002, 0.0025, 0.003, 0.01]),
     lower_embed_size=hp.choice("lower_embed_size", [32, 64, 128, 256]),
     num_batch=hp.choice("num_batch", [1, 2]),
     num_edges=hp.choice("num_edges", [1]),
