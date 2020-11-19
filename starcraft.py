@@ -37,7 +37,7 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
 
 
 class UpperTrainer(Trainer):
-    metric = "eval_reward"
+    metric = "reward"
     default = starcraft_default
 
     def build_infos_aggregator(self):
