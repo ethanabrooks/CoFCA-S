@@ -97,7 +97,8 @@ class AActions(typing.Generic[X]):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
+        return self.upper == 9
+        # return not self.is_op or any(x < 0 for x in astuple(self))
 
 
 @dataclass(frozen=True)
