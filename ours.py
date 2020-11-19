@@ -259,7 +259,7 @@ class Recurrence(nn.Module):
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
-        hx.a[new_episode] = self.n_a - 1
+        # hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
