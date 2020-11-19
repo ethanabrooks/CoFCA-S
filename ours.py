@@ -357,26 +357,28 @@ class Recurrence(nn.Module):
             # noinspection PyTypeChecker
             thresholds = self.thresholds.unsqueeze(0)
 
-            def meets_thresholds(At):
-                above_threshold: torch.Tensor = (
-                    At >= thresholds
-                )  # meets condition to progress to next action
+            def check_thresholds(At):
+                # noinspection PyTypeChecker
+                above_threshold: torch.Tensor = At >= thresholds
+                # meets condition to progress to next action
                 sampled = At >= 0  # sampled on a previous time step
                 above_threshold[~sampled] = True  # ignore unsampled
-                # assert torch.all(sampled.sum(-1) == l + 1)
-                return above_threshold.prod(-1)
+                # noinspection PyArgumentList
+                return above_threshold.all(-1, keepdim=True)
 
-            next_l = (A[t - 1] >= 0).sum(-1)  # next l if all thresholds are met
-            l = meets_thresholds(A[t - 1]) * next_l  # otherwise go back to 0
+            next_l = (A[t - 1] >= 0).sum(-1, keepdim=True)
+            # next l if all thresholds are met
+            meets_thresholds = check_thresholds(A[t - 1])
+            l = meets_thresholds * next_l  # otherwise go back to 0
             AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
-            copy = AR < l.unsqueeze(1)  # actions accumulated from prev time steps
+            copy = AR < l  # actions accumulated from prev time steps
             A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
-            complete = torch.all(A[t - 1] >= 0, dim=-1, keepdim=True)
-            prev = complete * -1 + ~complete * A[t - 1]
+            prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
             embedded_lower = self.embed_lower(prev + 1)  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
+            l = l.flatten()
             a_dist = FixedCategorical(probs=a_probs * self.masks[l])
             new = A[t, R, l] < 0
             A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
@@ -385,8 +387,8 @@ class Recurrence(nn.Module):
 
             d_logits = self.d_gate(zeta1_input)
             d_probs = F.softmax(d_logits, dim=-1)
-            complete = 1 - meets_thresholds(A[t]).unsqueeze(-1)
-            d_gate = gate(complete, d_probs, ones * 0)
+            complete = ~check_thresholds(A[t])
+            d_gate = gate(complete.long(), d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 
