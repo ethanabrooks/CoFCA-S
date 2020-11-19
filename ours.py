@@ -102,9 +102,9 @@ class Recurrence(nn.Module):
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         A_size = len(astuple(A_nvec))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer(
-            "thresholds", torch.tensor(astuple(action_nvec.thresholds()))
-        )
+        thresholds = torch.tensor(astuple(action_nvec.thresholds()))
+        thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
+        self.register_buffer("thresholds", thresholds)
 
         masks = torch.zeros(A_size, A_probs_size)
         A_nvec = torch.tensor(astuple(A_nvec))
@@ -140,7 +140,8 @@ class Recurrence(nn.Module):
                 self.num_edges * self.d_space() if self.no_scan else self.num_edges
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = Categorical(zeta1_input_size, 2)
+        self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
+
         self.kernel_net = nn.Linear(
             m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
         )
@@ -354,20 +355,23 @@ class Recurrence(nn.Module):
             z1 = F.relu(self.zeta1(zeta1_input))
 
             # noinspection PyTypeChecker
-            above_threshold: torch.Tensor = A[t - 1] >= self.thresholds.unsqueeze(
-                0
-            )  # meets condition to progress to next action
-            sampled = A[t - 1] >= 0  # sampled on a previous time step
-            above_threshold[~sampled] = True  # ignore unsampled
-            # assert torch.all(sampled.sum(-1) == l + 1)
-            above_thresholds = above_threshold.prod(-1)  # met all thresholds
-            next_l = sampled.sum(-1) % A.size(-1)  # next l if all thresholds are met
-            l: torch.Tensor = above_thresholds * next_l  # otherwise go back to 0
+            thresholds = self.thresholds.unsqueeze(0)
+
+            def meets_thresholds(At):
+                above_threshold: torch.Tensor = (
+                    At >= thresholds
+                )  # meets condition to progress to next action
+                sampled = At >= 0  # sampled on a previous time step
+                above_threshold[~sampled] = True  # ignore unsampled
+                # assert torch.all(sampled.sum(-1) == l + 1)
+                return above_threshold.prod(-1)
+
+            next_l = (A[t - 1] >= 0).sum(-1)  # next l if all thresholds are met
+            l = meets_thresholds(A[t - 1]) * next_l  # otherwise go back to 0
             AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
             copy = AR < l.unsqueeze(1)  # actions accumulated from prev time steps
             A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
-            l = hx.l.long().flatten()
             complete = torch.all(A[t - 1] >= 0, dim=-1, keepdim=True)
             prev = complete * -1 + ~complete * A[t - 1]
             embedded_lower = self.embed_lower(prev + 1)  # +1 to deal with negatives
@@ -379,7 +383,10 @@ class Recurrence(nn.Module):
 
             self.print("a_probs", a_dist.probs)
 
-            d_gate = self.d_gate(zeta1_input)
+            d_logits = self.d_gate(zeta1_input)
+            d_probs = F.softmax(d_logits, dim=-1)
+            complete = 1 - meets_thresholds(A[t]).unsqueeze(-1)
+            d_gate = gate(complete, d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 

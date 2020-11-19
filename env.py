@@ -199,6 +199,7 @@ class Env(gym.Env):
                 astuple(
                     Action(
                         upper=num_subtasks + 1,
+                        is_op=2,
                         delta=2 * self.n_lines,
                         dg=2,
                         ptr=self.n_lines,

@@ -67,8 +67,8 @@ class Env(env.Env):
         action,
         reward,
     ):
-        if action is not None and action < len(self.subtasks):
-            print("Selected:", self.subtasks[action], action)
+        # if action is not None and action < len(self.subtasks):
+        # print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
         for i, subtask in enumerate(self.subtasks):

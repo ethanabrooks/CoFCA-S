@@ -75,8 +75,8 @@ ActionTargets = list(Resource) + list(Building)
 
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
+    is_op: X  # 2
     upper: X
-    # is_op: X  # 2
     # target: X  # 16
     # worker: X  # 3
     # ij: X  # 64
@@ -84,7 +84,7 @@ class AActions(typing.Generic[X]):
     @staticmethod
     def thresholds():
         thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        # thresholds = replace(thresholds, is_op=0)  # , target=len(Resource))
+        thresholds = replace(thresholds, is_op=1)  # , target=len(Resource))
         # for i, t in enumerate(ActionTargets):
         #     assert (
         #         isinstance(t, Resource)
@@ -97,8 +97,7 @@ class AActions(typing.Generic[X]):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return self.upper == 9
-        # return not self.is_op or any(x < 0 for x in astuple(self))
+        return not self.is_op or any(x < 0 for x in astuple(self))
 
 
 @dataclass(frozen=True)
