@@ -202,11 +202,7 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
-        a_action_nvec = AActions(
-            # is_op=2,
-            upper=num_subtasks
-            + 1
-        )
+        a_action_nvec = AActions(is_op=2, upper=num_subtasks + 1)
         non_a_action_nvec = NonAAction(
             delta=2 * self.n_lines,
             dg=2,
