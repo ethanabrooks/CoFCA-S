@@ -81,9 +81,6 @@ class AActions(typing.Generic[X]):
     # worker: X  # 3
     # ij: X  # 64
 
-    def update(self, sub_action):
-        return replace(self, upper=sub_action)
-
     def targeted(self):
         return ActionTargets[self.target]
 
@@ -113,6 +110,9 @@ class Action(AActions, NonAAction):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
         )
+
+    def update(self, raw_action: RawAction):
+        return replace(self, upper=raw_action.a, ptr=raw_action.ptr)
 
     def parse(self, world_shape: Coord):
         if not self.is_op or any(x < 0 for x in astuple(self)):
