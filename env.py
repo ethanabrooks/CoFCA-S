@@ -568,7 +568,10 @@ class Env(gym.Env):
             print("Action:", end=" ")
             print(action)
             if action is not None:
-                print(action.parse(self.world_shape))
+                try:
+                    print(action.parse(self.world_shape))
+                except ValueError:
+                    pass
             render_s()
             print(RESET)
 
