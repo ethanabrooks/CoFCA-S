@@ -8,7 +8,7 @@ from torch.nn import functional as F
 import agents
 import ours
 from agents import AgentOutputs, NNBase
-from data_types import Action
+from data_types import RawAction
 from distributions import FixedCategorical
 from utils import astuple
 
@@ -48,9 +48,9 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = Action(upper=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = Action(
-            upper=hx.a_probs,
+        X = RawAction(a=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        probs = RawAction(
+            a=hx.a_probs,
             delta=None if rm.no_pointer else hx.d_probs,
             dg=hx.dg_probs,
             ptr=None,
@@ -62,8 +62,6 @@ class Agent(agents.Agent, NNBase):
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
-        if probs.upper is not None:
-            aux_loss += self.no_op_coef * hx.a_probs[:, -1].mean()
         if probs.dg is not None:
             aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
