@@ -121,7 +121,12 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
+        zeta1_input_size = (
+            m_size
+            + self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.lower_embed_size
+        )
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -343,7 +348,8 @@ class Recurrence(nn.Module):
             ).relu()
             h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
-            zeta1_input = torch.cat([m, h1, inventory], dim=-1)
+            partial_action = self.embed_lower(state.partial_action[t].long())
+            zeta1_input = torch.cat([m, h1, inventory, partial_action], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
             a_logits = self.actor(z1)
             a_dist = FixedCategorical(logits=a_logits)
