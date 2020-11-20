@@ -74,6 +74,18 @@ ActionTargets = list(Resource) + list(Building)
 
 
 @dataclass(frozen=True)
+class NonAAction(typing.Generic[X]):
+    delta: X
+    dg: X
+    ptr: X
+
+
+@dataclass(frozen=True)
+class RawAction(NonAAction):
+    a: X
+
+
+@dataclass(frozen=True)
 class AActions(typing.Generic[X]):
     # is_op: X  # 2
     upper: X
@@ -88,39 +100,32 @@ class AActions(typing.Generic[X]):
         return self.upper == 9
         # return not self.is_op or self.upper is None
 
-    @staticmethod
-    def complete():
-        return True
+    def complete(self):
+        return self.upper is not None
 
     @staticmethod
     def to_int(x):
         return 0 if x is None else 1 + x
 
     def to_array(self):
-        return np.array([self.to_int(self.upper)])
+        return np.array([*map(self.to_int, astuple(self))])
 
-
-@dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
-    delta: X
-    dg: X
-    ptr: X
-
-
-@dataclass(frozen=True)
-class RawAction(NonAAction):
-    a: X
+    def next_key(self):
+        # if self.is_op == 1:
+        #     return "upper"
+        return "upper"
 
 
 @dataclass(frozen=True)
 class Action(AActions, NonAAction):
+    @staticmethod
+    def none_action():
+        return Action(None, None, None, None)  # , None)
+
     def a_actions(self):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
         )
-
-    def update(self, raw_action: RawAction):
-        return replace(self, upper=raw_action.a, ptr=raw_action.ptr)
 
     def parse(self, world_shape: Coord):
         if not self.is_op or any(x < 0 for x in astuple(self)):

@@ -1,5 +1,4 @@
 from collections import Hashable
-from collections import Hashable
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -10,8 +9,8 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, Action
-from distributions import FixedCategorical, Categorical
+from data_types import ParsedInput, RecurrentState, RawAction
+from distributions import FixedCategorical
 from env import Obs
 from transformer import TransformerModel
 from utils import astuple, asdict, init
@@ -67,16 +66,13 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        # networks
-        action_nvec = Action(*map(int, self.action_space.nvec))
-        A_nvec = action_nvec.a_actions()
-        A_probs_size = max(astuple(A_nvec))
+        action_nvec = RawAction(*map(int, self.action_space.nvec))
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
+            self.obs_spaces.partial_action.nvec, embedding_dim=self.lower_embed_size
         )
         self.task_encoder = (
             TransformerModel(
@@ -99,11 +95,10 @@ class Recurrence(nn.Module):
         self.actor = init_(
             nn.Linear(
                 self.hidden_size,
-                A_probs_size,
+                action_nvec.a,
             )
         )
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = len(astuple(A_nvec))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         d, h, w = self.obs_spaces.obs.shape
@@ -149,7 +144,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
             a=1,
-            a_probs=A_probs_size,
+            a_probs=action_nvec.a,
             d=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
@@ -260,8 +255,8 @@ class Recurrence(nn.Module):
         h = hx.h
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
+        actions = RawAction(*inputs.actions.unbind(dim=2))
+        A = torch.cat([actions.a, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
         D = torch.cat([actions.delta], dim=0).long()
         DG = torch.cat([actions.dg], dim=0).long()
 
