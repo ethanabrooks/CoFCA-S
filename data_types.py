@@ -88,7 +88,8 @@ class RawAction(NonAAction):
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
     is_op: X  # 2
-    upper: X
+    verb: X
+    noun: X
     # target: X  # 16
     # worker: X  # 3
     # ij: X  # 64
@@ -97,10 +98,10 @@ class AActions(typing.Generic[X]):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op or self.upper is None
+        return not self.is_op or None in (self.verb, self.noun)
 
     def complete(self):
-        return self.upper is not None
+        return None not in astuple(self)
 
     @staticmethod
     def to_int(x):
@@ -110,16 +111,18 @@ class AActions(typing.Generic[X]):
         return np.array([*map(self.to_int, astuple(self))])
 
     def next_key(self):
-        if self.is_op == 1:
-            return "upper"
-        return "is_op"
+        if not self.is_op:
+            return "is_op"
+        if not self.verb:
+            return "verb"
+        return "noun"
 
 
 @dataclass(frozen=True)
 class Action(AActions, NonAAction):
     @staticmethod
     def none_action():
-        return Action(None, None, None, None, None)
+        return Action(None, None, None, None, None, None)
 
     def a_actions(self):
         return AActions(

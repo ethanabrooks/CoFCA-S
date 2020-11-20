@@ -44,8 +44,10 @@ class Env(env.Env):
                 counts=condition_bit,
                 inventory=None,
             )
-            subtask_id, lower_level_index = yield state
-            term = subtask_id != self.subtasks.index(lines[ptr].id)
+            verb, noun, lower_level_index = yield state
+            verb = self.behaviors[int(verb)]
+            noun = self.items[int(noun)]
+            term = (verb, noun) != lines[ptr].id
             if not term:
                 condition_bit = self.random.choice(2)
                 prev, ptr = ptr, subtask_iterator.send(

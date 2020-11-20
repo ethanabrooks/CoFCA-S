@@ -202,7 +202,9 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
-        a_action_nvec = AActions(is_op=2, upper=num_subtasks + 1)
+        a_action_nvec = AActions(
+            is_op=2, verb=len(self.behaviors), noun=len(self.items)
+        )
         non_a_action_nvec = NonAAction(
             delta=2 * self.n_lines,
             dg=2,
@@ -917,7 +919,9 @@ class Env(gym.Env):
             elif state.ptr is not None:
                 step += 1
                 # noinspection PyUnresolvedReferences
-                state = state_iterator.send((action.upper, lower_level_action))
+                state = state_iterator.send(
+                    (action.verb, action.noun, lower_level_action)
+                )
 
     def inventory_representation(self, state):
         return np.array([state.inventory[i] for i in self.items])
