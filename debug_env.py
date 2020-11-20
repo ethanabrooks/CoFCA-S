@@ -46,8 +46,11 @@ class Env(env.Env):
             )
             subtask_id, lower_level_index = yield state
             term = subtask_id != self.subtasks.index(lines[ptr].id)
-            condition_bit = self.random.choice(2)
-            prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
+            if not term:
+                condition_bit = self.random.choice(2)
+                prev, ptr = ptr, subtask_iterator.send(
+                    dict(condition_bit=condition_bit)
+                )
 
     def inventory_representation(self, state):
         return np.array([0])
