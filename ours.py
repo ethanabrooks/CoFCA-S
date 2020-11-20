@@ -89,12 +89,24 @@ class Recurrence(nn.Module):
             )
         )
 
+        m_size = (
+            2 * self.task_embed_size + self.hidden_size
+            if self.no_pointer
+            else self.task_embed_size
+        )
+        z1_size = (
+            m_size
+            + self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.lower_embed_size
+        )
+
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
         self.actor = init_(
             nn.Linear(
-                self.hidden_size,
+                z1_size,
                 action_nvec.a,
             )
         )
@@ -110,38 +122,26 @@ class Recurrence(nn.Module):
             init_(nn.Linear(self.obs_spaces.inventory.n, self.resources_hidden_size)),
             nn.ReLU(),
         )
-        m_size = (
-            2 * self.task_embed_size + self.hidden_size
-            if self.no_pointer
-            else self.task_embed_size
-        )
-        zeta1_input_size = (
-            m_size
-            + self.conv_hidden_size
-            + self.resources_hidden_size
-            + self.lower_embed_size
-        )
-        self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
-            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(z1_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.num_edges))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(z1_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(zeta1_input_size, self.num_edges))
+            self.upsilon = init_(nn.Linear(z1_size, self.num_edges))
             in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
             out_size = (
                 self.num_edges * self.d_space() if self.no_scan else self.num_edges
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
+        self.d_gate = init_(nn.Linear(z1_size, 2))
         self.kernel_net = nn.Linear(
             m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
         )
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
-        self.critic = init_(nn.Linear(self.hidden_size, 1))
+        self.critic = init_(nn.Linear(z1_size, 1))
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=action_nvec.a,
@@ -344,15 +344,14 @@ class Recurrence(nn.Module):
             inventory = self.embed_inventory(state.inventory[t])
             partial_action = self.embed_lower(state.partial_action[t].long())
             self.print("partial_action", state.partial_action[t])
-            zeta1_input = torch.cat([m, h1, inventory, partial_action], dim=-1)
-            z1 = F.relu(self.zeta1(zeta1_input))
+            z1 = torch.cat([m, h1, inventory, partial_action], dim=-1).relu()
             a_logits = self.actor(z1)
             a_probs = F.softmax(a_logits, dim=-1) * state.action_mask[t]
             a_dist = FixedCategorical(probs=a_probs)
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
 
-            d_logits = self.d_gate(zeta1_input)
+            d_logits = self.d_gate(z1)
             d_probs = F.softmax(d_logits, dim=-1)
             complete = (state.partial_action[t] > 0).prod(-1, keepdim=True)
             self.print("complete", complete)
@@ -361,13 +360,13 @@ class Recurrence(nn.Module):
             dg = DG[t].unsqueeze(-1).float()
 
             if self.olsk or self.no_pointer:
-                h = self.upsilon(zeta1_input, h)
+                h = self.upsilon(z1, h)
                 u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
                 delta = D[t].clone() - 1
             else:
-                u = self.upsilon(zeta1_input).softmax(dim=-1)
+                u = self.upsilon(z1).softmax(dim=-1)
                 self.print("u", u)
                 d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
