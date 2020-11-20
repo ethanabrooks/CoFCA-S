@@ -40,7 +40,7 @@ ObjectMap = Dict[Coord, str]
 
 Obs = namedtuple(
     "Obs",
-    "action_complete action_mask active inventory lines mask obs partial_action subtask_complete truthy",
+    "action_mask active inventory lines mask obs partial_action subtask_complete truthy",
 )
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -239,7 +239,6 @@ class Env(gym.Env):
         )
         self.observation_space = spaces.Dict(
             Obs(
-                action_complete=spaces.Discrete(2),
                 action_mask=spaces.MultiBinary(max_a_action),
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
@@ -866,13 +865,10 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
-            action_complete = action.complete()
-            if action.complete():
-                action = Action.none_action()
-            partial_action = np.array(action.a_actions().to_array())[:-1]
-            action_mask = getattr(self.action_mask, action.next_key())
+            new_action = action.none_action() if action.complete() else action
+            partial_action = np.array(new_action.a_actions().to_array())[:-1]
+            action_mask = getattr(self.action_mask, new_action.next_key())
             obs = Obs(
-                action_complete=action_complete,
                 action_mask=action_mask,
                 obs=[[obs]],
                 lines=preprocessed_lines,
@@ -897,7 +893,11 @@ class Env(gym.Env):
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             raw_action = RawAction(*raw_action)
             action = replace(
-                action, ptr=raw_action.ptr, **{action.next_key(): raw_action.a}
+                action,
+                delta=raw_action.delta,
+                dg=raw_action.dg,
+                ptr=raw_action.ptr,
+                **{action.next_key(): raw_action.a},
             )
 
             info = dict(
