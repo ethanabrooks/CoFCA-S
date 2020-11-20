@@ -86,6 +86,7 @@ class AActions(typing.Generic[X]):
 
     def no_op(self):
         return self.upper == 9
+        # return not self.is_op or self.upper is None
 
     @staticmethod
     def complete():

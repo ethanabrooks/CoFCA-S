@@ -862,12 +862,13 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
-            partial_action = np.array(action.to_array())[:-1] * (not action.complete())
-            action_mask = self.action_mask[
-                sum(a is not None for a in astuple(action)) * (not action.complete())
-            ]
+            action_complete = action.complete()
+            if action.complete():
+                action = Action(None, None, None, None)
+            partial_action = np.array(action.to_array())[:-1]
+            action_mask = self.action_mask[sum(a is not None for a in astuple(action))]
             obs = Obs(
-                action_complete=[action.complete()],
+                action_complete=[action_complete],
                 action_mask=action_mask,
                 obs=obs,
                 lines=preprocessed_lines,
