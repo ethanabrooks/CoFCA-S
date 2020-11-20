@@ -93,12 +93,8 @@ class Recurrence(nn.Module):
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
         self.actor = init_(
-            nn.Linear(
-                self.hidden_size,
-                action_nvec.a,
-            )
+            nn.Linear(self.hidden_size + self.lower_embed_size, action_nvec.a)
         )
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         d, h, w = self.obs_spaces.obs.shape
@@ -115,12 +111,7 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = (
-            m_size
-            + self.conv_hidden_size
-            + self.resources_hidden_size
-            + self.lower_embed_size
-        )
+        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -344,9 +335,9 @@ class Recurrence(nn.Module):
             inventory = self.embed_inventory(state.inventory[t])
             partial_action = self.embed_lower(state.partial_action[t].long())
             self.print("partial_action", state.partial_action[t])
-            zeta1_input = torch.cat([m, h1, inventory, partial_action], dim=-1)
+            zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
-            a_logits = self.actor(z1)
+            a_logits = self.actor(torch.cat([z1, partial_action], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1) * state.action_mask[t]
             a_dist = FixedCategorical(probs=a_probs)
             self.sample_new(A[t], a_dist)
