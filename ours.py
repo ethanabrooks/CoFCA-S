@@ -99,7 +99,6 @@ class Recurrence(nn.Module):
         self.actor = init_(
             nn.Linear(
                 self.hidden_size,
-                # + self.lower_embed_size,
                 A_probs_size,
             )
         )
@@ -352,7 +351,8 @@ class Recurrence(nn.Module):
             zeta1_input = torch.cat([m, h1, inventory, partial_action], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
             a_logits = self.actor(z1)
-            a_dist = FixedCategorical(logits=a_logits)
+            a_probs = F.softmax(a_logits, dim=-1) * state.action_mask[t]
+            a_dist = FixedCategorical(probs=a_probs)
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
 
