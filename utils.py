@@ -1,6 +1,7 @@
 # third party
 import csv
 import re
+from collections import namedtuple
 from io import StringIO
 import random
 import subprocess
@@ -8,6 +9,7 @@ import subprocess
 import argparse
 import numpy as np
 import torch
+from dataclasses import fields, is_dataclass
 from torch import nn as nn
 import torch.jit
 import torch.nn as nn
@@ -100,29 +102,15 @@ def get_freer_gpu():
     return int(np.argmax(free_memory))
 
 
-def init_(network, nonlinearity=nn.ReLU):
-    nonlinearity_str = {
-        nn.Linear: "linear",
-        nn.Conv1d: "conv1d",
-        nn.Conv2d: "conv2d",
-        nn.Conv3d: "conv3d",
-        nn.ConvTranspose1d: "conv_transpose1d",
-        nn.ConvTranspose2d: "conv_transpose2d",
-        nn.ConvTranspose3d: "conv_transpose3d",
-        nn.Sigmoid: "sigmoid",
-        nn.Tanh: "tanh",
-        nn.ReLU: "relu",
-        nn.LeakyReLU: "leaky_relu",
-    }.get(nonlinearity.__class__, "linear")
-
-    if nonlinearity is None:
+def init_(network: nn.Module, non_linearity: nn.Module = nn.ReLU):
+    if non_linearity is None:
         return init(network, init_normc_, lambda x: nn.init.constant_(x, 0))
         # return init(network, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0))
     return init(
         network,
         nn.init.orthogonal_,
         lambda x: nn.init.constant_(x, 0),
-        nn.init.calculate_gain(nonlinearity_str),
+        nn.init.calculate_gain(non_linearity.__name__.lower()),
     )
 
 
@@ -211,3 +199,26 @@ def get_device(name):
         device_num = get_random_gpu()
 
     return torch.device("cuda", device_num)
+
+
+def astuple(obj):
+    def gen():
+        for f in fields(obj):
+            yield astuple(getattr(obj, f.name))
+
+    if is_dataclass(obj):
+        return tuple(gen())
+    return obj
+
+
+def asdict(obj):
+    def gen():
+        for f in fields(obj):
+            yield f.name, asdict(getattr(obj, f.name))
+
+    if hasattr(obj, "_asdict"):
+        # noinspection PyProtectedMember
+        return obj._asdict()
+    if is_dataclass(obj):
+        return dict(gen())
+    return obj

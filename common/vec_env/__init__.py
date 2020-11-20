@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from gym import Space
+
 from common.tile_images import tile_images
 
 
@@ -142,7 +144,9 @@ class VecEnvWrapper(VecEnv):
     of environments at once.
     """
 
-    def __init__(self, venv, observation_space=None, action_space=None):
+    def __init__(
+        self, venv: VecEnv, observation_space: Space = None, action_space: Space = None
+    ):
         self.venv = venv
         VecEnv.__init__(
             self,

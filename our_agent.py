@@ -1,24 +1,29 @@
+from dataclasses import replace
+
 import torch
 import torch.jit
 from torch import nn as nn
 from torch.nn import functional as F
 
-import networks
+import agents
 import ours
+from agents import AgentOutputs, NNBase
+from data_types import RawAction
 from distributions import FixedCategorical
-from networks import AgentOutputs, NNBase
-from upper_env import Action
+from utils import astuple
 
 
-class Agent(networks.Agent, NNBase):
+class Agent(agents.Agent, NNBase):
     def __init__(
         self,
         entropy_coef,
         observation_space,
         action_space,
+        gate_coef,
         **network_args,
     ):
         nn.Module.__init__(self)
+        self.gate_coef = gate_coef
         self.entropy_coef = entropy_coef
         self.recurrent_module = ours.Recurrence(
             observation_space=observation_space,
@@ -28,7 +33,7 @@ class Agent(networks.Agent, NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return sum(self.recurrent_module.state_sizes)
+        return sum(astuple(self.recurrent_module.state_sizes))
 
     @property
     def is_recurrent(self):
@@ -41,26 +46,22 @@ class Agent(networks.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = Action(upper=hx.a, lower=hx.l, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = Action(
-            upper=hx.a_probs,
-            lower=None,
-            delta=None if rm.no_pointer else hx.d_probs,
-            dg=hx.dg_probs,
-            ptr=None,
-        )
+        R = torch.arange(N, device=rnn_hxs.device).unsqueeze(-1)
+        a = hx.a[R, hx.l.long()]
+        X = RawAction(a=a, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        probs = RawAction(a=hx.a_probs, delta=hx.d_probs, dg=hx.dg_probs, ptr=None)
 
-        dists = [(p if p is None else FixedCategorical(p)) for p in probs]
+        dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
         action_log_probs = sum(
-            dist.log_probs(x) for dist, x in zip(dists, X) if dist is not None
+            dist.log_probs(x) for dist, x in zip(dists, astuple(X)) if dist is not None
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
         if probs.dg is not None:
-            aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
+            aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
-        rnn_hxs = torch.cat(hx._replace(l=X.lower), dim=-1)
-        action = torch.cat(X, dim=-1)
+        rnn_hxs = torch.cat(astuple(hx), dim=-1)
+        action = torch.cat(astuple(replace(X, a=hx.a)), dim=-1)
         return AgentOutputs(
             value=hx.v,
             action=action,

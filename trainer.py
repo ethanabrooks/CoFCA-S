@@ -3,9 +3,10 @@ import itertools
 import os
 import time
 from argparse import ArgumentParser
-from collections import namedtuple, Counter
+from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
-from typing import Dict, Optional
+from pprint import pprint
+from typing import Dict, Optional, DefaultDict, Union
 
 import gym
 import ray
@@ -16,12 +17,12 @@ from ray.tune.suggest.hyperopt import HyperOptSearch
 from tensorboardX import SummaryWriter
 
 import arguments
+from agents import Agent, AgentOutputs, MLPBase
 from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
 from configs import default
-from networks import Agent, AgentOutputs, MLPBase
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -34,43 +35,39 @@ class Trainer:
     default = default
 
     @classmethod
-    def structure_config(cls, **config):
-        agent_args = {}
-        rollouts_args = {}
-        ppo_args = {}
-        env_args = {}
-        gen_args = {}
-        for k, v in config.items():
-            if k in ["num_processes"]:
-                gen_args[k] = v
-            else:
-                if k in inspect.signature(cls.build_agent).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(Agent.__init__).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(MLPBase.__init__).parameters:
-                    agent_args[k] = v
-                if k in inspect.signature(RolloutStorage.__init__).parameters:
-                    rollouts_args[k] = v
-                if k in inspect.signature(PPO.__init__).parameters:
-                    ppo_args[k] = v
-                if k in inspect.signature(cls.make_env).parameters:
-                    env_args[k] = v
-                if k in inspect.signature(cls.run).parameters or k not in (
-                    list(agent_args.keys())
-                    + list(rollouts_args.keys())
-                    + list(ppo_args.keys())
-                    + list(env_args.keys())
-                ):
-                    gen_args[k] = v
-        config = dict(
-            agent_args=agent_args,
-            rollouts_args=rollouts_args,
-            ppo_args=ppo_args,
-            env_args=env_args,
-            **gen_args,
+    def args_to_methods(cls):
+        return dict(
+            agent_args=[
+                cls.build_agent,
+                Agent.__init__,
+                MLPBase.__init__,
+            ],
+            rollouts_args=[RolloutStorage.__init__],
+            ppo_args=[PPO.__init__],
+            env_args=[cls.make_env],
+            run_args=[cls.run],
         )
-        return config
+
+    @classmethod
+    def structure_config(
+        cls, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        def parameters(*ms):
+            for method in ms:
+                yield from inspect.signature(method).parameters
+
+        args = defaultdict(dict)
+        args_to_methods = cls.args_to_methods()
+        for k, v in config.items():
+            assigned = False
+            for arg_name, methods in args_to_methods.items():
+                if k in parameters(*methods):
+                    args[arg_name][k] = v
+                    assigned = True
+            assert assigned
+        run_args = args.pop("run_args")
+        args.update(**run_args)
+        return args
 
     @staticmethod
     def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
@@ -194,7 +191,6 @@ class Trainer:
                 obs_space=train_envs.observation_space,
                 action_space=train_envs.action_space,
                 recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
-                num_processes=num_processes,
                 **rollouts_args,
             )
 
@@ -218,13 +214,13 @@ class Trainer:
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
                 done = frames["so_far"] >= num_frames
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
-                if done or (
-                    not no_eval
-                    and eval_interval
-                    and frames["since_eval"] > eval_interval
+                if not no_eval and (
+                    i == 0
+                    or done
+                    or (eval_interval and frames["since_eval"] > eval_interval)
                 ):
+                    eval_report = EvalWrapper(EpisodeAggregator())
+                    eval_infos = EvalWrapper(InfosAggregator())
                     frames["since_eval"] = 0
                     # vec_norm = get_vec_normalize(eval_envs)
                     # if vec_norm is not None:
@@ -254,6 +250,13 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
+                        reporter.send(
+                            dict(
+                                **dict(eval_report.items()),
+                                **dict(eval_infos.items()),
+                                training_iteration=frames["so_far"],
+                            )
+                        )
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
@@ -266,8 +269,6 @@ class Trainer:
                             **train_results,
                             **dict(train_report.items()),
                             **dict(train_infos.items()),
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
                             time_logging=time_spent["logging"],
                             time_saving=time_spent["saving"],
                             training_iteration=frames["so_far"],
@@ -337,6 +338,7 @@ class Trainer:
             writer = SummaryWriter(logdir=log_dir) if log_dir else None
 
             def report(training_iteration, **args):
+                pprint(args)
                 if writer:
                     for k, v in args.items():
                         writer.add_scalar(k, v, global_step=training_iteration)
@@ -377,8 +379,8 @@ class Trainer:
     ):
         if config is None:
             config = cls.default
-            if seed is not None:
-                config[seed] = seed
+        if seed is not None:
+            config.update(seed=seed)
 
         for k, v in kwargs.items():
             if k not in config or v is not None:
@@ -400,7 +402,10 @@ class Trainer:
         else:
             local_mode = num_samples is None
             ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            resources_per_trial = dict(gpu=gpus_per_trial, cpu=cpus_per_trial)
+            resources_per_trial = dict(
+                gpu=gpus_per_trial if torch.cuda.is_available() else 0,
+                cpu=cpus_per_trial,
+            )
 
             if local_mode:
                 print("Using local mode because num_samples is None")

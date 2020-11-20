@@ -1,5 +1,6 @@
 from abc import ABC
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Collection
 
 import numpy as np
@@ -55,9 +56,9 @@ class InfosAggregator(EpisodeAggregator):
                     incomplete_episodes[i] = []
 
 
+@dataclass(frozen=True)
 class EvalWrapper(Aggregator):
-    def __init__(self, aggregator: Aggregator):
-        self.aggregator = aggregator
+    aggregator: Aggregator
 
     def update(self, *args, **kwargs):
         self.aggregator.update(*args, **kwargs)
