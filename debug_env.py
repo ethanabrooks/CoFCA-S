@@ -1,11 +1,9 @@
 import typing
 from collections import Counter
-from dataclasses import astuple
 from pprint import pprint
 from typing import Union, Dict, Generator, Tuple, List
 
 import numpy as np
-from colored import fg
 
 import env
 from data_types import (
@@ -13,24 +11,17 @@ from data_types import (
     Resource,
     Building,
     Coord,
-    Costs,
     Action,
     WorldObject,
-    Movement,
     WorkerID,
     Worker,
     State,
     Line,
     BuildOrder,
 )
-from utils import RESET
 
 
 class Env(env.Env):
-    @staticmethod
-    def building_allowed(building_positions, target_position, *args, **kwargs):
-        return target_position not in building_positions
-
     def state_generator(self, *lines: Line) -> Generator[State, Action, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
         building_positions: Dict[Coord, Building] = dict(

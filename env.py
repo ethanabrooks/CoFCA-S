@@ -155,13 +155,13 @@ class Env(gym.Env):
         building_positions,
         insufficient_resources,
         positions,
-        worker_position,
+        target_position,
     ):
-        if not insufficient_resources and worker_position not in building_positions:
+        if not insufficient_resources and target_position not in building_positions:
             if building is Building.ASSIMILATOR:
-                return worker_position == positions[Resource.GAS]
+                return target_position == positions[Resource.GAS]
             else:
-                return worker_position not in (
+                return target_position not in (
                     *building_positions,
                     positions[Resource.GAS],
                     positions[Resource.MINERALS],
@@ -691,7 +691,7 @@ class Env(gym.Env):
                         building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
-                        worker_position=worker_position,
+                        target_position=worker_position,
                     ):
                         building_positions[worker_position] = building
                         resources -= Costs[building]
