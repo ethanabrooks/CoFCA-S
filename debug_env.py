@@ -1,10 +1,11 @@
 import env
+from data_types import Building, Resource
 
 
 class Env(env.Env):
     @staticmethod
-    def building_allowed(*args, **kwargs):
-        return True
+    def building_allowed(building_positions, worker_position, *args, **kwargs):
+        return worker_position not in building_positions
 
 
 def main(**kwargs):

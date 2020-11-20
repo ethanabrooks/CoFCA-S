@@ -75,14 +75,17 @@ ActionTargets = list(Resource) + list(Building)
 
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
-    is_op: X  # 2
+    # is_op: X  # 2
     worker_target: X  # 3 * 16
     ij: X  # 64
 
-    def thresholds(self):
+    @staticmethod
+    def thresholds():
         thresholds = AActions(*(-1 for _ in AActions.__annotations__))
         thresholds = replace(
-            thresholds, is_op=0, worker_target=len(WorkerID) * len(Resource)
+            thresholds,
+            # is_op=0,
+            worker_target=len(WorkerID) * len(Resource),
         )
         return thresholds
 
@@ -96,7 +99,8 @@ class AActions(typing.Generic[X]):
         return ActionTargets[int(target)]
 
     def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
+        return any(x < 0 for x in astuple(self))
+        # not self.is_op or any(x < 0 for x in astuple(self))
 
 
 @dataclass(frozen=True)
@@ -119,8 +123,7 @@ class Action(AActions, NonAAction):
         )
 
     def parse(self, world_shape: Coord):
-        if not self.is_op or any(x < 0 for x in astuple(self)):
-            return None
+        # if not self.is_op or any(x < 0 for x in astuple(self)): return None
         action_target = self.targeted()
         if action_target in Building:
             i, j = np.unravel_index(int(self.ij), world_shape)
@@ -198,7 +201,6 @@ class Resources:
 assert set(Resources(0, 0).__annotations__.keys()) == {
     r.lower() for r in Resource.__members__
 }
-
 
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.

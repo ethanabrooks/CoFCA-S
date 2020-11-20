@@ -92,7 +92,7 @@ class Env(gym.Env):
                     Action(
                         delta=2 * self.max_lines,
                         dg=2,
-                        is_op=2,
+                        # is_op=2,
                         worker_target=len(WorkerID) * len(ActionTargets),
                         ij=self.world_size ** 2,
                         ptr=self.max_lines,
@@ -341,10 +341,15 @@ class Env(gym.Env):
                                 i, j = 0, 0
                                 worker = 1
                             ij = int(np.ravel_multi_index((i, j), self.world_shape))
+                            worker_target = int(
+                                np.ravel_multi_index(
+                                    (worker, target),
+                                    (len(WorkerID), len(ActionTargets)),
+                                )
+                            )
                             action = Action(
-                                is_op=1,
-                                target=target,
-                                worker=worker,
+                                # is_op=1,
+                                worker_target=worker_target,
                                 ij=ij,
                                 delta=0,
                                 dg=0,
@@ -660,11 +665,11 @@ class Env(gym.Env):
                     building = worker_action
                     insufficient_resources = Costs[building] - resources
                     if self.building_allowed(
-                        building,
-                        building_positions,
-                        insufficient_resources,
-                        positions,
-                        worker_position,
+                        building=building,
+                        building_positions=building_positions,
+                        insufficient_resources=insufficient_resources,
+                        positions=positions,
+                        worker_position=worker_position,
                     ):
                         building_positions[worker_position] = building
                         resources -= Costs[building]
