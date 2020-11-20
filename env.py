@@ -39,7 +39,7 @@ ObjectMap = Dict[Coord, str]
 
 Obs = namedtuple(
     "Obs",
-    "action_complete active inventory lines mask obs partial_action subtask_complete truthy",
+    "action_complete action_mask active inventory lines mask obs partial_action subtask_complete truthy",
 )
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -208,6 +208,14 @@ class Env(gym.Env):
             ptr=self.n_lines,
         )
         self.action_space = spaces.MultiDiscrete(np.array(astuple(action_nvec)))
+        a_actions = action_nvec.a_actions()
+        num_a_actions = len(astuple(a_actions))
+        max_a_action = max(astuple(a_actions))
+        self.action_mask = np.zeros((num_a_actions, max_a_action))
+        is_one = np.expand_dims(np.arange(max_a_action), 0) <= np.expand_dims(
+            astuple(a_actions), 1
+        )
+        self.action_mask[is_one] = 1
         lines_space = spaces.MultiDiscrete(
             np.array(
                 [
@@ -228,6 +236,7 @@ class Env(gym.Env):
         self.observation_space = spaces.Dict(
             Obs(
                 action_complete=spaces.Discrete(2),
+                action_mask=spaces.MultiBinary(max_a_action),
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
                 lines=lines_space,
@@ -854,8 +863,12 @@ class Env(gym.Env):
 
             inventory = self.inventory_representation(state)
             partial_action = np.array(action.to_array())[:-1] * (not action.complete())
+            action_mask = self.action_mask[
+                sum(a is not None for a in astuple(action)) * (not action.complete())
+            ]
             obs = Obs(
                 action_complete=[action.complete()],
+                action_mask=action_mask,
                 obs=obs,
                 lines=preprocessed_lines,
                 mask=mask,
