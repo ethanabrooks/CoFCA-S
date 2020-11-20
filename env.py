@@ -883,9 +883,6 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            if raw_action.size == 1:
-                raw_action = Action(upper=0, delta=0, dg=0, ptr=0)
-
             action = action.update(RawAction(*raw_action))
             agent_ptr = action.ptr
 
@@ -912,7 +909,7 @@ class Env(gym.Env):
             elif state.ptr is not None:
                 step += 1
                 # noinspection PyUnresolvedReferences
-                state = state_iterator.send((raw_action, lower_level_action))
+                state = state_iterator.send((action.upper, lower_level_action))
 
     def inventory_representation(self, state):
         return np.array([state.inventory[i] for i in self.items])
