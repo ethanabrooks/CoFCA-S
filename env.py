@@ -2,16 +2,21 @@ import functools
 import itertools
 from collections import Counter, namedtuple, deque, OrderedDict, defaultdict
 from copy import deepcopy
-from dataclasses import astuple
-from typing import List, Tuple, Dict, Optional, Generator
 
 import gym
 import numpy as np
+from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
 
-import keyboard_control
 from data_types import Action
+from utils import (
+    hierarchical_parse_args,
+    RESET,
+)
+from typing import List, Tuple, Dict, Optional, Generator
+
+import keyboard_control
 from lines import (
     Subtask,
     Padding,
@@ -630,6 +635,8 @@ class Env(gym.Env):
         reward,
     ):
 
+        if action is not None and action < len(self.subtasks):
+            print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
         print("Time remaining", state.time_remaining)
@@ -783,8 +790,8 @@ class Env(gym.Env):
         agent_ptr = 0
         info = {}
         term = False
+        action = None
         lower_level_action = None
-        action = Action(*np.zeros_like(self.action_space.nvec))
         while True:
             success = state.ptr is None
             self.success_count += success
@@ -855,7 +862,7 @@ class Env(gym.Env):
 
             inventory = self.inventory_representation(state)
             obs = Obs(
-                action_complete=[action.complete()],
+                action_complete=[True],
                 obs=obs,
                 lines=preprocessed_lines,
                 mask=mask,
@@ -863,7 +870,7 @@ class Env(gym.Env):
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
-                partial_action=np.array(astuple(action)[:-1]),
+                partial_action=-1 * np.ones_like(self.action_space.nvec[:-1]),
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb
@@ -875,16 +882,22 @@ class Env(gym.Env):
             line_specific_info = {
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
-            sub_action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            action.update(sub_action)
-            agent_ptr = action.ptr
+            action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            if action.size == 1:
+                action = Action(upper=0, delta=0, dg=0, ptr=0)
+
+            action = Action(*action)
+            action, agent_ptr = (
+                int(action.upper),
+                int(action.ptr),
+            )
 
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            if action.no_op():
+            if action == self.num_subtasks:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
