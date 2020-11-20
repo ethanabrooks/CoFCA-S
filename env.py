@@ -891,6 +891,8 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            if action.complete():
+                action = action.none_action()
             raw_action = RawAction(*raw_action)
             action = replace(
                 action,
