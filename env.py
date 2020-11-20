@@ -29,11 +29,18 @@ from lines import (
     Loop,
     EndLoop,
 )
+from utils import (
+    hierarchical_parse_args,
+    RESET,
+)
 
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active inventory lines mask obs subtask_complete truthy")
+Obs = namedtuple(
+    "Obs",
+    "action_complete active inventory lines mask obs partial_action subtask_complete truthy",
+)
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -194,18 +201,17 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
-        self.action_space = spaces.MultiDiscrete(
-            np.array(
-                astuple(
-                    Action(
-                        upper=num_subtasks + 1,
-                        delta=2 * self.n_lines,
-                        dg=2,
-                        ptr=self.n_lines,
-                    )
+        action_nvec = np.array(
+            astuple(
+                Action(
+                    upper=num_subtasks + 1,
+                    delta=2 * self.n_lines,
+                    dg=2,
+                    ptr=self.n_lines,
                 )
             )
         )
+        self.action_space = spaces.MultiDiscrete(action_nvec)
         lines_space = spaces.MultiDiscrete(
             np.array(
                 [
@@ -222,6 +228,7 @@ class Env(gym.Env):
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         self.observation_space = spaces.Dict(
             Obs(
+                action_complete=spaces.Discrete(2),
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
                 lines=lines_space,
@@ -229,6 +236,7 @@ class Env(gym.Env):
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
+                partial_action=spaces.MultiDiscrete(1 + action_nvec[:-1]),
             )._asdict()
         )
         self.world_space = spaces.Box(
@@ -854,6 +862,7 @@ class Env(gym.Env):
 
             inventory = self.inventory_representation(state)
             obs = Obs(
+                action_complete=[True],
                 obs=obs,
                 lines=preprocessed_lines,
                 mask=mask,
@@ -861,6 +870,7 @@ class Env(gym.Env):
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
+                partial_action=-1 * np.ones_like(self.action_space.nvec[:-1]),
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb

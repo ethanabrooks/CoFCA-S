@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import torch
 import torch.jit
 from torch import nn as nn

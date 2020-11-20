@@ -81,22 +81,18 @@ class AActions(typing.Generic[X]):
     # worker: X  # 3
     # ij: X  # 64
 
-    def thresholds(self):
-        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        # thresholds = replace(thresholds, is_op=0, target=len(Resource))
-        # for i, t in enumerate(ActionTargets):
-        #     assert (
-        #         isinstance(t, Resource)
-        #         if i < thresholds.target
-        #         else isinstance(t, Building)
-        #     )
-        return thresholds
+    def update(self, sub_action):
+        return replace(self, upper=sub_action)
 
     def targeted(self):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op
+        return self.upper == 9
+
+    @staticmethod
+    def complete():
+        return True
 
 
 @dataclass(frozen=True)
@@ -338,7 +334,6 @@ class RecurrentState(Generic[X]):
     dg: X
     p: X
     v: X
-    l: X
     a_probs: X
     d_probs: X
     dg_probs: X

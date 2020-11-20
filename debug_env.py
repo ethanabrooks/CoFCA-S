@@ -5,7 +5,7 @@ from gym import spaces
 import numpy as np
 
 from data_types import Action
-from lines import If, While
+from lines import If, While, Subtask
 from utils import hierarchical_parse_args, RESET
 
 import env
