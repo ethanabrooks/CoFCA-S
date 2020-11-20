@@ -886,19 +886,11 @@ class Env(gym.Env):
             action = action.update(RawAction(*raw_action))
             agent_ptr = action.ptr
 
-            raw_action = Action(*raw_action)
-            assert agent_ptr == raw_action.ptr
-            raw_action = int(raw_action.upper)
-            assert action.upper == raw_action
-
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            assert raw_action == action.upper
-            no_op = raw_action == self.num_subtasks
-            assert no_op == action.no_op()
             if action.no_op():
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
