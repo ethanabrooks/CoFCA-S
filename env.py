@@ -24,6 +24,7 @@ from data_types import (
     Building,
     Coord,
     Costs,
+    costs,
     Action,
     WorldObject,
     WorldObjects,
@@ -381,12 +382,13 @@ class Env(gym.Env):
 
             for i, line in enumerate(list(lines_iterator())):
                 print(
-                    "{:2}{}{} ({}) {}".format(
+                    "{:2}{}{} ({}) {}: {}".format(
                         i,
                         "-" if i == state.pointer else " ",
                         "*" if line.required else " ",
                         ActionTargets.index(line.building),
                         str(line.building),
+                        costs[line.building],
                     )
                 )
             print("Obs:")
@@ -541,6 +543,8 @@ class Env(gym.Env):
             render_state()
             print("Action:", end=" ")
             print(action)
+            if action is not None:
+                print(action.parse(self.world_shape))
             render_s()
             print(RESET)
 
