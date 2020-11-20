@@ -149,6 +149,24 @@ class Env(gym.Env):
         p.add_argument("--tgt-success-rate", type=float)
         p.add_argument("--world-size", type=int)
 
+    @staticmethod
+    def building_allowed(
+        building,
+        building_positions,
+        insufficient_resources,
+        positions,
+        worker_position,
+    ):
+        if not insufficient_resources and worker_position not in building_positions:
+            if building is Building.ASSIMILATOR:
+                return worker_position == positions[Resource.GAS]
+            else:
+                return worker_position not in (
+                    *building_positions,
+                    positions[Resource.GAS],
+                    positions[Resource.MINERALS],
+                )
+
     def build_dependencies(self):
         n = len(Building)
         dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
@@ -322,7 +340,7 @@ class Env(gym.Env):
     def main(self):
         def action_gen():
             string = yield
-            prev_action = Action(0, 0, 0, 0, 0, 0)
+            prev_action = Action(0, 0, 0, 0, 0)
             while True:
                 action = None
                 while action is None:
@@ -353,6 +371,7 @@ class Env(gym.Env):
                                 ij=ij,
                                 delta=0,
                                 dg=0,
+                                ptr=0,
                             )
                             prev_action = action
                         except (ValueError, TypeError) as e:
@@ -680,24 +699,6 @@ class Env(gym.Env):
             for resource, _remaining in remaining.items():
                 if not _remaining:
                     del positions[resource]
-
-    @staticmethod
-    def building_allowed(
-        building,
-        building_positions,
-        insufficient_resources,
-        positions,
-        worker_position,
-    ):
-        if not insufficient_resources and worker_position not in building_positions:
-            if building is Building.ASSIMILATOR:
-                return worker_position == positions[Resource.GAS]
-            else:
-                return worker_position not in (
-                    *building_positions,
-                    positions[Resource.GAS],
-                    positions[Resource.MINERALS],
-                )
 
     def step(self, action: np.ndarray):
         return self.iterator.send(Action(*action))
