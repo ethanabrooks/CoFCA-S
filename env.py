@@ -784,13 +784,11 @@ class Env(gym.Env):
         state = next(state_iterator)
 
         subtasks_complete = 0
-        agent_ptr = 0
         info = {}
         term = False
-        raw_action = None
 
         lower_level_action = None
-        action = Action(*np.zeros_like(self.action_space.nvec))
+        action = Action(delta=None, dg=None, ptr=0, upper=None)
         while True:
             success = state.ptr is None
             self.success_count += success
@@ -831,7 +829,7 @@ class Env(gym.Env):
                     success=success,
                     lines=lines,
                     state=state,
-                    agent_ptr=agent_ptr,
+                    agent_ptr=action.ptr,
                 )
                 self.render_world(
                     state=state,
@@ -845,14 +843,9 @@ class Env(gym.Env):
             padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
             mask = [int(not isinstance(l, Padding)) for l in padded]
-            mask = (
-                [1 for l in padded if not isinstance(l, Padding)]
-                + [1]
-                + [0 for l in padded[:-1] if isinstance(l, Padding)]
-            )
             truthy = [
                 self.evaluate_line(l, None, state.counts)
-                if agent_ptr < len(lines)
+                if action.ptr < len(lines)
                 else 2
                 for l in lines
             ]
@@ -860,6 +853,7 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
+            partial_action = np.array(action.to_array())[:-1] * (not action.complete())
             obs = Obs(
                 action_complete=[action.complete()],
                 obs=obs,
@@ -869,7 +863,7 @@ class Env(gym.Env):
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
-                partial_action=np.array(action.partial()),
+                partial_action=partial_action,
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb
@@ -883,7 +877,6 @@ class Env(gym.Env):
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             action = action.update(RawAction(*raw_action))
-            agent_ptr = action.ptr
 
             info = dict(
                 use_failure_buf=use_failure_buf,

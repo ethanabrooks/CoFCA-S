@@ -68,15 +68,15 @@ class Obs(typing.Generic[O]):
     workers: O
 
 
-X = typing.TypeVar("X")
+X = typing.TypeVar("X", np.ndarray, typing.Optional[int], torch.Tensor)
 
 ActionTargets = list(Resource) + list(Building)
 
 
 @dataclass(frozen=True)
 class AActions(typing.Generic[X]):
-    upper: X
     # is_op: X  # 2
+    upper: X
     # target: X  # 16
     # worker: X  # 3
     # ij: X  # 64
@@ -92,8 +92,11 @@ class AActions(typing.Generic[X]):
         return True
 
     @staticmethod
-    def partial():
-        return np.array([])
+    def to_int(x):
+        return 0 if x is None else 1 + x
+
+    def to_array(self):
+        return np.array([self.to_int(self.upper)])
 
 
 @dataclass(frozen=True)
