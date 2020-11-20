@@ -91,6 +91,10 @@ class AActions(typing.Generic[X]):
     def complete():
         return True
 
+    @staticmethod
+    def partial():
+        return np.array([])
+
 
 @dataclass(frozen=True)
 class NonAAction(typing.Generic[X]):

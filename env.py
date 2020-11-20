@@ -201,17 +201,13 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
-        action_nvec = np.array(
-            astuple(
-                Action(
-                    upper=num_subtasks + 1,
-                    delta=2 * self.n_lines,
-                    dg=2,
-                    ptr=self.n_lines,
-                )
-            )
+        action_nvec = Action(
+            upper=num_subtasks + 1,
+            delta=2 * self.n_lines,
+            dg=2,
+            ptr=self.n_lines,
         )
-        self.action_space = spaces.MultiDiscrete(action_nvec)
+        self.action_space = spaces.MultiDiscrete(np.array(astuple(action_nvec)))
         lines_space = spaces.MultiDiscrete(
             np.array(
                 [
@@ -226,6 +222,9 @@ class Env(gym.Env):
             )
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
+        partial_action_space = spaces.MultiDiscrete(
+            np.array(astuple(action_nvec.a_actions()))[:-1]
+        )
         self.observation_space = spaces.Dict(
             Obs(
                 action_complete=spaces.Discrete(2),
@@ -236,7 +235,7 @@ class Env(gym.Env):
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
-                partial_action=spaces.MultiDiscrete(1 + action_nvec[:-1]),
+                partial_action=partial_action_space,
             )._asdict()
         )
         self.world_space = spaces.Box(
@@ -870,7 +869,7 @@ class Env(gym.Env):
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
-                partial_action=np.array(astuple(action)[:-1]),
+                partial_action=np.array(action.partial()),
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb
