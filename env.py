@@ -9,7 +9,7 @@ from dataclasses import astuple
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action
+from data_types import Action, RawAction
 from utils import (
     hierarchical_parse_args,
     RESET,
@@ -635,8 +635,6 @@ class Env(gym.Env):
         reward,
     ):
 
-        if action is not None and action < len(self.subtasks):
-            print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
         print("Time remaining", state.time_remaining)
@@ -790,8 +788,10 @@ class Env(gym.Env):
         agent_ptr = 0
         info = {}
         term = False
-        action = None
+        raw_action = None
+
         lower_level_action = None
+        action = Action(*np.zeros_like(self.action_space.nvec))
         while True:
             success = state.ptr is None
             self.success_count += success
@@ -862,7 +862,7 @@ class Env(gym.Env):
 
             inventory = self.inventory_representation(state)
             obs = Obs(
-                action_complete=[True],
+                action_complete=[action.complete()],
                 obs=obs,
                 lines=preprocessed_lines,
                 mask=mask,
@@ -870,7 +870,7 @@ class Env(gym.Env):
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
-                partial_action=-1 * np.ones_like(self.action_space.nvec[:-1]),
+                partial_action=np.array(astuple(action)[:-1]),
             )
             # if not self.observation_space.contains(obs):
             #     import ipdb
@@ -882,14 +882,18 @@ class Env(gym.Env):
             line_specific_info = {
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
-            action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            if action.size == 1:
-                action = Action(upper=0, delta=0, dg=0, ptr=0)
+            raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            if raw_action.size == 1:
+                raw_action = Action(upper=0, delta=0, dg=0, ptr=0)
 
-            action = Action(*action)
-            action, agent_ptr = (
-                int(action.upper),
-                int(action.ptr),
+            action = action.update(RawAction(*raw_action))
+            agent_ptr = action.ptr
+
+            raw_action = Action(*raw_action)
+            assert agent_ptr == raw_action.ptr
+            raw_action, agent_ptr = (
+                int(raw_action.upper),
+                int(raw_action.ptr),
             )
 
             info = dict(
@@ -897,7 +901,10 @@ class Env(gym.Env):
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            if action == self.num_subtasks:
+            assert raw_action == action.upper
+            no_op = raw_action == self.num_subtasks
+            assert no_op == action.no_op()
+            if no_op:
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -907,7 +914,7 @@ class Env(gym.Env):
             elif state.ptr is not None:
                 step += 1
                 # noinspection PyUnresolvedReferences
-                state = state_iterator.send((action, lower_level_action))
+                state = state_iterator.send((raw_action, lower_level_action))
 
     def inventory_representation(self, state):
         return np.array([state.inventory[i] for i in self.items])
