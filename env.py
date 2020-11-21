@@ -38,7 +38,10 @@ from utils import (
 Coord = Tuple[int, int]
 ObjectMap = Dict[Coord, str]
 
-Obs = namedtuple("Obs", "active inventory lines mask obs subtask_complete truthy")
+Obs = namedtuple(
+    "Obs",
+    "action_mask active inventory lines mask obs partial_action subtask_complete truthy",
+)
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
 Last = namedtuple("Last", "action active reward terminal selected")
@@ -227,8 +230,33 @@ class Env(gym.Env):
             )
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
+        a_action_nvec = AActions(
+            is_op=2, verb=len(self.behaviors), noun=len(self.items)
+        )
+        non_a_action_nvec = NonAAction(
+            delta=2 * self.n_lines,
+            dg=2,
+            ptr=self.n_lines,
+        )
+        num_a_actions = len(astuple(a_action_nvec))
+        max_a_action = max(astuple(a_action_nvec))
+        raw_action_nvec = RawAction(**asdict(non_a_action_nvec), a=max_a_action)
+        # self.action_space = spaces.MultiDiscrete(np.array(astuple(raw_action_nvec)))
+        self.action_mask = np.zeros((num_a_actions, max_a_action))
+        self.action_mask[
+            (
+                np.expand_dims(np.arange(max_a_action), 0)
+                < np.expand_dims(astuple(a_action_nvec), 1)
+            )
+        ] = 1
+        self.action_mask = AActions(*self.action_mask)
+
+        partial_action_space = spaces.MultiDiscrete(
+            1 + np.array(astuple(a_action_nvec))  # [:-1]
+        )
         self.observation_space = spaces.Dict(
             Obs(
+                action_mask=spaces.MultiBinary(max_a_action),
                 active=spaces.Discrete(self.n_lines + 1),
                 inventory=spaces.MultiBinary(len(self.items)),
                 lines=lines_space,
@@ -236,6 +264,7 @@ class Env(gym.Env):
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
+                partial_action=partial_action_space,
             )._asdict()
         )
         self.world_space = spaces.Box(
@@ -634,8 +663,6 @@ class Env(gym.Env):
         reward,
     ):
 
-        if action is not None and action < len(self.subtasks):
-            print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
         print("Time remaining", state.time_remaining)
@@ -789,8 +816,9 @@ class Env(gym.Env):
         agent_ptr = 0
         info = {}
         term = False
-        action = None
+
         lower_level_action = None
+        action = replace(Action.none_action(), ptr=0)
         while True:
             success = state.ptr is None
             self.success_count += success
@@ -845,11 +873,6 @@ class Env(gym.Env):
             padded = lines + pads
             preprocessed_lines = [self.preprocess_line(p) for p in padded]
             mask = [int(not isinstance(l, Padding)) for l in padded]
-            mask = (
-                [1 for l in padded if not isinstance(l, Padding)]
-                + [1]
-                + [0 for l in padded[:-1] if isinstance(l, Padding)]
-            )
             truthy = [
                 self.evaluate_line(l, None, state.counts)
                 if agent_ptr < len(lines)
@@ -860,21 +883,27 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
+            new_action = action.none_action() if action.complete() else action
+            partial_action = np.array(new_action.a_actions().to_array())  # [:-1]
+            action_mask = getattr(self.action_mask, new_action.next_key())
             obs = Obs(
-                obs=obs,
+                action_mask=action_mask,
+                obs=[[obs]],
                 lines=preprocessed_lines,
                 mask=mask,
                 active=self.n_lines if state.ptr is None else state.ptr,
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
+                partial_action=partial_action,
             )
-            # if not self.observation_space.contains(obs):
-            #     import ipdb
-            #
-            #     ipdb.set_trace()
-            #     self.observation_space.contains(obs)
             obs = OrderedDict(obs._asdict())
+            # for k, v in self.observation_space.spaces.items():
+            #     if not v.contains(obs[k]):
+            #         import ipdb
+            #
+            #         ipdb.set_trace()
+            #         v.contains(obs[k])
 
             line_specific_info = {
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
