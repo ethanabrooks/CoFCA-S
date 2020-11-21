@@ -68,9 +68,21 @@ class Obs(typing.Generic[O]):
     workers: O
 
 
-X = typing.TypeVar("X")
+X = typing.TypeVar("X", np.ndarray, typing.Optional[int], torch.Tensor)
 
 ActionTargets = list(Resource) + list(Building)
+
+
+@dataclass(frozen=True)
+class NonAAction(typing.Generic[X]):
+    delta: X
+    dg: X
+    ptr: X
+
+
+@dataclass(frozen=True)
+class RawAction(NonAAction):
+    a: X
 
 
 @dataclass(frozen=True)
@@ -100,21 +112,30 @@ class AActions(typing.Generic[X]):
     def no_op(self):
         return not self.is_op or any(x < 0 for x in astuple(self))
 
+    def complete(self):
+        return None not in astuple(self)
 
-@dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
-    delta: X
-    dg: X
-    ptr: X
+    @staticmethod
+    def to_int(x):
+        return 0 if x is None else 1 + x
 
+    def to_array(self):
+        return np.array([*map(self.to_int, astuple(self))])
 
-@dataclass(frozen=True)
-class RawAction(NonAAction):
-    a: X
+    def next_key(self):
+        if self.is_op in (None, 0):
+            return "is_op"
+        if self.verb is None:
+            return "verb"
+        return "noun"
 
 
 @dataclass(frozen=True)
 class Action(AActions, NonAAction):
+    @staticmethod
+    def none_action():
+        return Action(None, None, None, None, None, None)
+
     def a_actions(self):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}

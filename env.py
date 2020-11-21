@@ -5,14 +5,15 @@ from copy import deepcopy
 
 import gym
 import numpy as np
-from dataclasses import astuple
+from dataclasses import astuple, replace
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action, RawAction
+from data_types import Action, RawAction, AActions, NonAAction
 from utils import (
     hierarchical_parse_args,
     RESET,
+    asdict,
 )
 from typing import List, Tuple, Dict, Optional, Generator
 
@@ -28,6 +29,10 @@ from lines import (
     EndIf,
     Loop,
     EndLoop,
+)
+from utils import (
+    hierarchical_parse_args,
+    RESET,
 )
 
 Coord = Tuple[int, int]
