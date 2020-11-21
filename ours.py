@@ -392,10 +392,12 @@ class Recurrence(nn.Module):
 
             self.print("a_probs", a_dist.probs)
 
-            d_logits = self.d_gate(zeta1_input)
-            d_probs = F.softmax(d_logits, dim=-1)
-            complete = ~check_thresholds(A[t])
-            d_gate = gate(complete.long(), d_probs, ones * 0)
+            dg_logits = self.d_gate(zeta1_input)
+            dg_probs = F.softmax(dg_logits, dim=-1)
+            complete = (state.partial_action[t][:, :-1] > 0).prod(-1, keepdim=True)
+            self.print("complete", complete)
+            self.print("dg_probs", dg_probs)
+            d_gate = gate(complete, dg_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 
