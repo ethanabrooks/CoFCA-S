@@ -380,9 +380,8 @@ class Recurrence(nn.Module):
 
             prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
             partial_action = prev + 1
-            assert torch.all(partial_action == state.partial_action[t])
             embedded_lower = self.embed_lower(
-                partial_action
+                state.partial_action[t]
             )  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
