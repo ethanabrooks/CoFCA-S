@@ -1,6 +1,6 @@
 from collections import Hashable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import torch
@@ -66,7 +66,7 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        action_nvec = RawAction(*map(int, self.action_space.nvec))
+        action_nvec = replace(RawAction(*map(int, self.action_space.nvec)), a=3)
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
@@ -99,7 +99,7 @@ class Recurrence(nn.Module):
         )
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         A_size = 3
-        A_probs_size = 4
+        A_probs_size = 3
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         thresholds = torch.zeros(A_size)
         self.register_buffer("thresholds", thresholds)
