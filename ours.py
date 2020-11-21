@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, RawAction
+from data_types import ParsedInput, RecurrentState, RawAction, Action
 from distributions import FixedCategorical
 from env import Obs
 from transformer import TransformerModel
@@ -66,14 +66,13 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        action_nvec = replace(RawAction(*map(int, self.action_space.nvec)), a=3)
+        action_nvec = RawAction(*map(int, self.action_space.nvec))
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            # self.obs_spaces.partial_action.nvec,
-            np.array([3, 4, 4]),
+            self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
         )
         self.task_encoder = (
@@ -94,18 +93,8 @@ class Recurrence(nn.Module):
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
-        self.actor = init_(
-            nn.Linear(self.hidden_size + self.lower_embed_size, action_nvec.a)
-        )
+        self.actor = init_(nn.Linear(self.hidden_size, action_nvec.a))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = 3
-        A_probs_size = 3
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        thresholds = torch.zeros(A_size)
-        self.register_buffer("thresholds", thresholds)
-
-        masks = torch.zeros(A_size, A_size)
-        self.register_buffer("masks", masks)
 
         d, h, w = self.obs_spaces.obs.shape
         d += 1
@@ -121,7 +110,12 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + self.resources_hidden_size
+        zeta1_input_size = (
+            m_size
+            + self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.lower_embed_size
+        )
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -138,6 +132,7 @@ class Recurrence(nn.Module):
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
+
         self.kernel_net = nn.Linear(
             m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
         )
@@ -254,12 +249,14 @@ class Recurrence(nn.Module):
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
+        hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = RawAction(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.a, hx.a.view(1, N)], dim=0).long().unsqueeze(-1)
-        D = torch.cat([actions.delta], dim=0).long()
-        DG = torch.cat([actions.dg], dim=0).long()
+        prev_a = hx.a.view(1, N)
+        A = torch.cat([actions.a, prev_a], dim=0).long()
+        D = actions.delta.long()
+        DG = actions.dg.long()
 
         for t in range(T):
             if self.no_pointer:
@@ -343,22 +340,23 @@ class Recurrence(nn.Module):
             ).relu()
             h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
-            partial_action = self.embed_lower(state.partial_action[t].long())
-            self.print("partial_action", state.partial_action[t])
-            zeta1_input = torch.cat([m, h1, inventory], dim=-1)
+            embedded_lower = self.embed_lower(
+                state.partial_action[t].long()
+            )  # +1 to deal with negatives
+            zeta1_input = torch.cat([m, h1, inventory, embedded_lower], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
-            a_logits = self.actor(torch.cat([z1, partial_action], dim=-1))
-            a_probs = F.softmax(a_logits, dim=-1) * state.action_mask[t]
-            a_dist = FixedCategorical(probs=a_probs)
+
+            a_logits = self.actor(z1)
+            a_probs = F.softmax(a_logits, dim=-1)
+            a_dist = FixedCategorical(probs=a_probs * state.action_mask[t])
             self.sample_new(A[t], a_dist)
+
             self.print("a_probs", a_dist.probs)
 
-            dg_logits = self.d_gate(zeta1_input)
-            dg_probs = F.softmax(dg_logits, dim=-1)
-            complete = (state.partial_action[t][:, :-1] > 0).prod(-1, keepdim=True)
-            self.print("complete", complete)
-            self.print("dg_probs", dg_probs)
-            d_gate = gate(complete, dg_probs, ones * 0)
+            d_logits = self.d_gate(zeta1_input)
+            d_probs = F.softmax(d_logits, dim=-1)
+            complete = A[t].unsqueeze(-1) < state.complete_if_lt[t]
+            d_gate = gate(complete.long(), d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 

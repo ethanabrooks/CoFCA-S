@@ -40,7 +40,7 @@ ObjectMap = Dict[Coord, str]
 
 Obs = namedtuple(
     "Obs",
-    "action_mask active inventory lines mask obs partial_action subtask_complete truthy",
+    "action_mask active complete_if_lt inventory lines mask obs partial_action subtask_complete truthy",
 )
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -243,6 +243,7 @@ class Env(gym.Env):
             Obs(
                 action_mask=spaces.MultiBinary(max_a_action),
                 active=spaces.Discrete(self.n_lines + 1),
+                complete_if_lt=spaces.Discrete(max_a_action),
                 inventory=spaces.MultiBinary(len(self.items)),
                 lines=lines_space,
                 mask=mask_space,
@@ -870,8 +871,17 @@ class Env(gym.Env):
             new_action = action.none_action() if action.complete() else action
             partial_action = np.array(new_action.a_actions().to_array())  # [:-1]
             action_mask = getattr(self.action_mask, new_action.next_key())
+            if new_action.next_key() == "is_op":
+                complete_if_lt = 1
+            elif new_action.next_key() == "verb":
+                complete_if_lt = -1
+            elif new_action.next_key() == "noun":
+                complete_if_lt = 10
+            else:
+                raise RuntimeError
             obs = Obs(
                 action_mask=action_mask,
+                complete_if_lt=complete_if_lt,
                 obs=[[obs]],
                 lines=preprocessed_lines,
                 mask=mask,
@@ -1011,7 +1021,7 @@ def main(env):
         action = mapping2.get(string, None)
         if action is None:
             return None
-        return np.array(astuple(Action(upper=0, delta=0, dg=0, ptr=0)))
+        return np.array(astuple(Action(noun=0, verb=0, is_op=1, delta=0, dg=0, ptr=0)))
 
     keyboard_control.run(env, action_fn=action_fn)
 
