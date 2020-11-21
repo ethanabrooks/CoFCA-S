@@ -1,20 +1,19 @@
-import json
-from collections import namedtuple, Hashable
+from collections import Hashable
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, Action
-from distributions import FixedCategorical, Categorical
+from data_types import ParsedInput, RecurrentState, RawAction, Action
+from distributions import FixedCategorical
 from env import Obs
 from transformer import TransformerModel
-from utils import init_, astuple, asdict, init
+from utils import astuple, asdict, init
 
 
 def optimal_padding(h, kernel, stride):
@@ -67,16 +66,19 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        # networks
+        # action_nvec = RawAction(*map(int, self.action_space.nvec))
         action_nvec = Action(*map(int, self.action_space.nvec))
-        A_nvec = action_nvec.a_actions()
-        A_probs_size = max(astuple(A_nvec))
+        action_nvec = RawAction(
+            delta=action_nvec.delta, dg=action_nvec.dg, ptr=action_nvec.ptr, a=4
+        )
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
+            # self.obs_spaces.partial_action.nvec,
+            np.array([3, 4, 4]),
+            embedding_dim=self.lower_embed_size,
         )
         self.task_encoder = (
             TransformerModel(
@@ -97,22 +99,23 @@ class Recurrence(nn.Module):
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
         self.actor = init_(
-            nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
+            nn.Linear(self.hidden_size + self.lower_embed_size, action_nvec.a)
         )
-        self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = len(astuple(A_nvec))
+        A_size = 3
+        A_probs_size = 4
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        thresholds = torch.tensor(astuple(action_nvec.thresholds()))
+        thresholds = torch.tensor([1, -1, -1])
         thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
         self.register_buffer("thresholds", thresholds)
 
         masks = torch.zeros(A_size, A_probs_size)
-        A_nvec = torch.tensor(astuple(A_nvec))
+        A_nvec = torch.tensor([2, 3, 3])
         masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
         self.register_buffer("masks", masks)
 
-        d, h, w = (2, 1, 1)
+        d, h, w = self.obs_spaces.obs.shape
+        d += 1
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
