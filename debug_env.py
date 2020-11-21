@@ -103,7 +103,11 @@ class Env(env.Env):
                 evaluation = state.counts
                 line_str = f"{line} {evaluation}"
             else:
-                line_str = str(line)
+                if isinstance(line, Subtask):
+                    verb, noun = line.id
+                    line_str = f"{verb} ({self.behaviors.index(verb)}) {noun} ({self.items.index(noun)})"
+                else:
+                    line_str = str(line)
             print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
             indent += line.depth_change[1]
         print("Condition bit:", state.counts)
