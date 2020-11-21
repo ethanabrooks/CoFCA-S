@@ -94,23 +94,11 @@ class AActions(typing.Generic[X]):
     # worker: X  # 3
     # ij: X  # 64
 
-    @staticmethod
-    def thresholds():
-        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(thresholds, is_op=1)  # , target=len(Resource))
-        # for i, t in enumerate(ActionTargets):
-        #     assert (
-        #         isinstance(t, Resource)
-        #         if i < thresholds.target
-        #         else isinstance(t, Building)
-        #     )
-        return thresholds
-
     def targeted(self):
         return ActionTargets[self.target]
 
     def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
+        return not self.is_op or None in (self.verb, self.noun)
 
     def complete(self):
         return None not in astuple(self)

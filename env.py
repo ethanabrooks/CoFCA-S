@@ -858,7 +858,7 @@ class Env(gym.Env):
                     success=success,
                     lines=lines,
                     state=state,
-                    agent_ptr=agent_ptr,
+                    agent_ptr=action.ptr,
                 )
                 self.render_world(
                     state=state,
@@ -874,7 +874,7 @@ class Env(gym.Env):
             mask = [int(not isinstance(l, Padding)) for l in padded]
             truthy = [
                 self.evaluate_line(l, None, state.counts)
-                if agent_ptr < len(lines)
+                if action.ptr < len(lines)
                 else 2
                 for l in lines
             ]
@@ -907,9 +907,17 @@ class Env(gym.Env):
             line_specific_info = {
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
-            action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            action = Action(*action)
-            agent_ptr = action.ptr
+            raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
+            if action.complete():
+                action = action.none_action()
+            raw_action = Action(*raw_action)
+            action = replace(
+                action,
+                delta=raw_action.delta,
+                dg=raw_action.dg,
+                ptr=raw_action.ptr,
+                **{action.next_key(): getattr(raw_action, action.next_key())},
+            )
 
             info = dict(
                 use_failure_buf=use_failure_buf,
