@@ -101,7 +101,7 @@ class AActions(typing.Generic[X]):
         return not self.is_op or None in (self.verb, self.noun)
 
     def complete(self):
-        return None not in astuple(self)
+        return self.next_key() is "is_op"
 
     @staticmethod
     def to_int(x):
@@ -115,7 +115,9 @@ class AActions(typing.Generic[X]):
             return "is_op"
         if self.verb is None:
             return "verb"
-        return "noun"
+        if self.noun is None:
+            return "noun"
+        return "is_op"
 
 
 @dataclass(frozen=True)
