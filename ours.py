@@ -76,7 +76,9 @@ class Recurrence(nn.Module):
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
+            # self.obs_spaces.partial_action.nvec,
+            np.array([3, 4, 4]),
+            embedding_dim=self.lower_embed_size,
         )
         self.task_encoder = (
             TransformerModel(
