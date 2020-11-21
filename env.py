@@ -216,20 +216,6 @@ class Env(gym.Env):
                 )
             )
         )
-        lines_space = spaces.MultiDiscrete(
-            np.array(
-                [
-                    [
-                        len(Line.types),
-                        1 + len(self.behaviors),
-                        1 + len(self.items),
-                        1 + self.max_loops,
-                    ]
-                ]
-                * self.n_lines
-            )
-        )
-        mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         a_action_nvec = AActions(
             is_op=2, verb=len(self.behaviors), noun=len(self.items)
         )
@@ -250,7 +236,20 @@ class Env(gym.Env):
             )
         ] = 1
         self.action_mask = AActions(*self.action_mask)
-
+        lines_space = spaces.MultiDiscrete(
+            np.array(
+                [
+                    [
+                        len(Line.types),
+                        1 + len(self.behaviors),
+                        1 + len(self.items),
+                        1 + self.max_loops,
+                    ]
+                ]
+                * self.n_lines
+            )
+        )
+        mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         partial_action_space = spaces.MultiDiscrete(
             1 + np.array(astuple(a_action_nvec))  # [:-1]
         )
