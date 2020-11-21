@@ -94,6 +94,18 @@ class AActions(typing.Generic[X]):
     # worker: X  # 3
     # ij: X  # 64
 
+    @staticmethod
+    def thresholds():
+        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
+        thresholds = replace(thresholds, is_op=1)  # , target=len(Resource))
+        # for i, t in enumerate(ActionTargets):
+        #     assert (
+        #         isinstance(t, Resource)
+        #         if i < thresholds.target
+        #         else isinstance(t, Building)
+        #     )
+        return thresholds
+
     def targeted(self):
         return ActionTargets[self.target]
 
