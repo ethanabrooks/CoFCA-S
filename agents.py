@@ -366,14 +366,14 @@ class MLPBase(NNBase):
 class MultiEmbeddingBag(nn.Module):
     def __init__(self, nvec: Union[np.ndarray, torch.Tensor], **kwargs):
         super().__init__()
-        self.embedding = nn.EmbeddingBag(num_embeddings=nvec.sum(), **kwargs)
+        self.embedding = nn.Embedding(num_embeddings=nvec.sum(), **kwargs)
         self.register_buffer(
             "offset",
             F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
         )
 
     def forward(self, inputs):
-        return self.embedding(self.offset + inputs)
+        return self.embedding(self.offset + inputs).sum(-2)
 
 
 class IntEncoding(nn.Module):

@@ -1,13 +1,16 @@
-from collections import Counter
-from pprint import pprint
+from typing import List, Generator, Tuple, Optional
+
+from dataclasses import astuple
+from gym import spaces
 import numpy as np
 
-from lines import If, While
+from data_types import Action
+from lines import If, While, Subtask
 from utils import hierarchical_parse_args, RESET
 
 import env
 import keyboard_control
-from env import ObjectMap, Coord, Line, State, Action, Obs
+from env import ObjectMap, Coord, Line, State, Obs
 
 
 class Env(upper_env.Env):
@@ -50,10 +53,15 @@ class Env(upper_env.Env):
                 room_complete=room_complete,
                 required=required,
             )
-            subtask_id, lower_level_index = yield state
-            term = subtask_id != self.subtasks.index(lines[ptr].id)
-            condition_bit = self.random.choice(2)
-            prev, ptr = ptr, subtask_iterator.send(dict(condition_bit=condition_bit))
+            verb, noun, lower_level_index = yield state
+            verb = self.behaviors[int(verb)]
+            noun = self.items[int(noun)]
+            term = (verb, noun) != lines[ptr].id
+            if not term:
+                condition_bit = self.random.choice(2)
+                prev, ptr = ptr, subtask_iterator.send(
+                    dict(condition_bit=condition_bit)
+                )
 
     def inventory_representation(self, state):
         return np.array([0])
@@ -73,12 +81,10 @@ class Env(upper_env.Env):
         action,
         reward,
     ):
-        if action is not None and action < len(self.subtasks):
-            print("Selected:", self.subtasks[action], action)
+        # if action is not None and action < len(self.subtasks):
+        # print("Selected:", self.subtasks[action], action)
         print("Action:", action)
         print("Reward", reward)
-        for i, subtask in enumerate(self.subtasks):
-            print(i, subtask)
 
     def render_instruction(
         self,
@@ -106,7 +112,11 @@ class Env(upper_env.Env):
                 evaluation = state.counts
                 line_str = f"{line} {evaluation}"
             else:
-                line_str = str(line)
+                if isinstance(line, Subtask):
+                    verb, noun = line.id
+                    line_str = f"{verb} ({self.behaviors.index(verb)}) {noun} ({self.items.index(noun)})"
+                else:
+                    line_str = str(line)
             print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
             indent += line.depth_change[1]
         print("Condition bit:", state.counts)
@@ -122,7 +132,7 @@ def main(env: Env):
         except ValueError:
             return None
 
-        return np.array(Action(upper=action, lower=0, delta=0, dg=0, ptr=0))
+        return np.array(astuple(Action(upper=action, delta=0, dg=0, ptr=0)))
 
             def render():
                 print("Inventory:")

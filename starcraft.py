@@ -37,7 +37,7 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
 
 
 class UpperTrainer(Trainer):
-    metric = "eval_reward"
+    metric = "reward"
     default = starcraft_default
 
     def build_infos_aggregator(self):
@@ -110,8 +110,7 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--no-debug", dest="debug", action="store_false")
-        parser.add_argument("--debug-obs", action="store_true")
+        parser.add_argument("--debug", action="store_true")
         parser.add_argument("--no-scan", action="store_true")
         parser.add_argument("--no-roll", action="store_true")
         parser.add_argument("--no-pointer", action="store_true")
@@ -119,7 +118,8 @@ class UpperTrainer(Trainer):
         parser.add_argument("--transformer", action="store_true")
         parser.add_argument("--conv-hidden-size", type=int)
         parser.add_argument("--task-embed-size", type=int)
-        parser.add_argument("--inventory-hidden-size", type=int)
+        parser.add_argument("--lower-embed-size", type=int)
+        parser.add_argument("--resources-hidden-size", type=int)
         parser.add_argument("--num-edges", type=int)
         parser.add_argument("--gate-coef", type=float)
         parser.add_argument("--no-op-coef", type=float)

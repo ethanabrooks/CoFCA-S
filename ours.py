@@ -9,17 +9,17 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from gym import spaces
 
-from data_types import ParsedInput, RecurrentState
+from agents import MultiEmbeddingBag
+from data_types import ParsedInput, RecurrentState, Action
 from distributions import FixedCategorical, Categorical
-from env import Action
 from env import Obs
 from transformer import TransformerModel
-from utils import init_, astuple, asdict
+from utils import init_, astuple, asdict, init
 
 
 def optimal_padding(h, kernel, stride):
     n = np.ceil((h - kernel) / stride + 1)
-    return 1 + int(np.ceil((stride * (n - 1) + kernel - h) / 2))
+    return int(np.ceil((stride * (n - 1) + kernel - h) / 2))
 
 
 def conv_output_dimension(h, padding, kernel, stride, dilation=1):
@@ -41,9 +41,8 @@ class Recurrence(nn.Module):
     conv_hidden_size: int
     debug: bool
     hidden_size: int
-    inventory_hidden_size: int
     kernel_size: int
-    # lower_embed_size: int
+    lower_embed_size: int
     max_eval_lines: int
     no_pointer: bool
     no_roll: bool
@@ -51,6 +50,7 @@ class Recurrence(nn.Module):
     num_edges: int
     observation_space: spaces.Dict
     olsk: bool
+    resources_hidden_size: int
     stride: int
     task_embed_size: int
     transformer: bool
@@ -60,8 +60,7 @@ class Recurrence(nn.Module):
 
     def __post_init__(self):
         super().__init__()
-        observation_space = Obs(**self.observation_space.spaces)
-        self.obs_spaces = observation_space
+        self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_size = self.action_space.nvec.size
 
         self.obs_sections = get_obs_sections(self.obs_spaces)
@@ -69,12 +68,15 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         # networks
-        if self.olsk:
-            num_edges = 3
-        self.action_space_nvec = Action(*map(int, self.action_space.nvec))
-        self.n_a = n_a = self.action_space_nvec.upper
-        self.embed_task = nn.EmbeddingBag(
-            self.obs_spaces.lines.nvec[0].sum(), self.task_embed_size
+        action_nvec = Action(*map(int, self.action_space.nvec))
+        A_nvec = action_nvec.a_actions()
+        A_probs_size = max(astuple(A_nvec))
+
+        self.embed_task = MultiEmbeddingBag(
+            self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
+        )
+        self.embed_lower = MultiEmbeddingBag(
+            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
         )
         self.task_encoder0 = (
             TransformerModel(
@@ -93,19 +95,30 @@ class Recurrence(nn.Module):
             else nn.GRU(task_embed_size, task_embed_size, batch_first=True)
         )
 
-        self.actor = Categorical(self.hidden_size, n_a)
-        self.conv_hidden_size = self.conv_hidden_size
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        self.register_buffer(
-            "subtasks",
-            torch.Tensor([Env.preprocess_line(l) for l in subtasks()]),
+        init_ = lambda m: init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
+        )  # TODO: try init
+        self.actor = init_(
+            nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
         )
-        d, h, w = (2, 1, 1)
+        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        A_size = len(astuple(A_nvec))
+        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        thresholds = torch.tensor(astuple(action_nvec.thresholds()))
+        thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
+        self.register_buffer("thresholds", thresholds)
+
+        masks = torch.zeros(A_size, A_probs_size)
+        A_nvec = torch.tensor(astuple(A_nvec))
+        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
+        self.register_buffer("masks", masks)
+
+        d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.inventory.n, self.inventory_hidden_size)),
+            init_(nn.Linear(self.obs_spaces.inventory.n, self.resources_hidden_size)),
             nn.ReLU(),
         )
         m_size = (
@@ -113,33 +126,38 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.conv_hidden_size + self.inventory_hidden_size
+        zeta1_input_size = m_size + self.task_embed_size + self.resources_hidden_size
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
-        z2_size = zeta1_input_size
         if self.olsk:
             assert self.num_edges == 3
-            self.upsilon = nn.GRUCell(z2_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.num_edges))
         elif self.no_pointer:
-            self.upsilon = nn.GRUCell(z2_size, self.hidden_size)
+            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
             self.beta = init_(nn.Linear(self.hidden_size, self.d_space()))
         else:
-            self.upsilon = init_(nn.Linear(z2_size, self.num_edges))
+            self.upsilon = init_(nn.Linear(zeta1_input_size, self.num_edges))
             in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
             out_size = (
                 self.num_edges * self.d_space() if self.no_scan else self.num_edges
             )
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = Categorical(z2_size, 2)
-        self.kernel_net = nn.Linear(
-            m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
+        self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
+
+        self.embed_obs = nn.Conv2d(
+            d,
+            self.task_embed_size,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
         )
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
-            a=1,
-            a_probs=n_a,
+            a=A_size,
+            a_probs=A_probs_size,
             d=1,
+            l=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
             p=1,
@@ -199,7 +217,7 @@ class Recurrence(nn.Module):
 
     @property
     def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
+        return self.hidden_size + self.task_embed_size + self.encoder_hidden_size
 
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
@@ -217,89 +235,47 @@ class Recurrence(nn.Module):
         # parse non-action inputs
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
         state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
-        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)
+        lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
+        # mask = state.mask[0].view(N, nl)
+        # mask = F.pad(mask, [0, nl], value=1)  # pad for backward mask
+        # mask = torch.stack(
+        #     [torch.roll(mask, shifts=-i, dims=1) for i in range(nl)], dim=0
+        # )
+        # mask[:, :, 0] = 0  # prevent self-loops
+        # mask = mask.view(nl, N, 2, nl).transpose(2, 3).unsqueeze(-1)
 
         # build memory
         nl = len(self.obs_spaces.lines.nvec)
-        M = self.embed_task(
-            (state.lines.view(T, N, *self.obs_spaces.lines.shape).long()[0]).view(
-                -1, self.obs_spaces.lines.nvec[0].size
-            )
-        ).view(N, -1, self.task_embed_size)
+        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
+            N, -1, self.task_embed_size
+        )
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+        # first = torch.zeros(2 * nl, device=raw_inputs.device)
+        # first[0] = 0.1
+        # first = first.view(1, -1, 1)
+        last = torch.zeros(2 * nl, device=rnn_hxs.device)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
+
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         hx = RecurrentState(*[_x.squeeze(0) for _x in astuple(hx)])
 
-        if self.no_pointer:
-            _, G = self.task_encoder(M)
-            return G.transpose(0, 1).reshape(N, -1)
-        if self.no_scan:
-            if self.no_roll:
-                H, _ = self.task_encoder(M)
-            else:
-                rolled = torch.cat(
-                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                )
-                _, H = self.task_encoder(rolled)
-            H = H.transpose(0, 1).reshape(nl, N, -1)
-            P = self.beta(H).view(nl, N, -1, self.num_edges).softmax(2)
-        elif self.transformer:
-            P = (
-                self.task_encoder(M.transpose(0, 1))
-                .view(nl, N, -1, self.num_edges)
-                .softmax(2)
-            )
-        else:
-            if self.no_roll:
-                G, _ = self.task_encoder(M)
-                G = torch.cat(
-                    [
-                        G.unsqueeze(1).expand(-1, nl, -1, -1),
-                        G.unsqueeze(2).expand(-1, -1, nl, -1),
-                    ],
-                    dim=-1,
-                ).transpose(0, 1)
-            else:
-                rolled = torch.cat(
-                    [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                )
-                G, _ = self.task_encoder(rolled)
-            G = G.view(nl, N, nl, 2, -1)
-            B = self.beta(G).sigmoid()
-            # arange = torch.zeros(6).float()
-            # arange[0] = 1
-            # arange[1] = 1
-            # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-            # B[:, :, :, 1] = 1
-            f, b = torch.unbind(B, dim=3)
-            B = torch.stack([f, b.flip(2)], dim=-2)
-            B = B.view(nl, N, 2 * nl, self.num_edges)
-            last = torch.zeros(nl, N, 2 * nl, self.num_edges, device=rnn_hxs.device)
-            last[:, :, -1] = 1
-            B = (1 - last).flip(2) * B  # this ensures the first B is 0
-            zero_last = (1 - last) * B
-            B = zero_last + last  # this ensures that the last B is 1
-            rolled = torch.roll(zero_last, shifts=1, dims=2)
-            C = torch.cumprod(1 - rolled, dim=2)
-            P = B * C
-            P = P.view(nl, N, nl, 2, self.num_edges)
-            f, b = torch.unbind(P, dim=3)
-            P = torch.cat([b.flip(2), f], dim=2)
-            # noinspection PyArgumentList
-            half = P.size(2) // 2 if self.no_scan else nl
-
         p = hx.p.long().squeeze(-1)
         h = hx.h
-        hx.a[new_episode] = self.n_a - 1
+        hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
-        A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
-        D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
-        DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
+        a = torch.stack(astuple(actions.a_actions()), dim=-1)
+        prev_a = hx.a.view(1, N, -1)
+        A = torch.cat([a, prev_a], dim=0).long()
+        D = actions.delta.long()
+        DG = actions.dg.long()
 
         for t in range(T):
-
             if self.no_pointer:
                 _, G = self.task_encoder(M)
                 return G.transpose(0, 1).reshape(N, -1)
@@ -312,11 +288,11 @@ class Recurrence(nn.Module):
                     )
                     _, H = self.task_encoder(rolled)
                 H = H.transpose(0, 1).reshape(nl, N, -1)
-                P = self.beta(H).view(nl, N, -1, self.ne).softmax(2)
+                P = self.beta(H).view(nl, N, -1, self.num_edges).softmax(2)
             elif self.transformer:
                 P = (
                     self.task_encoder(M.transpose(0, 1))
-                    .view(nl, N, -1, self.ne)
+                    .view(nl, N, -1, self.num_edges)
                     .softmax(2)
                 )
             else:
@@ -330,97 +306,66 @@ class Recurrence(nn.Module):
                         dim=-1,
                     ).transpose(0, 1)
                 else:
-                    rolled = torch.stack(
-                        [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-                    )[p, R]
-                    G, _ = self.task_encoder(rolled)
+                    G, _ = self.task_encoder(rolled[p, R])
                 G = G.view(N, nl, 2, -1)
                 B = self.beta(G).sigmoid()
-                mask = state.mask[0].view(N, nl, 1, 1)
-                B = B * (1 - mask)
-                # arange = torch.zeros(6).float()
-                # arange[0] = 1
-                # arange[1] = 1
-                # B[:, :, :, 0] = 0  # arange.view(1, 1, -1, 1)
-                # B[:, :, :, 1] = 1
-                f, b = torch.unbind(B, dim=2)
-                B = torch.stack([f, b.flip(1)], dim=2)
-                B = B.view(N, 2 * nl, self.ne)
-                last = torch.zeros(N, 2 * nl, self.ne, device=rnn_hxs.device)
-                last[:, -1] = 1
-                B = (1 - last).flip(1) * B  # this ensures the first B is 0
+                # B = B * mask[p, R]
+                f, b = torch.unbind(B, dim=-2)
+                B = torch.stack([f, b.flip(-2)], dim=-2)
+                B = B.view(N, 2 * nl, self.num_edges)
+                B = (1 - last).flip(-2) * B  # this ensures the first B is 0
                 zero_last = (1 - last) * B
                 B = zero_last + last  # this ensures that the last B is 1
-                rolled = torch.roll(zero_last, shifts=1, dims=1)
-                C = torch.cumprod(1 - rolled, dim=1)
+                C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
                 P = B * C
-                P = P.view(N, nl, 2, self.ne)
-                f, b = torch.unbind(P, dim=2)
-                P = torch.cat([b.flip(1), f], dim=1)
+                P = P.view(N, nl, 2, self.num_edges)
+                f, b = torch.unbind(P, dim=-2)
+                P = torch.cat([b.flip(-2), f], dim=-2)
                 # noinspection PyArgumentList
-                half = P.size(1) // 2 if self.no_scan else nl
-
+                half = P.size(2) // 2 if self.no_scan else nl
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
-            conv_kernel = self.kernel_net(m).view(
-                N,
-                self.conv_hidden_size,
-                self.obs_dim,
-                self.kernel_size,
-                self.kernel_size,
-            )
-
-            obs = (
-                torch.stack(
-                    [state.truthy[t][R, p], state.subtask_complete[t].squeeze(-1)],
-                    dim=-1,
-                )
-                .unsqueeze(-1)
-                .unsqueeze(-1)
-            )
-
-            h1 = torch.cat(
-                [
-                    F.conv2d(
-                        input=o.unsqueeze(0),
-                        weight=k,
-                        bias=self.conv_bias,
-                        stride=self.stride,
-                        padding=self.padding,
-                    )
-                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
-                ],
-                dim=0,
-            ).relu()
-            h1 = h1.sum(-1).sum(-1)
-            inventory = state.inventory[t]
-            embedded_inventory = self.embed_inventory(inventory)
-            zeta1_input = torch.cat([m, h1, embedded_inventory], dim=-1)
+            h1 = self.embed_obs(state.obs[t]).relu()
+            h1 = m * h1.sum(-1).sum(-1) 
+            inventory = self.embed_inventory(state.inventory[t])
+            zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
-            a_dist = self.actor(z1)
-            self.sample_new(A[t], a_dist)
+
+            # noinspection PyTypeChecker
+            thresholds = self.thresholds.unsqueeze(0)
+
+            def check_thresholds(At):
+                # noinspection PyTypeChecker
+                above_threshold: torch.Tensor = At >= thresholds
+                # meets condition to progress to next action
+                sampled = At >= 0  # sampled on a previous time step
+                above_threshold[~sampled] = True  # ignore unsampled
+                # noinspection PyArgumentList
+                return above_threshold.all(-1, keepdim=True)
+
+            next_l = (A[t - 1] >= 0).sum(-1, keepdim=True)
+            # next l if all thresholds are met
+            meets_thresholds = check_thresholds(A[t - 1])
+            l = meets_thresholds * next_l  # otherwise go back to 0
+            AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
+            copy = AR < l  # actions accumulated from prev time steps
+            A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
+
+            prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
+            embedded_lower = self.embed_lower(prev + 1)  # +1 to deal with negatives
+            a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
+            a_probs = F.softmax(a_logits, dim=-1)
+            l = l.flatten()
+            a_dist = FixedCategorical(probs=a_probs * self.masks[l])
+            new = A[t, R, l] < 0
+            A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
+
             self.print("a_probs", a_dist.probs)
 
-            # while True:
-            #    try:
-            #        A[:] = float(input("A:"))
-            #        assert torch.all(A < self.n_a)
-            #        break
-            #    except (ValueError, AssertionError):
-            #        pass
-            # line_type, be, it, _ = lines[t][R, hx.p.long().flatten()].unbind(-1)
-            # a = 3 * (it - 1) + (be - 1)
-
-            self.print("lines[R, p]", lines[t][R, p])
-            # _, _, it, _ = lines[t][R, p].long().unbind(-1)  # N, 2
-            # sell = (be == 2).long()
-            # index1 = it - 1
-            # index2 = 1 + ((it - 3) % 3)
-            # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
-            # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
-            # z2 = (channel1 > channel2).unsqueeze(-1).float()
-
-            d_gate = self.d_gate(zeta1_input)
+            d_logits = self.d_gate(zeta1_input)
+            d_probs = F.softmax(d_logits, dim=-1)
+            complete = ~check_thresholds(A[t])
+            d_gate = gate(complete.long(), d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 
@@ -443,7 +388,6 @@ class Recurrence(nn.Module):
                 # D[:] = float(input("D:")) + half
                 delta = D[t].clone() - half
                 self.print("D[t], delta", D[t], delta)
-            self.print("old p", p)
             p = p + delta
             self.print("new p", p)
             p = torch.clamp(p, min=0, max=M.size(1) - 1)
@@ -452,23 +396,13 @@ class Recurrence(nn.Module):
                 v=self.critic(z1),
                 h=h,
                 p=p,
+                l=l,
                 d=D[t],
                 dg=dg,
                 a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
                 dg_probs=d_gate.probs,
             )
-
-    def P_shape(self):
-        lines = (
-            self.obs_spaces["lines"]
-            if isinstance(self.obs_spaces, dict)
-            else self.obs_spaces.lines
-        )
-        if self.olsk or self.no_pointer:
-            return np.zeros(1, dtype=int)
-        else:
-            return np.array([len(lines.nvec), self.d_space(), self.num_edges])
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = astuple(self.state_sizes)
