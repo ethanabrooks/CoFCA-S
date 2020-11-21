@@ -394,8 +394,7 @@ class Recurrence(nn.Module):
 
             d_logits = self.d_gate(zeta1_input)
             d_probs = F.softmax(d_logits, dim=-1)
-            complete = ~check_thresholds(A[t])
-            assert torch.all(complete == (A[t, R, l] < state.complete_if_lt[t]))
+            complete = A[t, R, l].unsqueeze(-1) < state.complete_if_lt[t]
             d_gate = gate(complete.long(), d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
