@@ -72,7 +72,9 @@ class Recurrence(nn.Module):
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            self.obs_spaces.partial_action.nvec, embedding_dim=self.lower_embed_size
+            # self.obs_spaces.partial_action.nvec,
+            np.array([3, 4, 4]),
+            embedding_dim=self.lower_embed_size,
         )
         self.task_encoder = (
             TransformerModel(
@@ -96,6 +98,14 @@ class Recurrence(nn.Module):
             nn.Linear(self.hidden_size + self.lower_embed_size, action_nvec.a)
         )
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        A_size = 3
+        A_probs_size = 4
+        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+        thresholds = torch.zeros(A_size)
+        self.register_buffer("thresholds", thresholds)
+
+        masks = torch.zeros(A_size, A_size)
+        self.register_buffer("masks", masks)
 
         d, h, w = self.obs_spaces.obs.shape
         d += 1
@@ -343,11 +353,12 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             self.print("a_probs", a_dist.probs)
 
-            d_logits = self.d_gate(zeta1_input)
-            d_probs = F.softmax(d_logits, dim=-1)
-            complete = (state.partial_action[t] > 0).prod(-1, keepdim=True)
+            dg_logits = self.d_gate(zeta1_input)
+            dg_probs = F.softmax(dg_logits, dim=-1)
+            complete = (state.partial_action[t][:, :-1] > 0).prod(-1, keepdim=True)
             self.print("complete", complete)
-            d_gate = gate(complete, d_probs, ones * 0)
+            self.print("dg_probs", dg_probs)
+            d_gate = gate(complete, dg_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
 

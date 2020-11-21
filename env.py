@@ -237,7 +237,7 @@ class Env(gym.Env):
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         partial_action_space = spaces.MultiDiscrete(
-            1 + np.array(astuple(a_action_nvec))[:-1]
+            1 + np.array(astuple(a_action_nvec))  # [:-1]
         )
         self.observation_space = spaces.Dict(
             Obs(
@@ -868,7 +868,7 @@ class Env(gym.Env):
 
             inventory = self.inventory_representation(state)
             new_action = action.none_action() if action.complete() else action
-            partial_action = np.array(new_action.a_actions().to_array())[:-1]
+            partial_action = np.array(new_action.a_actions().to_array())  # [:-1]
             action_mask = getattr(self.action_mask, new_action.next_key())
             obs = Obs(
                 action_mask=action_mask,

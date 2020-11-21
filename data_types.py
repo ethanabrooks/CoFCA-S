@@ -111,9 +111,9 @@ class AActions(typing.Generic[X]):
         return np.array([*map(self.to_int, astuple(self))])
 
     def next_key(self):
-        if not self.is_op:
+        if self.is_op in (None, 0):
             return "is_op"
-        if not self.verb:
+        if self.verb is None:
             return "verb"
         return "noun"
 
