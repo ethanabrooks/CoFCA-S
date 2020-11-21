@@ -355,6 +355,8 @@ class Recurrence(nn.Module):
             ).relu()
             h1 = h1.sum(-1).sum(-1)
             inventory = self.embed_inventory(state.inventory[t])
+            partial_action = self.embed_lower(state.partial_action[t].long())
+            self.print("partial_action", state.partial_action[t])
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
 
@@ -385,6 +387,9 @@ class Recurrence(nn.Module):
             l = l.flatten()
             a_dist = FixedCategorical(probs=a_probs * self.masks[l])
             new = A[t, R, l] < 0
+            a_logits = self.actor(torch.cat([z1, partial_action], dim=-1))
+            a_probs = F.softmax(a_logits, dim=-1) * state.action_mask[t]
+            a_dist = FixedCategorical(probs=a_probs)
             A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
 
             self.print("a_probs", a_dist.probs)
