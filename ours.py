@@ -381,12 +381,12 @@ class Recurrence(nn.Module):
             prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
             partial_action = prev + 1
             embedded_lower = self.embed_lower(
-                state.partial_action[t]
+                state.partial_action[t].long()
             )  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
             l = l.flatten()
-            a_dist = FixedCategorical(probs=a_probs * self.masks[l])
+            a_dist = FixedCategorical(probs=a_probs * state.action_mask[t])
             new = A[t, R, l] < 0
             A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
 
