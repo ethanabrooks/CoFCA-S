@@ -67,16 +67,12 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
         action_nvec = RawAction(*map(int, self.action_space.nvec))
-        action_nvec = RawAction(
-            delta=action_nvec.delta, dg=action_nvec.dg, ptr=action_nvec.ptr, a=3
-        )
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            # self.obs_spaces.partial_action.nvec,
-            np.array([3, 4, 4]),
+            self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
         )
         self.task_encoder = (
@@ -101,17 +97,6 @@ class Recurrence(nn.Module):
             nn.Linear(self.hidden_size + self.lower_embed_size, action_nvec.a)
         )
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = 3
-        A_probs_size = 3
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        thresholds = torch.tensor([1, -1, -1])
-        thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
-        self.register_buffer("thresholds", thresholds)
-
-        masks = torch.zeros(A_size, A_probs_size)
-        A_nvec = torch.tensor([2, 3, 3])
-        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
-        self.register_buffer("masks", masks)
 
         d, h, w = self.obs_spaces.obs.shape
         d += 1
@@ -152,7 +137,7 @@ class Recurrence(nn.Module):
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
             a=1,
-            a_probs=A_probs_size,
+            a_probs=action_nvec.a,
             d=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
@@ -355,36 +340,12 @@ class Recurrence(nn.Module):
             zeta1_input = torch.cat([m, h1, inventory], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
 
-            # noinspection PyTypeChecker
-            thresholds = self.thresholds.unsqueeze(0)
-
-            def check_thresholds(At):
-                # noinspection PyTypeChecker
-                above_threshold: torch.Tensor = At >= thresholds
-                # meets condition to progress to next action
-                sampled = At >= 0  # sampled on a previous time step
-                above_threshold[~sampled] = True  # ignore unsampled
-                # noinspection PyArgumentList
-                return above_threshold.all(-1, keepdim=True)
-
-            next_l = (A[t - 1] >= 0).sum(-1, keepdim=True)
-            # next l if all thresholds are met
-            # meets_thresholds = check_thresholds(A[t - 1])
-            # l = meets_thresholds * next_l  # otherwise go back to 0
-            # AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
-            # copy = AR < l  # actions accumulated from prev time steps
-            # A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
-
-            # prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
-            # partial_action = prev + 1
             embedded_lower = self.embed_lower(
                 state.partial_action[t].long()
             )  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
-            # l = l.flatten()
             a_dist = FixedCategorical(probs=a_probs * state.action_mask[t])
-            # new = A[t, R, l] < 0
             self.sample_new(A[t], a_dist)
 
             self.print("a_probs", a_dist.probs)
