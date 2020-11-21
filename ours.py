@@ -101,9 +101,9 @@ class Recurrence(nn.Module):
         self.actor = init_(
             nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
         )
-        self.conv_hidden_size = self.conv_hidden_size
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = len(astuple(A_nvec))
+        A_size = 3
+        A_probs_size = 3
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
         thresholds = torch.tensor(astuple(action_nvec.thresholds()))
         thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
