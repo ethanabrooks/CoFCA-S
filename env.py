@@ -202,20 +202,6 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
-        self.action_space = spaces.MultiDiscrete(
-            np.array(
-                astuple(
-                    Action(
-                        verb=len(self.behaviors),
-                        noun=len(self.items),
-                        is_op=2,
-                        delta=2 * self.n_lines,
-                        dg=2,
-                        ptr=self.n_lines,
-                    )
-                )
-            )
-        )
         a_action_nvec = AActions(
             is_op=2, verb=len(self.behaviors), noun=len(self.items)
         )
@@ -227,7 +213,7 @@ class Env(gym.Env):
         num_a_actions = len(astuple(a_action_nvec))
         max_a_action = max(astuple(a_action_nvec))
         raw_action_nvec = RawAction(**asdict(non_a_action_nvec), a=max_a_action)
-        # self.action_space = spaces.MultiDiscrete(np.array(astuple(raw_action_nvec)))
+        self.action_space = spaces.MultiDiscrete(np.array(astuple(raw_action_nvec)))
         self.action_mask = np.zeros((num_a_actions, max_a_action))
         self.action_mask[
             (
@@ -920,13 +906,13 @@ class Env(gym.Env):
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             if action.complete():
                 action = action.none_action()
-            raw_action = Action(*raw_action)
+            raw_action = RawAction(*raw_action)
             action = replace(
                 action,
                 delta=raw_action.delta,
                 dg=raw_action.dg,
                 ptr=raw_action.ptr,
-                **{action.next_key(): getattr(raw_action, action.next_key())},
+                **{action.next_key(): raw_action.a},
             )
 
             info = dict(

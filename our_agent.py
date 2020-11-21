@@ -48,9 +48,7 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        R = torch.arange(N, device=rnn_hxs.device).unsqueeze(-1)
-        a = hx.a[R, hx.l.long()]
-        X = RawAction(a=a, delta=hx.d, dg=hx.dg, ptr=hx.p)
+        X = RawAction(a=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
         probs = RawAction(a=hx.a_probs, delta=hx.d_probs, dg=hx.dg_probs, ptr=None)
 
         dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
@@ -63,7 +61,7 @@ class Agent(agents.Agent, NNBase):
             aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
         rnn_hxs = torch.cat(astuple(hx), dim=-1)
-        action = torch.cat(astuple(replace(X, a=hx.a)), dim=-1)
+        action = torch.cat(astuple(X), dim=-1)
         return AgentOutputs(
             value=hx.v,
             action=action,

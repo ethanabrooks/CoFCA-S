@@ -1,6 +1,6 @@
 from collections import Hashable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import torch
@@ -66,8 +66,7 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        # action_nvec = RawAction(*map(int, self.action_space.nvec))
-        action_nvec = Action(*map(int, self.action_space.nvec))
+        action_nvec = RawAction(*map(int, self.action_space.nvec))
         action_nvec = RawAction(
             delta=action_nvec.delta, dg=action_nvec.dg, ptr=action_nvec.ptr, a=3
         )
@@ -152,10 +151,9 @@ class Recurrence(nn.Module):
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
-            a=A_size,
+            a=1,
             a_probs=A_probs_size,
             d=1,
-            l=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
             p=1,
@@ -266,10 +264,9 @@ class Recurrence(nn.Module):
         hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*inputs.actions.unbind(dim=2))
-        a = torch.stack(astuple(actions.a_actions()), dim=-1)
-        prev_a = hx.a.view(1, N, -1)
-        A = torch.cat([a, prev_a], dim=0).long()
+        actions = RawAction(*inputs.actions.unbind(dim=2))
+        prev_a = hx.a.view(1, N)
+        A = torch.cat([actions.a, prev_a], dim=0).long()
         D = actions.delta.long()
         DG = actions.dg.long()
 
@@ -372,29 +369,29 @@ class Recurrence(nn.Module):
 
             next_l = (A[t - 1] >= 0).sum(-1, keepdim=True)
             # next l if all thresholds are met
-            meets_thresholds = check_thresholds(A[t - 1])
-            l = meets_thresholds * next_l  # otherwise go back to 0
-            AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
-            copy = AR < l  # actions accumulated from prev time steps
-            A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
+            # meets_thresholds = check_thresholds(A[t - 1])
+            # l = meets_thresholds * next_l  # otherwise go back to 0
+            # AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
+            # copy = AR < l  # actions accumulated from prev time steps
+            # A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
 
-            prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
-            partial_action = prev + 1
+            # prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
+            # partial_action = prev + 1
             embedded_lower = self.embed_lower(
                 state.partial_action[t].long()
             )  # +1 to deal with negatives
             a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
             a_probs = F.softmax(a_logits, dim=-1)
-            l = l.flatten()
+            # l = l.flatten()
             a_dist = FixedCategorical(probs=a_probs * state.action_mask[t])
-            new = A[t, R, l] < 0
-            A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
+            # new = A[t, R, l] < 0
+            self.sample_new(A[t], a_dist)
 
             self.print("a_probs", a_dist.probs)
 
             d_logits = self.d_gate(zeta1_input)
             d_probs = F.softmax(d_logits, dim=-1)
-            complete = A[t, R, l].unsqueeze(-1) < state.complete_if_lt[t]
+            complete = A[t].unsqueeze(-1) < state.complete_if_lt[t]
             d_gate = gate(complete.long(), d_probs, ones * 0)
             self.sample_new(DG[t], d_gate)
             dg = DG[t].unsqueeze(-1).float()
@@ -431,7 +428,6 @@ class Recurrence(nn.Module):
                 v=self.critic(z1),
                 h=h,
                 p=p,
-                l=l,
                 d=D[t],
                 dg=dg,
                 a_probs=a_dist.probs,
