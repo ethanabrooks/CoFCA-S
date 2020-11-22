@@ -1,3 +1,4 @@
+import itertools
 import typing
 from abc import abstractmethod
 from collections import Counter
@@ -8,7 +9,8 @@ from typing import Tuple, Union, List, Generator, Dict, Generic
 import numpy as np
 import torch
 from colored import fg
-from gym import Space
+from gym import Space, spaces
+from gym.spaces import Discrete
 
 from utils import RESET
 
@@ -368,14 +370,13 @@ class Resources:
         return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
 
 
-assert set(Resources(0, 0).__annotations__.keys()) == {
+assert set(f.name for f in fields(Resources(0, 0))) == {
     r.lower() for r in Resource.__members__
 }
 
-
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
-annotations = Obs.__annotations__
+annotations = [f.name for f in fields(Obs)]
 assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {

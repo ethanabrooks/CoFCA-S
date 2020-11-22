@@ -47,7 +47,7 @@ ObjectMap = Dict[Coord, str]
 
 Obs = namedtuple(
     "Obs",
-    "action_mask active complete_if_lt inventory lines mask obs partial_action subtask_complete truthy",
+    "action_mask active can_open_gate complete_if_lt inventory lines mask obs partial_action subtask_complete truthy",
 )
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -265,6 +265,8 @@ class Env(gym.Env):
         self.observation_space = spaces.Dict(
             Obs(
                 action_mask=spaces.MultiBinary(max_a_action),
+                can_open_gate=spaces.Discrete(2),
+                partial_action=partial_action_space,
                 active=spaces.Discrete(self.n_lines + 1),
                 complete_if_lt=spaces.Discrete(max_a_action),
                 inventory=spaces.MultiBinary(len(self.items)),
@@ -273,7 +275,6 @@ class Env(gym.Env):
                 obs=spaces.Box(low=0, high=1, shape=self.world_shape, dtype=np.float32),
                 subtask_complete=spaces.Discrete(2),
                 truthy=spaces.MultiDiscrete(4 * np.ones(self.n_lines)),
-                partial_action=partial_action_space,
             )._asdict()
         )
         self.world_space = spaces.Box(
@@ -827,7 +828,10 @@ class Env(gym.Env):
         term = False
 
         lower_level_action = None
-        action = replace(Action.none_action(), ptr=0)
+        old_action = replace(Action.none_action(), ptr=0)
+        actions = VariableActions()
+        action_class = next(actions.classes())
+        agent_ptr = 0
         while True:
             success = state.ptr is None
             self.success_count += success
@@ -868,11 +872,11 @@ class Env(gym.Env):
                     success=success,
                     lines=lines,
                     state=state,
-                    agent_ptr=action.ptr,
+                    agent_ptr=agent_ptr,
                 )
                 self.render_world(
                     state=state,
-                    action=action,
+                    action=old_action,
                     reward=reward,
                 )
 
@@ -884,7 +888,7 @@ class Env(gym.Env):
             mask = [int(not isinstance(l, Padding)) for l in padded]
             truthy = [
                 self.evaluate_line(l, None, state.counts)
-                if action.ptr < len(lines)
+                if agent_ptr < len(lines)
                 else 2
                 for l in lines
             ]
@@ -892,19 +896,22 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
-            new_action = action.none_action() if action.complete() else action
-            partial_action = np.array(new_action.a_actions().to_array())  # [:-1]
-            action_mask = getattr(self.action_mask, new_action.next_key())
-            if new_action.next_key() == "is_op":
+            old_new_acion = (
+                old_action.none_action() if old_action.complete() else old_action
+            )
+            partial_action = np.array(old_new_acion.a_actions().to_array())  # [:-1]
+            action_mask = getattr(self.action_mask, old_new_acion.next_key())
+            if old_new_acion.next_key() == "is_op":
                 complete_if_lt = 1
-            elif new_action.next_key() == "verb":
+            elif old_new_acion.next_key() == "verb":
                 complete_if_lt = -1
-            elif new_action.next_key() == "noun":
+            elif old_new_acion.next_key() == "noun":
                 complete_if_lt = 10
             else:
                 raise RuntimeError
             obs = Obs(
                 action_mask=action_mask,
+                can_open_gate=action_class.can_reset(),
                 complete_if_lt=complete_if_lt,
                 obs=[[obs]],
                 lines=preprocessed_lines,
@@ -927,15 +934,18 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            if action.complete():
-                action = action.none_action()
+            if old_action.complete():
+                old_action = old_action.none_action()
             raw_action = RawAction(*raw_action)
-            action = replace(
-                action,
+            new_action = action_class.parse(raw_action.a)
+            actions = actions.update(new_action)
+            action_class = new_action.next()
+            old_action = replace(
+                old_action,
                 delta=raw_action.delta,
                 dg=raw_action.dg,
                 ptr=raw_action.ptr,
-                **{action.next_key(): raw_action.a},
+                **{old_action.next_key(): raw_action.a},
             )
 
             info = dict(
@@ -943,7 +953,7 @@ class Env(gym.Env):
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            if action.no_op():
+            if old_action.no_op():
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -954,7 +964,7 @@ class Env(gym.Env):
                 step += 1
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send(
-                    (action.verb, action.noun, lower_level_action)
+                    (old_action.verb, old_action.noun, lower_level_action)
                 )
 
     def inventory_representation(self, state):
