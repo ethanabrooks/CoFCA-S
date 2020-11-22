@@ -7,31 +7,22 @@ from typing import List, Tuple, Dict, Optional, Generator
 
 import gym
 import numpy as np
-from dataclasses import astuple, replace
 from gym import spaces
 from gym.utils import seeding
 
+import keyboard_control
 from data_types import (
     Action,
-    RawAction,
     AActions,
     NonAAction,
     Action3,
     Action2,
     Action1,
+    PartialAction,
 )
-from utils import (
-    hierarchical_parse_args,
-    RESET,
-    asdict,
-)
-from typing import List, Tuple, Dict, Optional, Generator
-
-import keyboard_control
 from data_types import (
     RawAction,
     VariableActions,
-    PartialAction,
 )
 from lines import (
     Subtask,
@@ -44,6 +35,9 @@ from lines import (
     EndIf,
     Loop,
     EndLoop,
+)
+from utils import (
+    asdict,
 )
 from utils import (
     hierarchical_parse_args,
@@ -273,7 +267,7 @@ class Env(gym.Env):
         self.observation_space = spaces.Dict(
             Obs(
                 action_mask=spaces.MultiBinary(max_a_action),
-                can_open_gate=spaces.Discrete(2),
+                can_open_gate=spaces.MultiBinary(max_a_action),
                 partial_action=partial_action_space,
                 active=spaces.Discrete(self.n_lines + 1),
                 complete_if_lt=spaces.Discrete(max_a_action),
@@ -912,9 +906,10 @@ class Env(gym.Env):
                 raise RuntimeError
             action_mask = np.array([*actions.mask(self.action_nvec.a)])
             partial_action = np.array([*actions.partial_actions()])
+            assert issubclass(actions.active, PartialAction)
             obs = Obs(
                 action_mask=action_mask,
-                can_open_gate=actions.can_reset(),
+                can_open_gate=[*actions.active.complete(self.action_nvec.a)],
                 complete_if_lt=complete_if_lt,
                 obs=[[obs]],
                 lines=preprocessed_lines,

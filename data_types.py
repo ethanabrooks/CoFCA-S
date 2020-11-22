@@ -85,17 +85,14 @@ class PartialAction(typing.Generic[X]):
         return x % 2
 
     @classmethod
-    def parse(cls, a):
-        # TODO:
-        # if cls.can_reset():
-        #     a = a // 2
+    def parse(cls, a) -> "PartialAction":
         assert 0 <= a < cls.size_a()
         # noinspection PyArgumentList
         return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
 
     @classmethod
-    def size_a(cls):
-        return np.prod(astuple(cls.num_values()))  # TODO * (2 ** cls.can_reset())
+    def size_a(cls) -> int:
+        return int(np.prod(astuple(cls.num_values())))
 
     @classmethod
     def mask(cls, size):
@@ -110,6 +107,14 @@ class PartialAction(typing.Generic[X]):
         # yield True
         # else:
         # yield 0
+
+    @classmethod
+    def complete(cls, size) -> Generator[bool, None, None]:
+        for i in range(size):
+            try:
+                yield cls.parse(i).reset()
+            except AssertionError:
+                yield False
 
     @classmethod
     @abstractmethod
