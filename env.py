@@ -2,6 +2,8 @@ import functools
 import itertools
 from collections import Counter, namedtuple, deque, OrderedDict, defaultdict
 from copy import deepcopy
+from dataclasses import astuple
+from typing import List, Tuple, Dict, Optional, Generator
 
 import gym
 import numpy as np
@@ -18,6 +20,11 @@ from utils import (
 from typing import List, Tuple, Dict, Optional, Generator
 
 import keyboard_control
+from data_types import (
+    RawAction,
+    VariableActions,
+    PartialAction,
+)
 from lines import (
     Subtask,
     Padding,
@@ -202,6 +209,16 @@ class Env(gym.Env):
                     yield np.array([i, j])
 
         self.lower_level_actions = list(lower_level_actions())
+
+        max_a_action = max(
+            [x for a in VariableActions.classes() for x in astuple(a.num_values())]
+        )
+        self.action_nvec = action_nvec = RawAction(
+            delta=2 * self.n_lines,
+            dg=2,
+            ptr=self.n_lines,
+            a=max_a_action,
+        )
         a_action_nvec = AActions(
             is_op=2, verb=len(self.behaviors), noun=len(self.items)
         )
@@ -222,6 +239,7 @@ class Env(gym.Env):
             )
         ] = 1
         self.action_mask = AActions(*self.action_mask)
+        self.action_space = spaces.MultiDiscrete(np.array(astuple(action_nvec)))
         lines_space = spaces.MultiDiscrete(
             np.array(
                 [
@@ -237,8 +255,13 @@ class Env(gym.Env):
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.n_lines))
         partial_action_space = spaces.MultiDiscrete(
-            1 + np.array(astuple(a_action_nvec))  # [:-1]
+            [
+                1 + a
+                for c in VariableActions.classes()
+                for a in astuple(c.num_values())
+            ]  # [:-1]
         )
+
         self.observation_space = spaces.Dict(
             Obs(
                 action_mask=spaces.MultiBinary(max_a_action),

@@ -164,11 +164,11 @@ class Action2(PartialAction):
 @dataclass(frozen=True)
 class Action3(PartialAction):
     noun: X
-    gate: X
+    # gate: X
 
     @classmethod
     def num_values(cls) -> "Action3":
-        return cls(noun=3, gate=2)
+        return cls(noun=3)  # , gate=2)
 
     @classmethod
     def can_reset(cls):
