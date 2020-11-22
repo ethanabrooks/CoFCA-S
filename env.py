@@ -836,7 +836,6 @@ class Env(gym.Env):
         term = False
 
         lower_level_action = None
-        old_action = replace(Action.none_action(), ptr=0)
         actions = VariableActions()
         agent_ptr = 0
         while True:
@@ -883,7 +882,7 @@ class Env(gym.Env):
                 )
                 self.render_world(
                     state=state,
-                    action=old_action,
+                    action=actions,
                     reward=reward,
                 )
 
@@ -903,17 +902,11 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
-            old_new_acion = (
-                old_action.none_action() if old_action.complete() else old_action
-            )
-            if old_new_acion.next_key() == "is_op":
-                assert actions.active is Action1
+            if actions.active is Action1:
                 complete_if_lt = 1
-            elif old_new_acion.next_key() == "verb":
-                assert actions.active is Action2
+            elif actions.active is Action2:
                 complete_if_lt = -1
-            elif old_new_acion.next_key() == "noun":
-                assert actions.active is Action3
+            elif actions.active is Action3:
                 complete_if_lt = 10
             else:
                 raise RuntimeError
@@ -944,25 +937,15 @@ class Env(gym.Env):
                 f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            if old_action.complete():
-                old_action = old_action.none_action()
             raw_action = RawAction(*raw_action)
             actions = actions.update(raw_action.a)
-            old_action = replace(
-                old_action,
-                delta=raw_action.delta,
-                dg=raw_action.dg,
-                ptr=raw_action.ptr,
-                **{old_action.next_key(): raw_action.a},
-            )
 
             info = dict(
                 use_failure_buf=use_failure_buf,
                 len_failure_buffer=len(self.failure_buffer),
             )
 
-            assert old_action.no_op() == actions.no_op()
-            if old_action.no_op():
+            if actions.no_op():
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit
                 if self.no_op_limit is not None and self.no_op_limit < 0:
@@ -973,7 +956,7 @@ class Env(gym.Env):
                 step += 1
                 # noinspection PyUnresolvedReferences
                 state = state_iterator.send(
-                    (old_action.verb, old_action.noun, lower_level_action)
+                    (actions.verb(), actions.noun(), lower_level_action)
                 )
 
     def inventory_representation(self, state):
