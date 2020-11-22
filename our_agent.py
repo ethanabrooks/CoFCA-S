@@ -49,7 +49,7 @@ class Agent(agents.Agent, NNBase):
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
         X = RawAction(a=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = RawAction(a=hx.a_probs, delta=hx.d_probs, dg=None, ptr=None)
+        probs = RawAction(a=hx.a_probs, delta=hx.d_probs, dg=hx.dg_probs, ptr=None)
 
         dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
         action_log_probs = sum(
