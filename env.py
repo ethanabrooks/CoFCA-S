@@ -11,7 +11,7 @@ from dataclasses import astuple, replace
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action, RawAction, AActions, NonAAction
+from data_types import Action, RawAction, AActions, NonAAction, Action3, Action2
 from utils import (
     hierarchical_parse_args,
     RESET,
@@ -830,7 +830,6 @@ class Env(gym.Env):
         lower_level_action = None
         old_action = replace(Action.none_action(), ptr=0)
         actions = VariableActions()
-        action_class = next(actions.classes())
         agent_ptr = 0
         while True:
             success = state.ptr is None
@@ -909,9 +908,11 @@ class Env(gym.Env):
                 complete_if_lt = 10
             else:
                 raise RuntimeError
+            assert np.all(action_mask == np.array([*actions.mask(self.action_nvec.a)]))
+            assert np.all(partial_action == np.array([*actions.partial_actions()]))
             obs = Obs(
                 action_mask=action_mask,
-                can_open_gate=action_class.can_reset(),
+                can_open_gate=actions.can_reset(),
                 complete_if_lt=complete_if_lt,
                 obs=[[obs]],
                 lines=preprocessed_lines,
@@ -937,9 +938,7 @@ class Env(gym.Env):
             if old_action.complete():
                 old_action = old_action.none_action()
             raw_action = RawAction(*raw_action)
-            new_action = action_class.parse(raw_action.a)
-            actions = actions.update(new_action)
-            action_class = new_action.next()
+            actions = actions.update(raw_action.a)
             old_action = replace(
                 old_action,
                 delta=raw_action.delta,
@@ -953,6 +952,7 @@ class Env(gym.Env):
                 len_failure_buffer=len(self.failure_buffer),
             )
 
+            assert old_action.no_op() == actions.no_op()
             if old_action.no_op():
                 n += 1
                 no_op_limit = 200 if self.evaluating else self.no_op_limit

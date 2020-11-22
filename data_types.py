@@ -84,15 +84,16 @@ class PartialAction(typing.Generic[X]):
 
     @classmethod
     def parse(cls, a):
-        if cls.can_reset():
-            a = a // 2
+        # TODO:
+        # if cls.can_reset():
+        #     a = a // 2
         assert 0 <= a < cls.size_a()
         # noinspection PyArgumentList
         return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
 
     @classmethod
     def size_a(cls):
-        return np.prod(astuple(cls.num_values())) * (2 ** cls.can_reset())
+        return np.prod(astuple(cls.num_values()))  # TODO * (2 ** cls.can_reset())
 
     @classmethod
     def mask(cls, size):
@@ -199,6 +200,7 @@ class VariableActions:
     action1: Action1 = None
     action2: Action2 = None
     action3: Action3 = None
+    active: type = Action1
 
     def verb(self):
         return self.action2.verb
@@ -214,10 +216,13 @@ class VariableActions:
 
     def actions(self):
         for f in fields(self):
-            yield getattr(self, f.name)
+            if issubclass(f.type, PartialAction):
+                yield getattr(self, f.name)
 
     def partial_actions(self):
-        for cls, action in zip(self.classes(), self.actions()):
+        index = [*self.classes()].index(self.active)
+        actions = [*self.actions()][:index]
+        for cls, action in itertools.zip_longest(self.classes(), actions):
             if isinstance(action, PartialAction):
                 yield from [1 + x for x in astuple(action)]
             elif issubclass(cls, PartialAction):
@@ -226,11 +231,21 @@ class VariableActions:
             else:
                 raise RuntimeError
 
-    def update(self, next_action: PartialAction):
-        index = [*self.classes()].index(type(next_action))
+    def update(self, a: int):
+        assert issubclass(self.active, PartialAction)
+        action = self.active.parse(a)
+        index = [*self.classes()].index(self.active)
         filled_in = [*self.actions()][:index]
         assert None not in filled_in
-        return VariableActions(*filled_in, next_action)
+        return VariableActions(*filled_in, action, active=action.next())
+
+    def can_reset(self):
+        assert issubclass(self.active, PartialAction)
+        return self.active.can_reset()
+
+    def mask(self, size):
+        assert issubclass(self.active, PartialAction)
+        return self.active.mask(size)
 
     def no_op(self):
         return None in astuple(self)
