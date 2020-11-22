@@ -48,8 +48,8 @@ class Agent(agents.Agent, NNBase):
         )
         rm = self.recurrent_module
         hx = rm.parse_hidden(all_hxs)
-        X = RawAction(a=hx.a, delta=hx.d, dg=hx.dg, ptr=hx.p)
-        probs = RawAction(a=hx.a_probs, delta=hx.d_probs, dg=hx.dg_probs, ptr=None)
+        X = RawAction(a=hx.a, delta=hx.d, ptr=hx.p)
+        probs = RawAction(a=hx.a_probs, delta=hx.d_probs, ptr=None)
 
         dists = [(p if p is None else FixedCategorical(p)) for p in astuple(probs)]
         action_log_probs = sum(
@@ -57,8 +57,8 @@ class Agent(agents.Agent, NNBase):
         )
         entropy = sum([dist.entropy() for dist in dists if dist is not None]).mean()
         aux_loss = -self.entropy_coef * entropy
-        if probs.dg is not None:
-            aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
+        # if probs.dg is not None:
+        #     aux_loss += self.gate_coef * hx.dg_probs[:, 1].mean()
 
         rnn_hxs = torch.cat(astuple(hx), dim=-1)
         action = torch.cat(astuple(X), dim=-1)

@@ -1,13 +1,16 @@
+import itertools
 import typing
+from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, asdict, astuple, replace
+from dataclasses import dataclass, asdict, astuple, replace, fields
 from enum import unique, Enum, auto
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
 import numpy as np
 import torch
 from colored import fg
-from gym import Space
+from gym import Space, spaces
+from gym.spaces import Discrete
 
 from utils import RESET
 
@@ -74,75 +77,163 @@ ActionTargets = list(Resource) + list(Building)
 
 
 @dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
+class PartialAction(typing.Generic[X]):
+    @staticmethod
+    def get_gate_value(x: torch.Tensor) -> torch.Tensor:
+        return x % 2
+
+    @classmethod
+    def parse(cls, a):
+        if cls.can_reset():
+            a = a // 2
+        assert 0 <= a < cls.size_a()
+        # noinspection PyArgumentList
+        return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
+
+    @classmethod
+    def size_a(cls):
+        return np.prod(astuple(cls.num_values())) * (2 ** cls.can_reset())
+
+    @classmethod
+    def mask(cls, size):
+        mask = np.zeros(size)
+        mask[np.arange(size) < cls.size_a()] = 1
+        return mask
+
+    @classmethod
+    @abstractmethod
+    def num_values(cls) -> "PartialAction":
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def can_reset(cls) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset(self) -> bool:
+        raise NotImplementedError
+
+    def next(self) -> type:
+        if self.reset():
+            assert self.can_reset()
+            return Action1
+        return self.next_if_not_reset()
+
+    @abstractmethod
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Action1(PartialAction):
+    is_op: X
+
+    @classmethod
+    def num_values(cls) -> "Action1":
+        return cls(2)
+
+    @classmethod
+    def can_reset(cls):
+        return True
+
+    def reset(self):
+        return not self.is_op
+
+    def next_if_not_reset(self) -> type:
+        return Action2
+
+
+@dataclass(frozen=True)
+class Action2(PartialAction):
+    verb: X
+
+    @classmethod
+    def num_values(cls) -> "Action2":
+        return cls(3)
+
+    @classmethod
+    def can_reset(cls):
+        return False
+
+    def reset(self):
+        return False
+
+    def next_if_not_reset(self) -> type:
+        return Action3
+
+
+@dataclass(frozen=True)
+class Action3(PartialAction):
+    noun: X
+    gate: X
+
+    @classmethod
+    def num_values(cls) -> "Action3":
+        return cls(noun=3, gate=2)
+
+    @classmethod
+    def can_reset(cls):
+        return True
+
+    def reset(self):
+        return True
+
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class RecurringActions(typing.Generic[X]):
     delta: X
-    dg: X
     ptr: X
 
 
 @dataclass(frozen=True)
-class RawAction(NonAAction):
+class RawAction(RecurringActions):
     a: X
 
 
 @dataclass(frozen=True)
-class AActions(typing.Generic[X]):
-    is_op: X  # 2
-    verb: X
-    noun: X
-    # target: X  # 16
-    # worker: X  # 3
-    # ij: X  # 64
+class VariableActions:
+    action1: Action1 = None
+    action2: Action2 = None
+    action3: Action3 = None
 
-    def targeted(self):
-        return ActionTargets[self.target]
+    def verb(self):
+        return self.action2.verb
+
+    def noun(self):
+        return self.action3.noun
+
+    @classmethod
+    def classes(cls):
+        for f in fields(cls):
+            if issubclass(f.type, PartialAction):
+                yield f.type
+
+    def actions(self):
+        for f in fields(self):
+            yield getattr(self, f.name)
+
+    def partial_actions(self):
+        for cls, action in zip(self.classes(), self.actions()):
+            if isinstance(action, PartialAction):
+                yield from [1 + x for x in astuple(action)]
+            elif issubclass(cls, PartialAction):
+                assert action is None
+                yield from [0 for _ in astuple(cls.num_values())]
+            else:
+                raise RuntimeError
+
+    def update(self, next_action: PartialAction):
+        index = [*self.classes()].index(type(next_action))
+        filled_in = [*self.actions()][:index]
+        assert None not in filled_in
+        return VariableActions(*filled_in, next_action)
 
     def no_op(self):
-        return not self.is_op or None in (self.verb, self.noun)
-
-    def complete(self):
-        return self.next_key() is "is_op"
-
-    @staticmethod
-    def to_int(x):
-        return 0 if x is None else 1 + x
-
-    def to_array(self):
-        return np.array([*map(self.to_int, astuple(self))])
-
-    def next_key(self):
-        if self.is_op in (None, 0):
-            return "is_op"
-        if self.verb is None:
-            return "verb"
-        if self.noun is None:
-            return "noun"
-        return "is_op"
-
-
-@dataclass(frozen=True)
-class Action(AActions, NonAAction):
-    @staticmethod
-    def none_action():
-        return Action(None, None, None, None, None, None)
-
-    def a_actions(self):
-        return AActions(
-            **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
-        )
-
-    def parse(self, world_shape: Coord):
-        if not self.is_op or any(x < 0 for x in astuple(self)):
-            return None
-        action_target = self.targeted()
-        if action_target in Building:
-            i, j = np.unravel_index(self.ij, world_shape)
-            assignment = BuildOrder(building=action_target, location=(i, j))
-        elif action_target in Resource:
-            assignment = action_target
-        else:
-            raise RuntimeError
-        return Command(WorkerID(self.worker + 1), assignment)
+        return None in astuple(self)
 
 
 @dataclass(frozen=True)
@@ -207,14 +298,13 @@ class Resources:
         return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
 
 
-assert set(Resources(0, 0).__annotations__.keys()) == {
+assert set(f.name for f in fields(Resources(0, 0))) == {
     r.lower() for r in Resource.__members__
 }
 
-
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
-annotations = Obs.__annotations__
+annotations = [f.name for f in fields(Obs)]
 assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
@@ -356,12 +446,10 @@ class RecurrentState(Generic[X]):
     a: X
     d: X
     h: X
-    dg: X
     p: X
     v: X
     a_probs: X
     d_probs: X
-    dg_probs: X
 
 
 @dataclass

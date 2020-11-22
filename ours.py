@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, RawAction, Action
+from data_types import ParsedInput, RecurrentState, RawAction, PartialAction
 from distributions import FixedCategorical
 from env import Obs
 from transformer import TransformerModel
@@ -146,8 +146,6 @@ class Recurrence(nn.Module):
             h=self.hidden_size,
             p=1,
             v=1,
-            dg_probs=2,
-            dg=1,
         )
 
     def d_space(self):
@@ -256,7 +254,6 @@ class Recurrence(nn.Module):
         prev_a = hx.a.view(1, N)
         A = torch.cat([actions.a, prev_a], dim=0).long()
         D = actions.delta.long()
-        DG = actions.dg.long()
 
         for t in range(T):
             if self.no_pointer:
@@ -352,13 +349,10 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
 
             self.print("a_probs", a_dist.probs)
-
-            d_logits = self.d_gate(zeta1_input)
-            d_probs = F.softmax(d_logits, dim=-1)
-            complete = A[t].unsqueeze(-1) < state.complete_if_lt[t]
-            d_gate = gate(complete.long(), d_probs, ones * 0)
-            self.sample_new(DG[t], d_gate)
-            dg = DG[t].unsqueeze(-1).float()
+            dg = (
+                PartialAction.get_gate_value(A[t]).unsqueeze(-1)
+                * state.can_open_gate[t]
+            )
 
             if self.olsk or self.no_pointer:
                 h = self.upsilon(zeta1_input, h)
@@ -371,8 +365,6 @@ class Recurrence(nn.Module):
                 self.print("u", u)
                 d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
-                self.print("dg prob", d_gate.probs[:, 1])
-                self.print("dg", dg)
                 d_dist = gate(dg, d_probs, ones * half)
                 self.print("d_probs", d_probs[:, half:])
                 self.sample_new(D[t], d_dist)
@@ -393,10 +385,8 @@ class Recurrence(nn.Module):
                 h=h,
                 p=p,
                 d=D[t],
-                dg=dg,
                 a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
-                dg_probs=d_gate.probs,
             )
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
