@@ -84,16 +84,15 @@ class PartialAction(typing.Generic[X]):
 
     @classmethod
     def parse(cls, a):
-        # TODO:
-        # if cls.can_reset():
-        #     a = a // 2
+        if cls.can_reset():
+            a = a // 2
         assert 0 <= a < cls.size_a()
         # noinspection PyArgumentList
         return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
 
     @classmethod
     def size_a(cls):
-        return np.prod(astuple(cls.num_values()))  # TODO * (2 ** cls.can_reset())
+        return np.prod(astuple(cls.num_values())) * (2 ** cls.can_reset())
 
     @classmethod
     def mask(cls, size):
@@ -167,11 +166,10 @@ class Action2(PartialAction):
 @dataclass(frozen=True)
 class Action3(PartialAction):
     noun: X
-    # gate: X
 
     @classmethod
     def num_values(cls) -> "Action3":
-        return cls(noun=3)  # , gate=2)
+        return cls(noun=3)
 
     @classmethod
     def can_reset(cls):

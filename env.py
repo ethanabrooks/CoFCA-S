@@ -218,35 +218,13 @@ class Env(gym.Env):
 
         self.lower_level_actions = list(lower_level_actions())
 
-        max_a_action = max(
-            [x for a in VariableActions.classes() for x in astuple(a.num_values())]
-        )
+        max_a_action = max([a.size_a() for a in VariableActions.classes()])
         self.action_nvec = action_nvec = RawAction(
-            delta=2 * self.n_lines,
             dg=2,
+            delta=2 * self.n_lines,
             ptr=self.n_lines,
             a=max_a_action,
         )
-        a_action_nvec = AActions(
-            is_op=2, verb=len(self.behaviors), noun=len(self.items)
-        )
-        non_a_action_nvec = NonAAction(
-            delta=2 * self.n_lines,
-            dg=2,
-            ptr=self.n_lines,
-        )
-        num_a_actions = len(astuple(a_action_nvec))
-        max_a_action = max(astuple(a_action_nvec))
-        raw_action_nvec = RawAction(**asdict(non_a_action_nvec), a=max_a_action)
-        self.action_space = spaces.MultiDiscrete(np.array(astuple(raw_action_nvec)))
-        self.action_mask = np.zeros((num_a_actions, max_a_action))
-        self.action_mask[
-            (
-                np.expand_dims(np.arange(max_a_action), 0)
-                < np.expand_dims(astuple(a_action_nvec), 1)
-            )
-        ] = 1
-        self.action_mask = AActions(*self.action_mask)
         self.action_space = spaces.MultiDiscrete(np.array(astuple(action_nvec)))
         lines_space = spaces.MultiDiscrete(
             np.array(
@@ -831,7 +809,6 @@ class Env(gym.Env):
         state = next(state_iterator)
 
         subtasks_complete = 0
-        agent_ptr = 0
         info = {}
         term = False
 
@@ -938,6 +915,7 @@ class Env(gym.Env):
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             raw_action = RawAction(*raw_action)
+            agent_ptr = raw_action.ptr
             actions = actions.update(raw_action.a)
 
             info = dict(
