@@ -1,13 +1,16 @@
+import itertools
 import typing
+from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, asdict, astuple, replace
+from dataclasses import dataclass, asdict, astuple, replace, fields
 from enum import unique, Enum, auto
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
 import numpy as np
 import torch
 from colored import fg
-from gym import Space
+from gym import Space, spaces
+from gym.spaces import Discrete
 
 from utils import RESET
 
@@ -68,37 +71,191 @@ class Obs(typing.Generic[O]):
     workers: O
 
 
-X = typing.TypeVar("X")
+X = typing.TypeVar("X", np.ndarray, typing.Optional[int], torch.Tensor)
 
 ActionTargets = list(Resource) + list(Building)
 
+Y = typing.TypeVar("Y", torch.Tensor, int)
+
 
 @dataclass(frozen=True)
-class AActions(typing.Generic[X]):
-    is_op: X  # 2
-    verb: X
-    noun: X
-    # target: X  # 16
-    # worker: X  # 3
-    # ij: X  # 64
-
+class PartialAction(typing.Generic[X]):
     @staticmethod
-    def thresholds():
-        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(thresholds, is_op=1)  # , target=len(Resource))
-        # for i, t in enumerate(ActionTargets):
-        #     assert (
-        #         isinstance(t, Resource)
-        #         if i < thresholds.target
-        #         else isinstance(t, Building)
-        #     )
-        return thresholds
+    def get_gate_value(x: Y) -> Y:
+        return x // 2
 
-    def targeted(self):
-        return ActionTargets[self.target]
+    @classmethod
+    def parse(cls, a):
+        assert 0 <= a < 2 * cls.size_a()
+        a = a % cls.size_a()
+        # noinspection PyArgumentList
+        return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
+
+    @classmethod
+    def size_a(cls):
+        return np.prod(astuple(cls.num_values()))  # TODO * (2 ** cls.can_reset())
+
+    @classmethod
+    def mask(cls, size):
+        for i in range(2 * size):
+            j = i % size
+            if j >= cls.size_a():
+                yield False
+            else:
+                if i < size:  # gate closed
+                    yield True
+                else:  # gate open
+                    # only open for values that lead to reset
+                    yield cls.parse(j).reset()
+
+    @classmethod
+    @abstractmethod
+    def num_values(cls) -> "PartialAction":
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    def can_reset(cls) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset(self) -> bool:
+        raise NotImplementedError
+
+    def next(self) -> type:
+        if self.reset():
+            assert self.can_reset()
+            return Action1
+        return self.next_if_not_reset()
+
+    @abstractmethod
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Action1(PartialAction):
+    is_op: X
+
+    @classmethod
+    def num_values(cls) -> "Action1":
+        return cls(2)
+
+    @classmethod
+    def can_reset(cls):
+        return True
+
+    def reset(self):
+        return not self.is_op
+
+    def next_if_not_reset(self) -> type:
+        return Action2
+
+
+@dataclass(frozen=True)
+class Action2(PartialAction):
+    verb: X
+
+    @classmethod
+    def num_values(cls) -> "Action2":
+        return cls(3)
+
+    @classmethod
+    def can_reset(cls):
+        return False
+
+    def reset(self):
+        return False
+
+    def next_if_not_reset(self) -> type:
+        return Action3
+
+
+@dataclass(frozen=True)
+class Action3(PartialAction):
+    noun: X
+    # gate: X
+
+    @classmethod
+    def num_values(cls) -> "Action3":
+        return cls(noun=3)  # , gate=2)
+
+    @classmethod
+    def can_reset(cls):
+        return True
+
+    def reset(self):
+        return True
+
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class RecurringActions(typing.Generic[X]):
+    delta: X
+    ptr: X
+
+
+@dataclass(frozen=True)
+class RawAction(RecurringActions):
+    a: X
+
+
+@dataclass(frozen=True)
+class VariableActions:
+    action1: Action1 = None
+    action2: Action2 = None
+    action3: Action3 = None
+    active: type = Action1
+
+    def verb(self):
+        return self.action2.verb
+
+    def noun(self):
+        return self.action3.noun
+
+    @classmethod
+    def classes(cls):
+        for f in fields(cls):
+            if issubclass(f.type, PartialAction):
+                yield f.type
+
+    def actions(self):
+        for f in fields(self):
+            if issubclass(f.type, PartialAction):
+                yield getattr(self, f.name)
+
+    def partial_actions(self):
+        index = [*self.classes()].index(self.active)
+        actions = [*self.actions()][:index]
+        for cls, action in itertools.zip_longest(self.classes(), actions):
+            if isinstance(action, PartialAction):
+                yield from [1 + x for x in astuple(action)]
+            elif issubclass(cls, PartialAction):
+                assert action is None
+                yield from [0 for _ in astuple(cls.num_values())]
+            else:
+                raise RuntimeError
+
+    def update(self, a: int):
+        assert issubclass(self.active, PartialAction)
+        action = self.active.parse(a)
+        index = [*self.classes()].index(self.active)
+        filled_in = [*self.actions()][:index]
+        assert None not in filled_in
+        return VariableActions(*filled_in, action, active=action.next())
+
+    def can_reset(self):
+        assert issubclass(self.active, PartialAction)
+        return self.active.can_reset()
+
+    def mask(self, size):
+        assert issubclass(self.active, PartialAction)
+        return self.active.mask(size)
 
     def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
+        return None in astuple(self)
 
 
 @dataclass(frozen=True)
@@ -114,7 +271,46 @@ class RawAction(NonAAction):
 
 
 @dataclass(frozen=True)
+class AActions(typing.Generic[X]):
+    is_op: X  # 2
+    verb: X
+    noun: X
+    # target: X  # 16
+    # worker: X  # 3
+    # ij: X  # 64
+
+    def targeted(self):
+        return ActionTargets[self.target]
+
+    def no_op(self):
+        return not self.is_op or None in (self.verb, self.noun)
+
+    def complete(self):
+        return self.next_key() is "is_op"
+
+    @staticmethod
+    def to_int(x):
+        return 0 if x is None else 1 + x
+
+    def to_array(self):
+        return np.array([*map(self.to_int, astuple(self))])
+
+    def next_key(self):
+        if self.is_op in (None, 0):
+            return "is_op"
+        if self.verb is None:
+            return "verb"
+        if self.noun is None:
+            return "noun"
+        return "is_op"
+
+
+@dataclass(frozen=True)
 class Action(AActions, NonAAction):
+    @staticmethod
+    def none_action():
+        return Action(None, None, None, None, None, None)
+
     def a_actions(self):
         return AActions(
             **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
@@ -196,14 +392,13 @@ class Resources:
         return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
 
 
-assert set(Resources(0, 0).__annotations__.keys()) == {
+assert set(f.name for f in fields(Resources(0, 0))) == {
     r.lower() for r in Resource.__members__
 }
 
-
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
-annotations = Obs.__annotations__
+annotations = [f.name for f in fields(Obs)]
 assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
@@ -348,7 +543,6 @@ class RecurrentState(Generic[X]):
     dg: X
     p: X
     v: X
-    # l: X
     a_probs: X
     d_probs: X
     dg_probs: X

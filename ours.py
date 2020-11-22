@@ -1,20 +1,19 @@
-import json
-from collections import namedtuple, Hashable
+from collections import Hashable
 from contextlib import contextmanager
+from dataclasses import dataclass, replace
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
 from gym import spaces
 
 from agents import MultiEmbeddingBag
-from data_types import ParsedInput, RecurrentState, Action
-from distributions import FixedCategorical, Categorical
+from data_types import ParsedInput, RecurrentState, RawAction, Action
+from distributions import FixedCategorical
 from env import Obs
 from transformer import TransformerModel
-from utils import init_, astuple, asdict, init
+from utils import astuple, asdict, init
 
 
 def optimal_padding(h, kernel, stride):
@@ -67,16 +66,14 @@ class Recurrence(nn.Module):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        # networks
-        action_nvec = Action(*map(int, self.action_space.nvec))
-        A_nvec = action_nvec.a_actions()
-        A_probs_size = max(astuple(A_nvec))
+        action_nvec = RawAction(*map(int, self.action_space.nvec))
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.embed_lower = MultiEmbeddingBag(
-            1 + np.array(astuple(A_nvec)), embedding_dim=self.lower_embed_size
+            self.obs_spaces.partial_action.nvec,
+            embedding_dim=self.lower_embed_size,
         )
         self.task_encoder0 = (
             TransformerModel(
@@ -98,22 +95,11 @@ class Recurrence(nn.Module):
         init_ = lambda m: init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
         )  # TODO: try init
-        self.actor = init_(
-            nn.Linear(self.hidden_size + self.lower_embed_size, A_probs_size)
-        )
+        self.actor = init_(nn.Linear(self.hidden_size, action_nvec.a))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        A_size = len(astuple(A_nvec))
-        self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-        thresholds = torch.tensor(astuple(action_nvec.thresholds()))
-        thresholds[-1] = max(astuple(action_nvec)) + 1  # unreachable threshold
-        self.register_buffer("thresholds", thresholds)
-
-        masks = torch.zeros(A_size, A_probs_size)
-        A_nvec = torch.tensor(astuple(A_nvec))
-        masks[torch.arange(A_probs_size).unsqueeze(0) < A_nvec.unsqueeze(1)] = 1
-        self.register_buffer("masks", masks)
 
         d, h, w = self.obs_spaces.obs.shape
+        d += 1
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
@@ -126,7 +112,12 @@ class Recurrence(nn.Module):
             if self.no_pointer
             else self.task_embed_size
         )
-        zeta1_input_size = m_size + self.task_embed_size + self.resources_hidden_size
+        zeta1_input_size = (
+            m_size
+            + self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.lower_embed_size
+        )
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
             assert self.num_edges == 3
@@ -154,10 +145,9 @@ class Recurrence(nn.Module):
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
-            a=A_size,
-            a_probs=A_probs_size,
+            a=1,
+            a_probs=2 * action_nvec.a,
             d=1,
-            l=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
             p=1,
@@ -268,10 +258,9 @@ class Recurrence(nn.Module):
         hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
-        actions = Action(*inputs.actions.unbind(dim=2))
-        a = torch.stack(astuple(actions.a_actions()), dim=-1)
-        prev_a = hx.a.view(1, N, -1)
-        A = torch.cat([a, prev_a], dim=0).long()
+        actions = RawAction(*inputs.actions.unbind(dim=2))
+        prev_a = hx.a.view(1, N)
+        A = torch.cat([actions.a, prev_a], dim=0).long()
         D = actions.delta.long()
         DG = actions.dg.long()
 
@@ -328,46 +317,27 @@ class Recurrence(nn.Module):
             h1 = self.embed_obs(state.obs[t]).relu()
             h1 = m * h1.sum(-1).sum(-1) 
             inventory = self.embed_inventory(state.inventory[t])
-            zeta1_input = torch.cat([m, h1, inventory], dim=-1)
+            embedded_lower = self.embed_lower(
+                state.partial_action[t].long()
+            )  # +1 to deal with negatives
+            zeta1_input = torch.cat([m, h1, inventory, embedded_lower], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
 
-            # noinspection PyTypeChecker
-            thresholds = self.thresholds.unsqueeze(0)
-
-            def check_thresholds(At):
-                # noinspection PyTypeChecker
-                above_threshold: torch.Tensor = At >= thresholds
-                # meets condition to progress to next action
-                sampled = At >= 0  # sampled on a previous time step
-                above_threshold[~sampled] = True  # ignore unsampled
-                # noinspection PyArgumentList
-                return above_threshold.all(-1, keepdim=True)
-
-            next_l = (A[t - 1] >= 0).sum(-1, keepdim=True)
-            # next l if all thresholds are met
-            meets_thresholds = check_thresholds(A[t - 1])
-            l = meets_thresholds * next_l  # otherwise go back to 0
-            AR = torch.arange(A.size(-1), device=A.device).unsqueeze(0)
-            copy = AR < l  # actions accumulated from prev time steps
-            A[t][copy] = A[t - 1][copy]  # copy accumulated actions from A[t-1]
-
-            prev = meets_thresholds * A[t - 1] + ~meets_thresholds * -1
-            embedded_lower = self.embed_lower(prev + 1)  # +1 to deal with negatives
-            a_logits = self.actor(torch.cat([z1, embedded_lower], dim=-1))
+            a_logits = self.actor(z1)
+            mask = state.action_mask[t].bool()
             a_probs = F.softmax(a_logits, dim=-1)
-            l = l.flatten()
-            a_dist = FixedCategorical(probs=a_probs * self.masks[l])
-            new = A[t, R, l] < 0
-            A[t, R, l] = new * a_dist.sample().flatten() + ~new * A[t, R, l]
-
-            self.print("a_probs", a_dist.probs)
-
             d_logits = self.d_gate(zeta1_input)
-            d_probs = F.softmax(d_logits, dim=-1)
-            complete = ~check_thresholds(A[t])
-            d_gate = gate(complete.long(), d_probs, ones * 0)
-            self.sample_new(DG[t], d_gate)
-            dg = DG[t].unsqueeze(-1).float()
+            dg_probs = F.softmax(d_logits, dim=-1)
+
+            joint_probs = a_probs.unsqueeze(1) * dg_probs.unsqueeze(2)
+            probs = joint_probs.view(N, -1) * mask
+            probs[mask] = probs[mask] / probs[mask].sum(-1)
+            self.print("probs", probs)
+            a_dist = FixedCategorical(probs=probs)
+            a = a_dist.sample()
+            new = A[t] < 0
+            A[t, new] = a[new].flatten()
+            dg = a // (self.state_sizes.a_probs / 2)
 
             if self.olsk or self.no_pointer:
                 h = self.upsilon(zeta1_input, h)
@@ -380,10 +350,11 @@ class Recurrence(nn.Module):
                 self.print("u", u)
                 d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
-                self.print("dg prob", d_gate.probs[:, 1])
+                self.print("dg prob", dg_probs)
                 self.print("dg", dg)
                 d_dist = gate(dg, d_probs, ones * half)
-                self.print("d_probs", d_probs[:, half:])
+                self.print("d_probs", d_dist.probs[:, :half])
+                self.print("d_probs", d_dist.probs[:, half:])
                 self.sample_new(D[t], d_dist)
                 # D[:] = float(input("D:")) + half
                 delta = D[t].clone() - half
@@ -396,12 +367,11 @@ class Recurrence(nn.Module):
                 v=self.critic(z1),
                 h=h,
                 p=p,
-                l=l,
                 d=D[t],
                 dg=dg,
                 a_probs=a_dist.probs,
                 d_probs=d_dist.probs,
-                dg_probs=d_gate.probs,
+                dg_probs=dg_probs,
             )
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
