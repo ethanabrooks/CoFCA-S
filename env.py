@@ -272,7 +272,7 @@ class Env(gym.Env):
 
         self.observation_space = spaces.Dict(
             Obs(
-                action_mask=spaces.MultiBinary(max_a_action),
+                action_mask=spaces.MultiBinary(2 * max_a_action),
                 can_open_gate=spaces.Discrete(2),
                 partial_action=partial_action_space,
                 active=spaces.Discrete(self.n_lines + 1),
@@ -831,7 +831,6 @@ class Env(gym.Env):
         state = next(state_iterator)
 
         subtasks_complete = 0
-        agent_ptr = 0
         info = {}
         term = False
 
@@ -939,6 +938,7 @@ class Env(gym.Env):
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             raw_action = RawAction(*raw_action)
             actions = actions.update(raw_action.a)
+            agent_ptr = raw_action.ptr
 
             info = dict(
                 use_failure_buf=use_failure_buf,

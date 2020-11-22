@@ -82,14 +82,12 @@ Y = typing.TypeVar("Y", torch.Tensor, int)
 class PartialAction(typing.Generic[X]):
     @staticmethod
     def get_gate_value(x: Y) -> Y:
-        return x % 2
+        return x // 2
 
     @classmethod
     def parse(cls, a):
-        # TODO:
-        # if cls.can_reset():
-        #     a = a // 2
-        assert 0 <= a < cls.size_a()
+        assert 0 <= a < 2 * cls.size_a()
+        a = a % cls.size_a()
         # noinspection PyArgumentList
         return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
 
@@ -99,17 +97,16 @@ class PartialAction(typing.Generic[X]):
 
     @classmethod
     def mask(cls, size):
-        mask = np.zeros(size)
-        mask[np.arange(size) < cls.size_a()] = 1
-        return mask
-        # for i in range(size):
-        # if i < cls.size_a():
-        # if PartialAction.get_gate_value(i):  # if i opens gate
-        # yield cls.parse(i).reset()  # only allow values that cause a reset
-        # else:
-        # yield True
-        # else:
-        # yield 0
+        for i in range(2 * size):
+            j = i % size
+            if j >= cls.size_a():
+                yield False
+            else:
+                if i < size:  # gate closed
+                    yield True
+                else:  # gate open
+                    # only open for values that lead to reset
+                    yield cls.parse(j).reset()
 
     @classmethod
     @abstractmethod
