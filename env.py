@@ -11,7 +11,15 @@ from dataclasses import astuple, replace
 from gym import spaces
 from gym.utils import seeding
 
-from data_types import Action, RawAction, AActions, NonAAction, Action3, Action2
+from data_types import (
+    Action,
+    RawAction,
+    AActions,
+    NonAAction,
+    Action3,
+    Action2,
+    Action1,
+)
 from utils import (
     hierarchical_parse_args,
     RESET,
@@ -898,18 +906,19 @@ class Env(gym.Env):
             old_new_acion = (
                 old_action.none_action() if old_action.complete() else old_action
             )
-            partial_action = np.array(old_new_acion.a_actions().to_array())  # [:-1]
-            action_mask = getattr(self.action_mask, old_new_acion.next_key())
             if old_new_acion.next_key() == "is_op":
+                assert actions.active is Action1
                 complete_if_lt = 1
             elif old_new_acion.next_key() == "verb":
+                assert actions.active is Action2
                 complete_if_lt = -1
             elif old_new_acion.next_key() == "noun":
+                assert actions.active is Action3
                 complete_if_lt = 10
             else:
                 raise RuntimeError
-            assert np.all(action_mask == np.array([*actions.mask(self.action_nvec.a)]))
-            assert np.all(partial_action == np.array([*actions.partial_actions()]))
+            action_mask = np.array([*actions.mask(self.action_nvec.a)])
+            partial_action = np.array([*actions.partial_actions()])
             obs = Obs(
                 action_mask=action_mask,
                 can_open_gate=actions.can_reset(),
