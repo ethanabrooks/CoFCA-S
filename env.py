@@ -15,9 +15,6 @@ from data_types import (
     Action,
     AActions,
     NonAAction,
-    Action3,
-    Action2,
-    Action1,
     PartialAction,
 )
 from data_types import (
@@ -49,7 +46,7 @@ ObjectMap = Dict[Coord, str]
 
 Obs = namedtuple(
     "Obs",
-    "action_mask active can_open_gate complete_if_lt inventory lines mask obs partial_action subtask_complete truthy",
+    "action_mask active can_open_gate inventory lines mask obs partial_action subtask_complete truthy",
 )
 assert tuple(Obs._fields) == tuple(sorted(Obs._fields))
 
@@ -270,7 +267,6 @@ class Env(gym.Env):
                 can_open_gate=spaces.MultiBinary(max_a_action),
                 partial_action=partial_action_space,
                 active=spaces.Discrete(self.n_lines + 1),
-                complete_if_lt=spaces.Discrete(max_a_action),
                 inventory=spaces.MultiBinary(len(self.items)),
                 lines=lines_space,
                 mask=mask_space,
@@ -896,25 +892,15 @@ class Env(gym.Env):
             truthy += [3] * (self.n_lines - len(truthy))
 
             inventory = self.inventory_representation(state)
-            if actions.active is Action1:
-                complete_if_lt = 1
-            elif actions.active is Action2:
-                complete_if_lt = -1
-            elif actions.active is Action3:
-                complete_if_lt = 10
-            else:
-                raise RuntimeError
-            action_mask = np.array([*actions.mask(self.action_nvec.a)])
             partial_action = np.array([*actions.partial_actions()])
             assert issubclass(actions.active, PartialAction)
             obs = Obs(
-                action_mask=action_mask,
+                action_mask=np.array([*actions.mask(self.action_nvec.a)]),
+                active=self.n_lines if state.ptr is None else state.ptr,
                 can_open_gate=[*actions.active.complete(self.action_nvec.a)],
-                complete_if_lt=complete_if_lt,
-                obs=[[obs]],
                 lines=preprocessed_lines,
                 mask=mask,
-                active=self.n_lines if state.ptr is None else state.ptr,
+                obs=[[obs]],
                 inventory=inventory,
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,

@@ -99,14 +99,6 @@ class PartialAction(typing.Generic[X]):
         mask = np.zeros(size)
         mask[np.arange(size) < cls.size_a()] = 1
         return mask
-        # for i in range(size):
-        # if i < cls.size_a():
-        # if PartialAction.get_gate_value(i):  # if i opens gate
-        # yield cls.parse(i).reset()  # only allow values that cause a reset
-        # else:
-        # yield True
-        # else:
-        # yield 0
 
     @classmethod
     def complete(cls, size) -> Generator[bool, None, None]:
