@@ -3,7 +3,7 @@ import os
 import typing
 from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, astuple, fields
+from dataclasses import dataclass, astuple, fields, replace
 from enum import unique, Enum, auto, EnumMeta
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
@@ -200,6 +200,10 @@ class Action(metaclass=ActionType):
     def reset(self) -> bool:
         raise NotImplementedError
 
+    @abstractmethod
+    def to_ints(self) -> Generator[int, None, None]:
+        yield from map(int, astuple(self))
+
     def next(self) -> ActionType:
         if self.reset():
             return Action1
@@ -245,6 +249,16 @@ class Action2(Action):
 
     def next_if_not_reset(self) -> ActionType:
         return Action3
+
+    def to_ints(self) -> Generator[int, None, None]:
+        if isinstance(self.worker, WorkerID):
+            yield self.worker.value
+        else:
+            yield int(self.worker)
+        if isinstance(self.target, Target):
+            yield Targets.index(self.target)
+        else:
+            yield int(self.target)
 
 
 @dataclass(frozen=True)
@@ -299,7 +313,7 @@ class CompoundAction:
         actions = [*self.actions()][:index]
         for cls, action in itertools.zip_longest(self.classes(), actions):
             if isinstance(action, Action):
-                yield from [1 + x for x in astuple(action)]
+                yield from action.to_ints()
             elif issubclass(cls, Action):
                 assert action is None
                 yield from [0 for _ in astuple(cls.num_values())]
@@ -313,10 +327,13 @@ class CompoundAction:
         assert issubclass(self.active, Action)
         action = self.active.parse(action.a)
         index = [*self.classes()].index(self.active)
-        filled_in = [*self.actions()][:index]
-        assert None not in filled_in
+        new_keys = (f.name for f in fields(self))
+        new_actions = [*[*self.actions()][:index], action]
+        assert None not in new_actions
+        kwargs = dict(itertools.zip_longest(new_keys, new_actions))
+        kwargs.update(active=action.next(), ptr=ptr)
         # noinspection PyTypeChecker
-        return CompoundAction(*filled_in, action, active=action.next(), ptr=ptr)
+        return replace(self, **kwargs)
 
     def can_open_gate(self, size):
         assert issubclass(self.active, Action)

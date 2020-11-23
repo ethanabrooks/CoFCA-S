@@ -344,6 +344,7 @@ class Recurrence(nn.Module):
 
             a_logits = self.actor(z1)
             a_probs = F.softmax(a_logits, dim=-1)
+            self.print("action_mask", state.action_mask[t])
             a_dist = FixedCategorical(probs=a_probs * state.action_mask[t])
             self.sample_new(A[t], a_dist)
 
