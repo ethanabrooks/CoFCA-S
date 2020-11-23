@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Tuple
 
 import env
 import keyboard_control
@@ -15,9 +14,9 @@ from data_types import (
     BuildOrder,
     Coord,
     WorkerAction,
-    Movement,
     Targets,
     WORLD_SIZE,
+    Resource,
 )
 
 
@@ -32,10 +31,12 @@ class DebugAction(Action):
 @dataclass(frozen=True)
 class DebugAction1(DebugAction):
     building: X
+    i: X
+    j: X
 
     @classmethod
     def num_values(cls) -> "DebugAction1":
-        return cls(len(Building))
+        return cls(len(Building), i=WORLD_SIZE, j=WORLD_SIZE)
 
     def reset(self):
         return True
@@ -45,7 +46,9 @@ class DebugAction1(DebugAction):
 
     @classmethod
     def parse(cls, a) -> "Action":
-        return cls(Building(1 + a))
+        parsed = super().parse(a)
+        assert isinstance(parsed, DebugAction1)
+        return cls(building=Building(1 + parsed.building), i=parsed.i, j=parsed.j)
 
 
 @dataclass(frozen=True)
@@ -71,7 +74,9 @@ class DebugCompoundAction(CompoundAction):
         return WorkerID(1)
 
     def assignment(self) -> Assignment:
-        return DebugBuildOrder(self.action1.building, location=(0, 0))
+        return DebugBuildOrder(
+            self.action1.building, location=(self.action1.i, self.action1.j)
+        )
 
     def is_op(self):
         return True
@@ -79,8 +84,23 @@ class DebugCompoundAction(CompoundAction):
 
 class Env(env.Env):
     @staticmethod
-    def building_allowed(*args, **kwargs):
-        return True
+    def building_allowed(
+        building,
+        building_positions,
+        insufficient_resources,
+        positions,
+        assignment_location,
+    ) -> bool:
+        if assignment_location in building_positions:
+            return False
+        if building is Building.ASSIMILATOR:
+            return assignment_location == positions[Resource.GAS]
+        else:
+            return assignment_location not in (
+                *building_positions,
+                positions[Resource.GAS],
+                positions[Resource.MINERALS],
+            )
 
     @staticmethod
     def compound_action(*args, **kwargs) -> DebugCompoundAction:
@@ -93,9 +113,10 @@ class Env(env.Env):
     def main(self):
         def action_fn(string: str):
             try:
-                return self.compound_action(
-                    DebugAction1(building=Targets[int(string)]),
-                )
+                b, i, j = map(int, string.split())
+                action1 = DebugAction1(building=Targets[b], i=i, j=j)
+                act = self.compound_action(action1)
+                return act
             except (ValueError, TypeError) as e:
                 print(e)
 

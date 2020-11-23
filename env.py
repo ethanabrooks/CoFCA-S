@@ -680,6 +680,7 @@ class Env(gym.Env):
                     positions=positions,
                     nexus_positions=nexus_positions,
                 )
+
                 if isinstance(worker_action, Movement):
                     new_position = tuple(
                         np.array(worker_position) + np.array(astuple(worker_action))
@@ -698,10 +699,10 @@ class Env(gym.Env):
                         building_positions,
                         insufficient_resources,
                         positions,
-                        worker_position,
+                        assignment.location,
                     ):
                         self.update_buildings(
-                            building, building_positions, worker_position
+                            building, building_positions, assignment.location
                         )
                         resources -= Costs[building]
                 else:
@@ -722,17 +723,18 @@ class Env(gym.Env):
         building_positions,
         insufficient_resources,
         positions,
-        worker_position,
-    ):
-        if not insufficient_resources and worker_position not in building_positions:
-            if building is Building.ASSIMILATOR:
-                return worker_position == positions[Resource.GAS]
-            else:
-                return worker_position not in (
-                    *building_positions,
-                    positions[Resource.GAS],
-                    positions[Resource.MINERALS],
-                )
+        assignment_location,
+    ) -> bool:
+        if insufficient_resources or assignment_location in building_positions:
+            return False
+        if building is Building.ASSIMILATOR:
+            return assignment_location == positions[Resource.GAS]
+        else:
+            return assignment_location not in (
+                *building_positions,
+                positions[Resource.GAS],
+                positions[Resource.MINERALS],
+            )
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):
