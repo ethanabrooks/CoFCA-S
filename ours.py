@@ -139,6 +139,21 @@ class Recurrence(nn.Module):
         self.kernel_net = nn.Linear(
             m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
         )
+        conv_out = conv_output_dimension(h, self.padding, self.kernel_size, self.stride)
+        self.conv = nn.Sequential(
+            nn.Conv2d(
+                d,
+                self.conv_hidden_size,
+                kernel_size=self.kernel_size,
+                stride=self.stride,
+                padding=self.padding,
+            ),
+            nn.ReLU(),
+            nn.Flatten(),
+            init_(
+                nn.Linear(conv_out ** 2 * self.conv_hidden_size, self.conv_hidden_size)
+            ),
+        )
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
         self.state_sizes = RecurrentState(
@@ -319,22 +334,7 @@ class Recurrence(nn.Module):
                 self.kernel_size,
             )
 
-            obs = state.obs[t]
-
-            h1 = torch.cat(
-                [
-                    F.conv2d(
-                        input=o.unsqueeze(0),
-                        weight=k,
-                        bias=self.conv_bias,
-                        stride=self.stride,
-                        padding=self.padding,
-                    )
-                    for o, k in zip(obs.unbind(0), conv_kernel.unbind(0))
-                ],
-                dim=0,
-            ).relu()
-            h1 = h1.sum(-1).sum(-1)
+            h1 = self.conv(state.obs[t])
             resources = self.embed_resources(state.resources[t])
             embedded_lower = self.embed_lower(
                 state.partial_action[t].long()
