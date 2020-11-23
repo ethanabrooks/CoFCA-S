@@ -16,6 +16,8 @@ from utils import RESET
 
 Coord = Tuple[int, int]
 
+WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 4))
+
 
 @unique
 class Unit(Enum):
@@ -243,9 +245,6 @@ class Action2(Action):
 
     def next_if_not_reset(self) -> ActionType:
         return Action3
-
-
-WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 4))
 
 
 @dataclass(frozen=True)
