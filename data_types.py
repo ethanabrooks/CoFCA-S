@@ -2,8 +2,8 @@ import itertools
 import typing
 from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, asdict, astuple, replace, fields
-from enum import unique, Enum, auto
+from dataclasses import dataclass, astuple, fields
+from enum import unique, Enum, auto, EnumMeta
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
 import numpy as np
@@ -22,7 +22,39 @@ class Unit(Enum):
 
 
 @unique
-class Building(Enum):
+class WorkerID(Enum):
+    A = auto()
+    B = auto()
+    C = auto()
+
+
+class Assignment:
+    @abstractmethod
+    def action(
+        self,
+        current_position: Coord,
+        positions: Dict[Union["Resource", WorkerID], Coord],
+        nexus_positions: List[Coord],
+    ) -> "WorkerAction":
+        raise NotImplementedError
+
+
+class Target:
+    @abstractmethod
+    def assignment(self, coord: Coord) -> "Assignment":
+        raise NotImplementedError
+
+    @classmethod
+    def index(cls, item: "Target") -> int:
+        return [*cls].index(item)
+
+
+class WorkerAction:
+    pass
+
+
+@unique
+class Building(Target, WorkerAction, Enum):
     PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
@@ -38,25 +70,76 @@ class Building(Enum):
     ROBOTICS_FACILITY = auto()
     ROBOTICS_BAY = auto()
 
-
-@dataclass(eq=True, frozen=True)
-class Movement:
-    x: int
-    y: int
+    def assignment(self, coord: Coord) -> "Assignment":
+        return BuildOrder(building=self, location=coord)
 
 
 @unique
-class Resource(Enum):
+class Resource(Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
 
+    def assignment(self, coord: Coord) -> "Assignment":
+        return self
 
-@unique
-class WorkerID(Enum):
-    A = auto()
-    B = auto()
-    C = auto()
+    def action(
+        self,
+        current_position: Coord,
+        positions: Dict[Union["Resource", WorkerID], Coord],
+        nexus_positions: List[Coord],
+    ) -> "Movement":
+        target_position = positions[self]
+        if current_position == target_position:
+            nearest = int(
+                np.argmin(
+                    np.max(
+                        np.abs(
+                            np.expand_dims(np.array(current_position), 0)
+                            - np.stack(nexus_positions),
+                        ),
+                        axis=-1,
+                    )
+                )
+            )
+            target_position = nexus_positions[nearest]
+        return Movement.from_(current_position, to=target_position)
 
+
+Targets = [*Resource, *Building]
+
+
+@dataclass(frozen=True)
+class BuildOrder(Assignment):
+    building: Building
+    location: Tuple[int, int] = None
+
+    def action(self, current_position: Coord, *args, **kwargs) -> "WorkerAction":
+        if current_position == self.location:
+            return self.building
+        return Movement.from_(current_position, to=self.location)
+
+
+Assignment = Union[BuildOrder, Resource]
+
+
+class MovementType(type):
+    def __iter__(self):
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                yield Movement(i, j)
+
+
+@dataclass(eq=True, frozen=True)
+class Movement(WorkerAction, metaclass=MovementType):
+    x: int
+    y: int
+
+    @classmethod
+    def from_(cls, origin, to):
+        return cls(*np.clip(np.array(to) - np.array(origin), -1, 1))
+
+
+WorkerActions = [*Building, *Movement]
 
 O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
 
@@ -73,16 +156,17 @@ class Obs(typing.Generic[O]):
     workers: O
 
 
-ActionTargets = list(Resource) + list(Building)
-
-
 X = typing.TypeVar("X")
 
 
+class ActionType(type):
+    pass
+
+
 @dataclass(frozen=True)
-class PartialAction(typing.Generic[X]):
+class Action(metaclass=ActionType):
     @classmethod
-    def parse(cls, a) -> "PartialAction":
+    def parse(cls, a) -> "Action":
         assert 0 <= a < cls.size_a()
         # noinspection PyArgumentList
         return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
@@ -97,7 +181,7 @@ class PartialAction(typing.Generic[X]):
             yield i < cls.size_a()
 
     @classmethod
-    def complete(cls, size) -> Generator[bool, None, None]:
+    def can_open_gate(cls, size) -> Generator[bool, None, None]:
         for i in range(size):
             try:
                 yield cls.parse(i).reset()
@@ -106,25 +190,25 @@ class PartialAction(typing.Generic[X]):
 
     @classmethod
     @abstractmethod
-    def num_values(cls) -> "PartialAction":
+    def num_values(cls) -> "Action":
         raise NotImplementedError
 
     @abstractmethod
     def reset(self) -> bool:
         raise NotImplementedError
 
-    def next(self) -> type:
+    def next(self) -> ActionType:
         if self.reset():
             return Action1
         return self.next_if_not_reset()
 
     @abstractmethod
-    def next_if_not_reset(self) -> type:
+    def next_if_not_reset(self) -> ActionType:
         raise NotImplementedError
 
 
 @dataclass(frozen=True)
-class Action1(PartialAction):
+class Action1(Action):
     is_op: X
 
     @classmethod
@@ -134,38 +218,48 @@ class Action1(PartialAction):
     def reset(self):
         return not self.is_op
 
-    def next_if_not_reset(self) -> type:
+    def next_if_not_reset(self) -> ActionType:
         return Action2
 
 
 @dataclass(frozen=True)
-class Action2(PartialAction):
-    verb: X
+class Action2(Action):
+    worker: X
+    target: X
+
+    @classmethod
+    def parse(cls, a) -> "Action":
+        ints = super().parse(a)
+        assert isinstance(ints, cls)
+        return cls(worker=WorkerID(ints.worker + 1), target=Targets[ints.target])
 
     @classmethod
     def num_values(cls) -> "Action2":
-        return cls(3)
+        return cls(worker=len(WorkerID), target=len(Targets))
 
     def reset(self):
-        return False
+        return isinstance(Targets[self.target], Resource)
 
-    def next_if_not_reset(self) -> type:
+    def next_if_not_reset(self) -> ActionType:
         return Action3
 
 
+WORLD_SIZE = 0
+
+
 @dataclass(frozen=True)
-class Action3(PartialAction):
-    noun: X
-    # gate: X
+class Action3(Action):
+    i: X
+    j: X
 
     @classmethod
     def num_values(cls) -> "Action3":
-        return cls(noun=3)  # , gate=2)
+        return cls(i=WORLD_SIZE, j=WORLD_SIZE)
 
     def reset(self):
         return True
 
-    def next_if_not_reset(self) -> type:
+    def next_if_not_reset(self) -> ActionType:
         raise NotImplementedError
 
 
@@ -181,168 +275,66 @@ class RawAction(RecurringActions):
 
 
 @dataclass(frozen=True)
-class VariableActions:
+class CompoundAction:
     action1: Action1 = None
     action2: Action2 = None
     action3: Action3 = None
-    active: type = Action1
+    ptr: int = 0
+    active: ActionType = Action1
 
     @classmethod
     def classes(cls):
         for f in fields(cls):
-            if issubclass(f.type, PartialAction):
+            if issubclass(f.type, Action):
                 yield f.type
 
     def actions(self):
         for f in fields(self):
-            if issubclass(f.type, PartialAction):
+            if issubclass(f.type, Action):
                 yield getattr(self, f.name)
 
     def partial_actions(self):
         index = [*self.classes()].index(self.active)
         actions = [*self.actions()][:index]
         for cls, action in itertools.zip_longest(self.classes(), actions):
-            if isinstance(action, PartialAction):
+            if isinstance(action, Action):
                 yield from [1 + x for x in astuple(action)]
-            elif issubclass(cls, PartialAction):
+            elif issubclass(cls, Action):
                 assert action is None
                 yield from [0 for _ in astuple(cls.num_values())]
             else:
                 raise RuntimeError
 
-    def update(self, a: int):
-        assert issubclass(self.active, PartialAction)
-        action = self.active.parse(a)
+    def update(self, action: Union[RawAction, "CompoundAction"]):
+        if isinstance(action, CompoundAction):
+            return action
+        ptr = action.ptr
+        assert issubclass(self.active, Action)
+        action = self.active.parse(action.a)
         index = [*self.classes()].index(self.active)
         filled_in = [*self.actions()][:index]
         assert None not in filled_in
-        return VariableActions(*filled_in, action, active=action.next())
+        # noinspection PyTypeChecker
+        return CompoundAction(*filled_in, action, active=action.next(), ptr=ptr)
+
+    def can_open_gate(self, size):
+        assert issubclass(self.active, Action)
+        return self.active.can_open_gate(size)
 
     def mask(self, size):
-        assert issubclass(self.active, PartialAction)
+        assert issubclass(self.active, Action)
         return self.active.mask(size)
 
-    def no_op(self):
-        return None in astuple(self)
+    def is_op(self):
+        return None not in astuple(self)
 
+    def worker(self) -> WorkerID:
+        assert self.action2.worker is not None
+        return self.action2.worker
 
-@dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
-    delta: X
-    dg: X
-    ptr: X
-
-
-@dataclass(frozen=True)
-class RawAction(NonAAction):
-    a: X
-
-
-@dataclass(frozen=True)
-class AActions(typing.Generic[X]):
-    is_op: X  # 2
-    worker_target: X  # 3 * 16
-    ij: X  # 64
-
-    def thresholds(self):
-        thresholds = AActions(*(-1 for _ in AActions.__annotations__))
-        thresholds = replace(
-            thresholds, is_op=0, worker_target=len(WorkerID) * len(Resource)
-        )
-        return thresholds
-
-    def unravel_worker_target(self):
-        return np.unravel_index(
-            int(self.worker_target), (len(WorkerID), len(ActionTargets))
-        )
-
-    def targeted(self):
-        worker, target = self.unravel_worker_target()
-        return ActionTargets[int(target)]
-
-    def no_op(self):
-        return not self.is_op or any(x < 0 for x in astuple(self))
-
-
-@dataclass(frozen=True)
-class NonAAction(typing.Generic[X]):
-    delta: X
-    dg: X
-    ptr: X
-
-
-@dataclass(frozen=True)
-class RawAction(NonAAction):
-    a: X
-
-
-@dataclass(frozen=True)
-class Action(AActions, NonAAction):
-    def a_actions(self):
-        return AActions(
-            **{k: v for k, v in asdict(self).items() if k in AActions.__annotations__}
-        )
-
-    def parse(self, world_shape: Coord):
-        if not self.is_op or any(x < 0 for x in astuple(self)):
-            return None
-        action_target = self.targeted()
-        if action_target in Building:
-            i, j = np.unravel_index(int(self.ij), world_shape)
-            assignment = BuildOrder(building=action_target, location=(i, j))
-        elif action_target in Resource:
-            assignment = action_target
-        else:
-            raise RuntimeError
-        worker, target = self.unravel_worker_target()
-        return Command(WorkerID(worker + 1), assignment)
-
-
-@dataclass(frozen=True)
-class BuildOrder:
-    building: Building
-    location: Tuple[int, int] = None
-
-
-Assignment = Union[BuildOrder, Resource]
-
-
-@dataclass
-class Worker:
-    assignment: Assignment
-    next_action: Union[Movement, Building] = None
-
-    def get_action(
-        self,
-        position: Coord,
-        positions: Dict[Union[Resource, WorkerID], Coord],
-        nexus_positions: List[Coord],
-    ):
-        if isinstance(self.assignment, Resource):
-            objective = positions[self.assignment]
-            if position == objective:
-                nearest = int(
-                    np.argmin(
-                        np.max(
-                            np.abs(
-                                np.expand_dims(np.array(position), 0)
-                                - np.stack(nexus_positions),
-                            ),
-                            axis=-1,
-                        )
-                    )
-                )
-                goto = nexus_positions[nearest]
-            else:
-                goto = objective
-        elif isinstance(self.assignment, BuildOrder):
-            goto = self.assignment.location
-        else:
-            raise RuntimeError
-        if goto == position:
-            if isinstance(self.assignment, BuildOrder):
-                return self.assignment.building
-        return Movement(*np.clip(np.array(goto) - np.array(position), -1, 1))
+    def assignment(self) -> Assignment:
+        assert isinstance(self.action2.target, Target)
+        return self.action2.target.assignment(astuple(self.action3))
 
 
 @dataclass(frozen=True)
@@ -459,21 +451,15 @@ def flatten(tree: Tree) -> Generator[Building, None, None]:
 assert set(flatten(build_tree)) == set(Building)
 
 
-def worker_actions():
-    yield from Building
-    for i in range(-1, 2):
-        for j in range(-1, 2):
-            yield Movement(i, j)
-
-
 @dataclass
 class State:
+    action: CompoundAction
     building_positions: Dict[Coord, Building]
+    next_action: Dict[WorkerID, WorkerAction]
+    pointer: int
     positions: Dict[Union[Resource, WorkerID], Coord]
     resources: typing.Counter[Resource]
-    workers: Dict[WorkerID, Worker]
     success: bool
-    pointer: int
 
 
 WorldObject = Union[Building, Resource, WorkerID]

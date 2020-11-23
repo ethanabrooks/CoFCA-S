@@ -18,29 +18,30 @@ from treelib import Tree
 
 import keyboard_control
 from data_types import (
-    Command,
     Obs,
     Resource,
     Building,
     Coord,
     Costs,
     costs,
-    Action,
     WorldObject,
     WorldObjects,
-    worker_actions,
     Movement,
     WorkerID,
-    Worker,
     Resources,
     State,
     Line,
     Symbols,
     BuildOrder,
-    ActionTargets,
-    PartialAction,
-    VariableActions,
+    CompoundAction,
     RawAction,
+    Assignment,
+    Action1,
+    Action2,
+    Targets,
+    Action3,
+    WorkerAction,
+    WorkerActions,
 )
 from utils import RESET
 
@@ -56,6 +57,7 @@ def delete_nth(d, n):
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
+    debug_env: bool
     destroy_building_prob: float
     eval_steps: int
     failure_buffer_load_path: Path
@@ -64,7 +66,6 @@ class Env(gym.Env):
     min_lines: int
     num_initial_buildings: int
     rank: int
-    world_size: int
     random_seed: int
     tgt_success_rate: int
     alpha: float = 0.05
@@ -73,10 +74,11 @@ class Env(gym.Env):
     iterator = None
     render_thunk = None
     success_avg = 0.5
+    world_size: int = None
 
     def __post_init__(self):
         super().__init__()
-        self.worker_actions = [*worker_actions()]
+        self.world_size = WORLD_SIZE
 
         self.random, _ = seeding.np_random(self.random_seed)
         self.failure_buffer = deque(maxlen=self.failure_buffer_size)
@@ -88,13 +90,12 @@ class Env(gym.Env):
                     f"from {self.failure_buffer_load_path}"
                 )
         self.non_failure_random = self.random.get_state()
-        max_a_action = max([c.size_a() for c in VariableActions.classes()])
+        self.a_size = max_a_action = max([c.size_a() for c in CompoundAction.classes()])
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 astuple(
                     RawAction(
                         delta=2 * self.max_lines,
-                        dg=2,
                         a=max_a_action,
                         ptr=self.max_lines,
                     )
@@ -122,12 +123,10 @@ class Env(gym.Env):
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
         resources_space = spaces.MultiDiscrete([self.max.minerals, self.max.gas])
-        worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(self.worker_actions))
+        worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
-                1 + a
-                for c in VariableActions.classes()
-                for a in astuple(c.num_values())
+                1 + a for c in CompoundAction.classes() for a in astuple(c.num_values())
             ]  # [:-1]
         )
 
@@ -205,11 +204,39 @@ class Env(gym.Env):
                                 *remainder,
                             ]
 
+        def random_instructions_under(
+            n: int, include_assimilator: bool = True
+        ) -> Generator[List[Line], None, None]:
+            if n < 0:
+                raise RuntimeError
+            if n == 0:
+                return
+            building = self.random.choice(
+                [
+                    *filter(
+                        lambda b: b is not Building.NEXUS
+                        and (include_assimilator or b is not Building.ASSIMILATOR),
+                        Building,
+                    )
+                ]
+            )
+
+            inst = *first, last = [*instructions_for(building)]
+            assert last is not Building.NEXUS
+            if len(inst) <= n:
+                for i in first:
+                    yield Line(False, i)
+                yield Line(True, last)
+                yield from random_instructions_under(
+                    n=n - len(inst),
+                    include_assimilator=include_assimilator
+                    and building is not Building.ASSIMILATOR,
+                )
+            else:
+                yield from random_instructions_under(n, include_assimilator)
+
         n_lines = self.random.randint(self.min_lines, self.max_lines + 1)
-        potential_instructions = [*instructions_under(n_lines)]
-        instructions = potential_instructions[
-            self.random.choice(len(potential_instructions))
-        ]
+        instructions = [*random_instructions_under(n_lines)]
         required = [l.building for l in instructions if l.required]
         assert required.count(Building.ASSIMILATOR) <= 1
         return instructions
@@ -297,6 +324,7 @@ class Env(gym.Env):
                     self.failure_buffer.append(initial_random)
 
             if t:
+                # noinspection PyAttributeOutsideInit
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
@@ -331,45 +359,27 @@ class Env(gym.Env):
             info = {}
 
     def main(self):
-        def action_gen():
-            string = yield
-            prev_action = Action(0, 0, 0, 0, 0, 0)
-            while True:
-                action = None
-                while action is None:
-                    if string == "":
-                        action = prev_action
-                    else:
-                        try:
-                            *args, target = map(int, string.split())
-                            try:
-                                i, j = args
-                                worker = 0
-                            except ValueError:
-                                if ActionTargets[target] is Building:
-                                    print("Must specify i/j for buildings.")
-                                    continue
-                                i, j = 0, 0
-                                worker = 1
-                            ij = int(np.ravel_multi_index((i, j), self.world_shape))
-                            action = Action(
-                                is_op=1,
-                                target=target,
-                                worker=worker,
-                                ij=ij,
-                                delta=0,
-                                dg=0,
-                            )
-                            prev_action = action
-                        except (ValueError, TypeError) as e:
-                            print(e)
-                string = yield np.array(astuple(action))
-
-        action_it = action_gen()
-        next(action_it)
-
-        def action_fn(string):
-            return action_it.send(string)
+        def action_fn(string: str):
+            try:
+                *args, target = map(int, string.split())
+                try:
+                    i, j = args
+                    worker = 0
+                except ValueError:
+                    if Targets[target] is Building:
+                        print("Must specify i/j for buildings.")
+                        return
+                    i, j = 0, 0
+                    worker = 1
+                worker = WorkerID(worker + 1)
+                target = Targets[target]
+                return CompoundAction(
+                    Action1(is_op=True),
+                    Action2(worker, target),
+                    Action3(i, j),
+                )
+            except (ValueError, TypeError) as e:
+                print(e)
 
         keyboard_control.run(self, action_fn)
 
@@ -397,7 +407,7 @@ class Env(gym.Env):
                         i,
                         "-" if i == state.pointer else " ",
                         "*" if line.required else " ",
-                        ActionTargets.index(line.building),
+                        Targets.index(line.building),
                         str(line.building),
                         costs[line.building],
                     )
@@ -420,11 +430,11 @@ class Env(gym.Env):
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             workers = np.array(
-                [
-                    self.worker_actions.index(w.next_action)
-                    for w in state.workers.values()
-                ]
+                [WorkerActions.index(a) for a in state.next_action.values()]
             )
+            action_mask = np.array([*state.action.mask(self.a_size)])
+            can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
+            partial_action = np.array([*state.action.partial_actions()])
             obs = OrderedDict(
                 asdict(
                     Obs(
@@ -433,6 +443,9 @@ class Env(gym.Env):
                         workers=workers,
                         lines=preprocessed,
                         mask=mask,
+                        action_mask=action_mask,
+                        can_open_gate=can_open_gate,
+                        partial_action=partial_action,
                     )
                 )
             )
@@ -527,7 +540,9 @@ class Env(gym.Env):
     def seed(self, seed=None):
         assert self.random_seed == seed
 
-    def srti_generator(self):
+    def srti_generator(
+        self,
+    ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
         dependencies = self.build_dependencies()
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
@@ -539,7 +554,7 @@ class Env(gym.Env):
         next(reward_iterator)
         next(done_iterator)
         next(info_iterator)
-        action = None
+        action = CompoundAction()
         state, render_state = next(state_iterator)
 
         def render():
@@ -554,8 +569,6 @@ class Env(gym.Env):
             render_state()
             print("Action:", end=" ")
             print(action)
-            if action is not None:
-                print(action.parse(self.world_shape))
             render_s()
             print(RESET)
 
@@ -572,13 +585,14 @@ class Env(gym.Env):
 
             self.render_thunk = render
 
-            action: Optional[Action]
             # noinspection PyTypeChecker
-            action = yield s, r, t, i
-            if not action.no_op():
+            a = yield s, r, t, i
+            action = action.update(a)
+
+            if action.is_op():
                 state, render_state = state_iterator.send(action)
 
-    def state_generator(self, *lines: Line) -> Generator[State, Action, None]:
+    def state_generator(self, *lines: Line) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
         building_positions: Dict[Coord, Building] = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
@@ -586,14 +600,16 @@ class Env(gym.Env):
         positions: Dict[Union[Resource, WorkerID], Coord] = dict(
             [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
         )
-        workers: Dict[WorkerID, Worker] = {}
+        assignments: Dict[WorkerID, Assignment] = {}
+        next_actions: Dict[WorkerID, WorkerAction] = {}
         for worker_id in WorkerID:
-            workers[worker_id] = Worker(assignment=Resource.MINERALS)
+            assignments[worker_id] = Resource.MINERALS
 
         required = Counter(l.building for l in lines if l.required)
         remaining: Dict[Resource, int] = self.max.as_dict()
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
+        action = CompoundAction()
         while True:
             destroyed_buildings = [
                 (c, b)
@@ -610,11 +626,12 @@ class Env(gym.Env):
 
             state = State(
                 building_positions=building_positions,
+                next_action=next_actions,
                 positions=positions,
                 resources=resources,
-                workers=workers,
                 success=success,
                 pointer=ptr,
+                action=action,
             )
 
             def render():
@@ -630,30 +647,28 @@ class Env(gym.Env):
                 p for p, b in building_positions.items() if b is Building.NEXUS
             ]
             assert nexus_positions
-            for worker_id, worker in workers.items():
-                worker.next_action = worker.get_action(
-                    position=positions[worker_id],
-                    positions=positions,
-                    nexus_positions=nexus_positions,
+            for worker_id, assignment in assignments.items():
+                next_actions[worker_id] = assignment.action(
+                    positions[worker_id],
+                    positions,
+                    [p for p, b in building_positions.items() if b is Building.NEXUS],
                 )
 
-            action: Action
+            action: CompoundAction
             # noinspection PyTypeChecker
             action = yield state, render
-            ptr += action.delta
-            action = action.parse(tuple(self.world_shape))
+            ptr = action.ptr
 
-            if isinstance(action, Command):
-                workers[action.worker].assignment = action.assignment
+            assignments[action.worker()] = action.assignment()
 
             worker_id: WorkerID
-            worker: Worker
-            for worker_id, worker in sorted(
-                workers.items(), key=lambda w: isinstance(w[1].assignment, BuildOrder)
+            assignment: Assignment
+            for worker_id, assignment in sorted(
+                assignments.items(), key=lambda w: isinstance(w[1], BuildOrder)
             ):  # collect resources first.
                 worker_position = positions[worker_id]
-                worker_action = worker.get_action(
-                    position=worker_position,
+                worker_action = assignment.action(
+                    current_position=worker_position,
                     positions=positions,
                     nexus_positions=nexus_positions,
                 )
@@ -705,14 +720,18 @@ class Env(gym.Env):
                     positions[Resource.MINERALS],
                 )
 
-    def step(self, action: np.ndarray):
-        return self.iterator.send(Action(*action))
+    def step(self, action: Union[np.ndarray, CompoundAction]):
+        if isinstance(action, np.ndarray):
+            action = RawAction(*action)
+        return self.iterator.send(action)
 
     def time_limit(self, lines):
         return len(lines) * self.time_per_line
 
 
-def main(**kwargs):
+def main(world_size: int, **kwargs):
+    global WORLD_SIZE
+    WORLD_SIZE = world_size
     Env(rank=0, eval_steps=500, **kwargs).main()
 
 
