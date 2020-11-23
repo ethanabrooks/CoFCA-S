@@ -93,14 +93,14 @@ class Env(env.Env):
     ) -> bool:
         if assignment_location in building_positions:
             return False
-        if building is Building.ASSIMILATOR:
-            return assignment_location == positions[Resource.GAS]
-        else:
-            return assignment_location not in (
-                *building_positions,
-                positions[Resource.GAS],
-                positions[Resource.MINERALS],
-            )
+        # if building is Building.ASSIMILATOR:
+        #     return assignment_location == positions[Resource.GAS]
+        # else:
+        return assignment_location not in (
+            *building_positions,
+            positions[Resource.GAS],
+            positions[Resource.MINERALS],
+        )
 
     @staticmethod
     def compound_action(*args, **kwargs) -> DebugCompoundAction:
