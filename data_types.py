@@ -3,7 +3,7 @@ import os
 import typing
 from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, astuple, fields
+from dataclasses import dataclass, astuple, fields, replace
 from enum import unique, Enum, auto, EnumMeta
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
@@ -313,10 +313,12 @@ class CompoundAction:
         assert issubclass(self.active, Action)
         action = self.active.parse(action.a)
         index = [*self.classes()].index(self.active)
-        filled_in = [*self.actions()][:index]
-        assert None not in filled_in
+        new_keys = (f.name for f in fields(self))
+        new_actions = (*[*self.actions()][:index], action)
+        kwargs = dict(zip(new_keys, new_actions))
+        assert None not in kwargs.values()
         # noinspection PyTypeChecker
-        return CompoundAction(*filled_in, action, active=action.next(), ptr=ptr)
+        return replace(self, **kwargs, active=action.next(), ptr=ptr)
 
     def can_open_gate(self, size):
         assert issubclass(self.active, Action)

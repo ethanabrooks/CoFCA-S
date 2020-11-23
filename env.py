@@ -1,4 +1,3 @@
-import os
 import pickle
 import typing
 from collections import Counter, deque, OrderedDict
@@ -90,7 +89,9 @@ class Env(gym.Env):
                     f"from {self.failure_buffer_load_path}"
                 )
         self.non_failure_random = self.random.get_state()
-        self.a_size = max_a_action = max([c.size_a() for c in CompoundAction.classes()])
+        self.a_size = max_a_action = max(
+            [c.size_a() for c in self.compound_action().classes()]
+        )
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 astuple(
@@ -127,7 +128,9 @@ class Env(gym.Env):
         worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
-                1 + a for c in CompoundAction.classes() for a in astuple(c.num_values())
+                1 + a
+                for c in self.compound_action().classes()
+                for a in astuple(c.num_values())
             ]  # [:-1]
         )
 
@@ -373,7 +376,7 @@ class Env(gym.Env):
                     worker = 1
                 worker = WorkerID(worker + 1)
                 target = Targets[target]
-                return CompoundAction(
+                return self.compound_action(
                     Action1(is_op=True),
                     Action2(worker, target),
                     Action3(i, j),
@@ -554,7 +557,7 @@ class Env(gym.Env):
         next(reward_iterator)
         next(done_iterator)
         next(info_iterator)
-        action = CompoundAction()
+        action = self.compound_action()
         state, render_state = next(state_iterator)
 
         def render():
@@ -592,6 +595,10 @@ class Env(gym.Env):
             if action.is_op():
                 state, render_state = state_iterator.send(action)
 
+    @staticmethod
+    def compound_action(*args, **kwargs) -> CompoundAction:
+        return CompoundAction(*args, **kwargs)
+
     def state_generator(self, *lines: Line) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
         building_positions: Dict[Coord, Building] = dict(
@@ -609,7 +616,7 @@ class Env(gym.Env):
         remaining: Dict[Resource, int] = self.max.as_dict()
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
-        action = CompoundAction()
+        action = self.compound_action()
         while True:
             destroyed_buildings = [
                 (c, b)
