@@ -1,6 +1,8 @@
+import itertools
 import typing
+from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, asdict, astuple, replace
+from dataclasses import dataclass, asdict, astuple, replace, fields
 from enum import unique, Enum, auto
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
@@ -71,6 +73,171 @@ class Obs(typing.Generic[O]):
 X = typing.TypeVar("X")
 
 ActionTargets = list(Resource) + list(Building)
+
+
+@dataclass(frozen=True)
+class PartialAction(typing.Generic[X]):
+    @classmethod
+    def parse(cls, a) -> "PartialAction":
+        assert 0 <= a < cls.size_a()
+        # noinspection PyArgumentList
+        return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
+
+    @classmethod
+    def size_a(cls) -> int:
+        return int(np.prod(astuple(cls.num_values())))
+
+    @classmethod
+    def mask(cls, size):
+        for i in range(size):
+            yield i < cls.size_a()
+
+    @classmethod
+    def complete(cls, size) -> Generator[bool, None, None]:
+        for i in range(size):
+            try:
+                yield cls.parse(i).reset()
+            except AssertionError:
+                yield False
+
+    @classmethod
+    @abstractmethod
+    def num_values(cls) -> "PartialAction":
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset(self) -> bool:
+        raise NotImplementedError
+
+    def next(self) -> type:
+        if self.reset():
+            return Action1
+        return self.next_if_not_reset()
+
+    @abstractmethod
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Action1(PartialAction):
+    is_op: X
+
+    @classmethod
+    def num_values(cls) -> "Action1":
+        return cls(2)
+
+    def reset(self):
+        return not self.is_op
+
+    def next_if_not_reset(self) -> type:
+        return Action2
+
+
+@dataclass(frozen=True)
+class Action2(PartialAction):
+    verb: X
+
+    @classmethod
+    def num_values(cls) -> "Action2":
+        return cls(3)
+
+    def reset(self):
+        return False
+
+    def next_if_not_reset(self) -> type:
+        return Action3
+
+
+@dataclass(frozen=True)
+class Action3(PartialAction):
+    noun: X
+    # gate: X
+
+    @classmethod
+    def num_values(cls) -> "Action3":
+        return cls(noun=3)  # , gate=2)
+
+    def reset(self):
+        return True
+
+    def next_if_not_reset(self) -> type:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class RecurringActions(typing.Generic[X]):
+    delta: X
+    ptr: X
+
+
+@dataclass(frozen=True)
+class RawAction(RecurringActions):
+    a: X
+
+
+@dataclass(frozen=True)
+class VariableActions:
+    action1: Action1 = None
+    action2: Action2 = None
+    action3: Action3 = None
+    active: type = Action1
+
+    def verb(self):
+        return self.action2.verb
+
+    def noun(self):
+        return self.action3.noun
+
+    @classmethod
+    def classes(cls):
+        for f in fields(cls):
+            if issubclass(f.type, PartialAction):
+                yield f.type
+
+    def actions(self):
+        for f in fields(self):
+            if issubclass(f.type, PartialAction):
+                yield getattr(self, f.name)
+
+    def partial_actions(self):
+        index = [*self.classes()].index(self.active)
+        actions = [*self.actions()][:index]
+        for cls, action in itertools.zip_longest(self.classes(), actions):
+            if isinstance(action, PartialAction):
+                yield from [1 + x for x in astuple(action)]
+            elif issubclass(cls, PartialAction):
+                assert action is None
+                yield from [0 for _ in astuple(cls.num_values())]
+            else:
+                raise RuntimeError
+
+    def update(self, a: int):
+        assert issubclass(self.active, PartialAction)
+        action = self.active.parse(a)
+        index = [*self.classes()].index(self.active)
+        filled_in = [*self.actions()][:index]
+        assert None not in filled_in
+        return VariableActions(*filled_in, action, active=action.next())
+
+    def mask(self, size):
+        assert issubclass(self.active, PartialAction)
+        return self.active.mask(size)
+
+    def no_op(self):
+        return None in astuple(self)
+
+
+@dataclass(frozen=True)
+class NonAAction(typing.Generic[X]):
+    delta: X
+    dg: X
+    ptr: X
+
+
+@dataclass(frozen=True)
+class RawAction(NonAAction):
+    a: X
 
 
 @dataclass(frozen=True)
