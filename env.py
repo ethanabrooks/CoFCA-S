@@ -38,6 +38,9 @@ from data_types import (
     Symbols,
     BuildOrder,
     ActionTargets,
+    PartialAction,
+    VariableActions,
+    RawAction,
 )
 from utils import RESET
 
@@ -85,16 +88,14 @@ class Env(gym.Env):
                     f"from {self.failure_buffer_load_path}"
                 )
         self.non_failure_random = self.random.get_state()
-
+        max_a_action = max([c.size_a() for c in VariableActions.classes()])
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 astuple(
-                    Action(
+                    RawAction(
                         delta=2 * self.max_lines,
                         dg=2,
-                        is_op=2,
-                        worker_target=len(WorkerID) * len(ActionTargets),
-                        ij=self.world_size ** 2,
+                        a=max_a_action,
                         ptr=self.max_lines,
                     )
                 )
@@ -105,7 +106,6 @@ class Env(gym.Env):
             np.array([[2, len(Building)]] * self.max_lines)
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
-
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
         self.world_space = spaces.Box(
             low=np.zeros_like(world_shape, dtype=np.float32),
@@ -123,10 +123,21 @@ class Env(gym.Env):
         )
         resources_space = spaces.MultiDiscrete([self.max.minerals, self.max.gas])
         worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(self.worker_actions))
+        partial_action_space = spaces.MultiDiscrete(
+            [
+                1 + a
+                for c in VariableActions.classes()
+                for a in astuple(c.num_values())
+            ]  # [:-1]
+        )
+
         # noinspection PyTypeChecker
         self.observation_space = spaces.Dict(
             asdict(
                 Obs(
+                    action_mask=spaces.MultiBinary(max_a_action),
+                    can_open_gate=spaces.MultiBinary(max_a_action),
+                    partial_action=partial_action_space,
                     obs=obs_space,
                     resources=resources_space,
                     workers=worker_space,

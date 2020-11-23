@@ -63,16 +63,20 @@ O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
 
 @dataclass(frozen=True)
 class Obs(typing.Generic[O]):
+    action_mask: O
+    can_open_gate: O
     lines: O
     mask: O
     obs: O
+    partial_action: O
     resources: O
     workers: O
 
 
-X = typing.TypeVar("X")
-
 ActionTargets = list(Resource) + list(Building)
+
+
+X = typing.TypeVar("X")
 
 
 @dataclass(frozen=True)
@@ -182,12 +186,6 @@ class VariableActions:
     action2: Action2 = None
     action3: Action3 = None
     active: type = Action1
-
-    def verb(self):
-        return self.action2.verb
-
-    def noun(self):
-        return self.action3.noun
 
     @classmethod
     def classes(cls):
