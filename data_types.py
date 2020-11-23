@@ -2,15 +2,14 @@ import itertools
 import typing
 from abc import abstractmethod
 from collections import Counter
-from dataclasses import dataclass, asdict, astuple, replace, fields
+from dataclasses import dataclass, asdict, astuple, fields
 from enum import unique, Enum, auto
 from typing import Tuple, Union, List, Generator, Dict, Generic
 
 import numpy as np
 import torch
 from colored import fg
-from gym import Space, spaces
-from gym.spaces import Discrete
+from gym import Space
 
 from utils import RESET
 
@@ -75,15 +74,9 @@ X = typing.TypeVar("X", np.ndarray, typing.Optional[int], torch.Tensor)
 
 ActionTargets = list(Resource) + list(Building)
 
-Y = typing.TypeVar("Y", torch.Tensor, int)
-
 
 @dataclass(frozen=True)
 class PartialAction(typing.Generic[X]):
-    @staticmethod
-    def get_gate_value(x: Y) -> Y:
-        return x % 2
-
     @classmethod
     def parse(cls, a) -> "PartialAction":
         assert 0 <= a < cls.size_a()
@@ -96,9 +89,8 @@ class PartialAction(typing.Generic[X]):
 
     @classmethod
     def mask(cls, size):
-        mask = np.zeros(size)
-        mask[np.arange(size) < cls.size_a()] = 1
-        return mask
+        for i in range(size):
+            yield i < cls.size_a()
 
     @classmethod
     def complete(cls, size) -> Generator[bool, None, None]:
@@ -113,18 +105,12 @@ class PartialAction(typing.Generic[X]):
     def num_values(cls) -> "PartialAction":
         raise NotImplementedError
 
-    @classmethod
-    @abstractmethod
-    def can_reset(cls) -> bool:
-        raise NotImplementedError
-
     @abstractmethod
     def reset(self) -> bool:
         raise NotImplementedError
 
     def next(self) -> type:
         if self.reset():
-            assert self.can_reset()
             return Action1
         return self.next_if_not_reset()
 
@@ -141,10 +127,6 @@ class Action1(PartialAction):
     def num_values(cls) -> "Action1":
         return cls(2)
 
-    @classmethod
-    def can_reset(cls):
-        return True
-
     def reset(self):
         return not self.is_op
 
@@ -159,10 +141,6 @@ class Action2(PartialAction):
     @classmethod
     def num_values(cls) -> "Action2":
         return cls(3)
-
-    @classmethod
-    def can_reset(cls):
-        return False
 
     def reset(self):
         return False
@@ -179,10 +157,6 @@ class Action3(PartialAction):
     @classmethod
     def num_values(cls) -> "Action3":
         return cls(noun=3)  # , gate=2)
-
-    @classmethod
-    def can_reset(cls):
-        return True
 
     def reset(self):
         return True
@@ -245,10 +219,6 @@ class VariableActions:
         filled_in = [*self.actions()][:index]
         assert None not in filled_in
         return VariableActions(*filled_in, action, active=action.next())
-
-    def can_reset(self):
-        assert issubclass(self.active, PartialAction)
-        return self.active.can_reset()
 
     def mask(self, size):
         assert issubclass(self.active, PartialAction)

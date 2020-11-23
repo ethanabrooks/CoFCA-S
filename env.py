@@ -13,8 +13,6 @@ from gym.utils import seeding
 import keyboard_control
 from data_types import (
     Action,
-    AActions,
-    NonAAction,
     PartialAction,
 )
 from data_types import (
@@ -32,9 +30,6 @@ from lines import (
     EndIf,
     Loop,
     EndLoop,
-)
-from utils import (
-    asdict,
 )
 from utils import (
     hierarchical_parse_args,
@@ -218,26 +213,6 @@ class Env(gym.Env):
             ptr=self.n_lines,
             a=max_a_action,
         )
-        a_action_nvec = AActions(
-            is_op=2, verb=len(self.behaviors), noun=len(self.items)
-        )
-        non_a_action_nvec = NonAAction(
-            delta=2 * self.n_lines,
-            dg=2,
-            ptr=self.n_lines,
-        )
-        num_a_actions = len(astuple(a_action_nvec))
-        max_a_action = max(astuple(a_action_nvec))
-        raw_action_nvec = RawAction(**asdict(non_a_action_nvec), a=max_a_action)
-        self.action_space = spaces.MultiDiscrete(np.array(astuple(raw_action_nvec)))
-        self.action_mask = np.zeros((num_a_actions, max_a_action))
-        self.action_mask[
-            (
-                np.expand_dims(np.arange(max_a_action), 0)
-                < np.expand_dims(astuple(a_action_nvec), 1)
-            )
-        ] = 1
-        self.action_mask = AActions(*self.action_mask)
         self.action_space = spaces.MultiDiscrete(np.array(astuple(action_nvec)))
         lines_space = spaces.MultiDiscrete(
             np.array(
@@ -261,6 +236,7 @@ class Env(gym.Env):
             ]  # [:-1]
         )
 
+        max_a_action = max([c.size_a() for c in VariableActions.classes()])
         self.observation_space = spaces.Dict(
             Obs(
                 action_mask=spaces.MultiBinary(max_a_action),
@@ -891,20 +867,18 @@ class Env(gym.Env):
             truthy = [2 if t is None else int(t) for t in truthy]
             truthy += [3] * (self.n_lines - len(truthy))
 
-            inventory = self.inventory_representation(state)
-            partial_action = np.array([*actions.partial_actions()])
             assert issubclass(actions.active, PartialAction)
             obs = Obs(
-                action_mask=np.array([*actions.mask(self.action_nvec.a)]),
+                action_mask=[*actions.mask(self.action_nvec.a)],
                 active=self.n_lines if state.ptr is None else state.ptr,
                 can_open_gate=[*actions.active.complete(self.action_nvec.a)],
                 lines=preprocessed_lines,
                 mask=mask,
                 obs=[[obs]],
-                inventory=inventory,
+                inventory=self.inventory_representation(state),
                 subtask_complete=state.subtask_complete,
                 truthy=truthy,
-                partial_action=partial_action,
+                partial_action=[*actions.partial_actions()],
             )
             obs = OrderedDict(obs._asdict())
             # for k, v in self.observation_space.spaces.items():
@@ -920,6 +894,7 @@ class Env(gym.Env):
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             raw_action = RawAction(*raw_action)
             actions = actions.update(raw_action.a)
+            agent_ptr = raw_action.ptr
 
             info = dict(
                 use_failure_buf=use_failure_buf,
