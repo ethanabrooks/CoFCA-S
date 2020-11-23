@@ -96,6 +96,7 @@ class Env(gym.Env):
                 astuple(
                     RawAction(
                         delta=2 * self.max_lines,
+                        dg=2,
                         a=max_a_action,
                         ptr=self.max_lines,
                     )

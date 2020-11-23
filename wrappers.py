@@ -87,7 +87,7 @@ class VecPyTorch(VecEnvWrapper):
 
     def reset(self):
         obs = self.extract_numpy(self.venv.reset())
-        return torch.from_numpy(obs).float().from_(self.device)
+        return torch.from_numpy(obs).float().to(self.device)
 
     def step_async(self, actions):
         actions = actions.cpu().numpy()
@@ -96,7 +96,7 @@ class VecPyTorch(VecEnvWrapper):
     def step_wait(self):
         obs, reward, done, info = self.venv.step_wait()
         obs = self.extract_numpy(obs)
-        obs = torch.from_numpy(obs).float().from_(self.device)
+        obs = torch.from_numpy(obs).float().to(self.device)
         reward = torch.from_numpy(reward).float()
         return obs, reward, done, info
 
@@ -104,7 +104,7 @@ class VecPyTorch(VecEnvWrapper):
         self.device = device
         self.venv.to(device)
         if self.action_bounds is not None:
-            self.action_bounds = [t.from_(device) for t in self.action_bounds]
+            self.action_bounds = [t.to(device) for t in self.action_bounds]
 
     def evaluate(self):
         self.venv.evaluate()
@@ -186,7 +186,7 @@ class VecPyTorchFrameStack(VecEnvWrapper):
         self.venv.close()
 
     def to(self, device):
-        self.stacked_obs = self.stacked_obs.from_(device)
+        self.stacked_obs = self.stacked_obs.to(device)
         self.venv.to(device)
 
 

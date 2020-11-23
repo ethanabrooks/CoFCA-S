@@ -239,7 +239,7 @@ class Action2(Action):
         return cls(worker=len(WorkerID), target=len(Targets))
 
     def reset(self):
-        return isinstance(Targets[self.target], Resource)
+        return isinstance(self.target, Resource)
 
     def next_if_not_reset(self) -> ActionType:
         return Action3
@@ -267,6 +267,7 @@ class Action3(Action):
 @dataclass(frozen=True)
 class RecurringActions(typing.Generic[X]):
     delta: X
+    dg: X
     ptr: X
 
 
@@ -499,7 +500,6 @@ class RecurrentState(Generic[X]):
     dg: X
     p: X
     v: X
-    l: X
     a_probs: X
     d_probs: X
     dg_probs: X

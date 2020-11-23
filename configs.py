@@ -104,7 +104,6 @@ starcraft_default = {
     "transformer": False,
     "use_gae": False,
     "value_loss_coef": 0.5,
-    "world_size": 4,
 }
 
 search_starcraft = copy.deepcopy(starcraft_default)
@@ -129,13 +128,11 @@ search_debug = copy.deepcopy(search_starcraft)
 search_debug.update(
     kernel_size=1,
     stride=1,
-    world_size=1,
 )
 debug_default = copy.deepcopy(starcraft_default)
 debug_default.update(
     kernel_size=1,
     stride=1,
-    world_size=1,
 )
 configs = dict(
     search_starcraft=search_starcraft,

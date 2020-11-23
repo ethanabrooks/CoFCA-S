@@ -78,7 +78,7 @@ def make_env(
         env = retro_wrappers.make_retro(
             game=env_id,
             max_episode_steps=10000,
-            use_restricted_actions=retro.CompoundAction.DISCRETE,
+            use_restricted_actions=retro.Actions.DISCRETE,
             state=gamestate,
         )
     else:

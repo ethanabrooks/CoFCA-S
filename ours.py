@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-from agents import MultiEmbeddingBag
+from agents import MultiEmbeddingBag, IntEncoding
 from data_types import ParsedInput, RecurrentState, RawAction, Action
 from distributions import FixedCategorical
 from env import Obs
@@ -97,12 +97,15 @@ class Recurrence(nn.Module):
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         d, h, w = self.obs_spaces.obs.shape
-        d += 1
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
-        self.embed_inventory = nn.Sequential(
-            init_(nn.Linear(self.obs_spaces.inventory.n, self.resources_hidden_size)),
+        self.embed_resources = nn.Sequential(
+            IntEncoding(self.resources_hidden_size),
+            nn.Flatten(),
+            init_(
+                nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
+            ),
             nn.ReLU(),
         )
         m_size = (
@@ -169,7 +172,7 @@ class Recurrence(nn.Module):
         self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
         self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
-        self.state_sizes = self.state_sizes._replace(d_probs=self.d_space())
+        self.state_sizes = replace(self.state_sizes, d_probs=self.d_space())
         self.obs_spaces = Obs(**self.obs_spaces)
         yield self
         self.obs_spaces = obs_spaces
@@ -218,7 +221,7 @@ class Recurrence(nn.Module):
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs.obs, self.obs_sections, dim=-1))
-        state = state._replace(obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
+        state = replace(state, obs=state.obs.view(T, N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(T, N, *self.obs_spaces.lines.shape)[0].long()
         # mask = state.mask[0].view(N, nl)
         # mask = F.pad(mask, [0, nl], value=1)  # pad for backward mask
@@ -332,11 +335,11 @@ class Recurrence(nn.Module):
                 dim=0,
             ).relu()
             h1 = h1.sum(-1).sum(-1)
-            inventory = self.embed_inventory(state.inventory[t])
+            resources = self.embed_resources(state.resources[t])
             embedded_lower = self.embed_lower(
                 state.partial_action[t].long()
             )  # +1 to deal with negatives
-            zeta1_input = torch.cat([m, h1, inventory, embedded_lower], dim=-1)
+            zeta1_input = torch.cat([m, h1, resources, embedded_lower], dim=-1)
             z1 = F.relu(self.zeta1(zeta1_input))
 
             a_logits = self.actor(z1)
