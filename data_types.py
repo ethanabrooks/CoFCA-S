@@ -65,13 +65,13 @@ class Building(Target, WorkerAction, Enum):
     PHOTON_CANNON = auto()
     GATEWAY = auto()
     CYBERNETICS_CORE = auto()
-    TWILIGHT_COUNCIL = auto()
-    TEMPLAR_ARCHIVES = auto()
-    DARK_SHRINE = auto()
-    STARGATE = auto()
-    FLEET_BEACON = auto()
-    ROBOTICS_FACILITY = auto()
-    ROBOTICS_BAY = auto()
+    # TWILIGHT_COUNCIL = auto()
+    # TEMPLAR_ARCHIVES = auto()
+    # DARK_SHRINE = auto()
+    # STARGATE = auto()
+    # FLEET_BEACON = auto()
+    # ROBOTICS_FACILITY = auto()
+    # ROBOTICS_BAY = auto()
 
     def assignment(self, coord: Coord) -> "Assignment":
         return BuildOrder(building=self, location=coord)
@@ -388,13 +388,13 @@ costs = {
     Building.GATEWAY: Resources(minerals=2, gas=0),
     Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
     Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
-    Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
-    Building.STARGATE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
-    Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
-    Building.DARK_SHRINE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
-    Building.FLEET_BEACON: Resources(minerals=3, gas=2),
+    # Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
+    # Building.STARGATE: Resources(minerals=2, gas=2),
+    # Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
+    # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
+    # Building.DARK_SHRINE: Resources(minerals=2, gas=2),
+    # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
+    # Building.FLEET_BEACON: Resources(minerals=3, gas=2),
 }
 
 Costs: Dict[Building, typing.Counter[Resource]] = {
@@ -424,50 +424,6 @@ class Node:
 
 Tree = List[Union[Node, Leaf]]
 
-build_tree = [
-    Leaf(Building.PYLON),
-    Leaf(Building.ASSIMILATOR),
-    Node(
-        Building.NEXUS,
-        [
-            Node(Building.FORGE, [Leaf(Building.PHOTON_CANNON)]),
-            Node(
-                Building.GATEWAY,
-                [
-                    Node(
-                        Building.CYBERNETICS_CORE,
-                        [
-                            Node(
-                                Building.TWILIGHT_COUNCIL,
-                                [
-                                    Leaf(Building.TEMPLAR_ARCHIVES),
-                                    Leaf(Building.DARK_SHRINE),
-                                ],
-                            ),
-                            Node(Building.STARGATE, [Leaf(Building.FLEET_BEACON)]),
-                            Node(
-                                Building.ROBOTICS_FACILITY,
-                                [Leaf(Building.ROBOTICS_BAY)],
-                            ),
-                        ],
-                    )
-                ],
-            ),
-        ],
-    ),
-]
-
-
-def flatten(tree: Tree) -> Generator[Building, None, None]:
-    for node in tree:
-        yield node.building
-        if isinstance(node, Node):
-            yield from flatten(node.children)
-
-
-# ensure all buildings are in build_tree
-assert set(flatten(build_tree)) == set(Building)
-
 
 @dataclass
 class State:
@@ -491,13 +447,13 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PHOTON_CANNON: "c",
     Building.GATEWAY: "g",
     Building.CYBERNETICS_CORE: "C",
-    Building.TWILIGHT_COUNCIL: "T",
-    Building.TEMPLAR_ARCHIVES: "A",
-    Building.DARK_SHRINE: "D",
-    Building.STARGATE: "S",
-    Building.FLEET_BEACON: "b",
-    Building.ROBOTICS_FACILITY: "F",
-    Building.ROBOTICS_BAY: "B",
+    # Building.TWILIGHT_COUNCIL: "T",
+    # Building.TEMPLAR_ARCHIVES: "A",
+    # Building.DARK_SHRINE: "D",
+    # Building.STARGATE: "S",
+    # Building.FLEET_BEACON: "b",
+    # Building.ROBOTICS_FACILITY: "F",
+    # Building.ROBOTICS_BAY: "B",
     WorkerID.A: 1,
     WorkerID.B: 1,
     WorkerID.C: 1,
