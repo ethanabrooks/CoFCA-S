@@ -1,4 +1,5 @@
 import itertools
+import os
 import typing
 from abc import abstractmethod
 from collections import Counter
@@ -244,7 +245,7 @@ class Action2(Action):
         return Action3
 
 
-WORLD_SIZE = 0
+WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 4))
 
 
 @dataclass(frozen=True)

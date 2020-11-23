@@ -1,3 +1,4 @@
+import os
 import pickle
 import typing
 from collections import Counter, deque, OrderedDict
@@ -42,7 +43,9 @@ from data_types import (
     Action3,
     WorkerAction,
     WorkerActions,
+    WORLD_SIZE,
 )
+
 from utils import RESET
 
 Dependencies = Dict[Building, Building]
@@ -57,7 +60,6 @@ def delete_nth(d, n):
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
-    debug_env: bool
     destroy_building_prob: float
     eval_steps: int
     failure_buffer_load_path: Path
@@ -74,12 +76,10 @@ class Env(gym.Env):
     iterator = None
     render_thunk = None
     success_avg = 0.5
-    world_size: int = None
 
     def __post_init__(self):
         super().__init__()
         self.world_size = WORLD_SIZE
-
         self.random, _ = seeding.np_random(self.random_seed)
         self.failure_buffer = deque(maxlen=self.failure_buffer_size)
         if self.failure_buffer_load_path:
@@ -157,7 +157,6 @@ class Env(gym.Env):
         p.add_argument("--max-lines", type=int)
         p.add_argument("--num-initial-buildings", type=int)
         p.add_argument("--tgt-success-rate", type=float)
-        p.add_argument("--world-size", type=int)
 
     def build_dependencies(self):
         n = len(Building)
@@ -729,9 +728,7 @@ class Env(gym.Env):
         return len(lines) * self.time_per_line
 
 
-def main(world_size: int, **kwargs):
-    global WORLD_SIZE
-    WORLD_SIZE = world_size
+def main(debug_env: bool, **kwargs):
     Env(rank=0, eval_steps=500, **kwargs).main()
 
 
