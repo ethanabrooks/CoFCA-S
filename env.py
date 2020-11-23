@@ -159,24 +159,6 @@ class Env(gym.Env):
         p.add_argument("--num-initial-buildings", type=int)
         p.add_argument("--tgt-success-rate", type=float)
 
-    @staticmethod
-    def building_allowed(
-        building,
-        building_positions,
-        insufficient_resources,
-        positions,
-        target_position,
-    ):
-        if not insufficient_resources and target_position not in building_positions:
-            if building is Building.ASSIMILATOR:
-                return target_position == positions[Resource.GAS]
-            else:
-                return target_position not in (
-                    *building_positions,
-                    positions[Resource.GAS],
-                    positions[Resource.MINERALS],
-                )
-
     def build_dependencies(self):
         n = len(Building)
         dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
@@ -704,11 +686,11 @@ class Env(gym.Env):
                     building = worker_action
                     insufficient_resources = Costs[building] - resources
                     if self.building_allowed(
-                        building=building,
-                        building_positions=building_positions,
-                        insufficient_resources=insufficient_resources,
-                        positions=positions,
-                        target_position=worker_position,
+                        building,
+                        building_positions,
+                        insufficient_resources,
+                        positions,
+                        worker_position,
                     ):
                         building_positions[worker_position] = building
                         resources -= Costs[building]

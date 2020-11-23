@@ -357,6 +357,7 @@ assert set(Resources(0, 0).__annotations__.keys()) == {
     r.lower() for r in Resource.__members__
 }
 
+
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
 annotations = Obs.__annotations__
