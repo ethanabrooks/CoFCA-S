@@ -43,6 +43,7 @@ class Recurrence(nn.Module):
     kernel_size: int
     lower_embed_size: int
     max_eval_lines: int
+    next_actions_embed_size: int
     no_pointer: bool
     no_roll: bool
     no_scan: bool
@@ -74,6 +75,10 @@ class Recurrence(nn.Module):
         self.embed_lower = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
+        )
+        self.embed_next_action = nn.Embedding(
+            self.obs_spaces.next_actions.nvec[0],
+            embedding_dim=self.next_actions_embed_size,
         )
         self.task_encoder = (
             TransformerModel(
@@ -118,6 +123,7 @@ class Recurrence(nn.Module):
             + self.conv_hidden_size
             + self.resources_hidden_size
             + self.lower_embed_size
+            + self.next_actions_embed_size * len(self.obs_spaces.next_actions.nvec)
         )
         self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
         if self.olsk:
@@ -136,9 +142,6 @@ class Recurrence(nn.Module):
             self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
         self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
 
-        self.kernel_net = nn.Linear(
-            m_size, self.conv_hidden_size * self.kernel_size ** 2 * d
-        )
         conv_out = conv_output_dimension(h, self.padding, self.kernel_size, self.stride)
         self.conv = nn.Sequential(
             nn.Conv2d(
@@ -326,20 +329,18 @@ class Recurrence(nn.Module):
                 half = P.size(2) // 2 if self.no_scan else nl
             self.print("p", p)
             m = torch.cat([P, h], dim=-1) if self.no_pointer else M[R, p]
-            conv_kernel = self.kernel_net(m).view(
-                N,
-                self.conv_hidden_size,
-                self.obs_dim,
-                self.kernel_size,
-                self.kernel_size,
-            )
 
             h1 = self.conv(state.obs[t])
             resources = self.embed_resources(state.resources[t])
+            next_actions = self.embed_next_action(state.next_actions[t].long()).view(
+                N, -1
+            )
             embedded_lower = self.embed_lower(
                 state.partial_action[t].long()
             )  # +1 to deal with negatives
-            zeta1_input = torch.cat([m, h1, resources, embedded_lower], dim=-1)
+            zeta1_input = torch.cat(
+                [m, h1, resources, embedded_lower, next_actions], dim=-1
+            )
             z1 = F.relu(self.zeta1(zeta1_input))
 
             a_logits = self.actor(z1)

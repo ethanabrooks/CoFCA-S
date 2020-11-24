@@ -114,6 +114,7 @@ class UpperTrainer(Trainer):
         parser.add_argument("--resources-hidden-size", type=int)
         parser.add_argument("--kernel-size", type=int)
         parser.add_argument("--olsk", action="store_true")
+        parser.add_argument("--next-actions-embed-size", type=int)
         parser.add_argument("--num-edges", type=int)
         parser.add_argument("--no-pointer", action="store_true")
         parser.add_argument("--no-roll", action="store_true")

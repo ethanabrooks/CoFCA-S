@@ -153,10 +153,10 @@ class Obs(typing.Generic[O]):
     can_open_gate: O
     lines: O
     mask: O
+    next_actions: O
     obs: O
     partial_action: O
     resources: O
-    workers: O
 
 
 X = typing.TypeVar("X")

@@ -125,7 +125,7 @@ class Env(gym.Env):
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
         resources_space = spaces.MultiDiscrete([self.max.minerals, self.max.gas])
-        worker_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
+        next_actions_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
                 1 + a
@@ -140,12 +140,12 @@ class Env(gym.Env):
                 Obs(
                     action_mask=spaces.MultiBinary(max_a_action),
                     can_open_gate=spaces.MultiBinary(max_a_action),
-                    partial_action=partial_action_space,
-                    obs=obs_space,
-                    resources=resources_space,
-                    workers=worker_space,
                     lines=lines_space,
                     mask=mask_space,
+                    next_actions=next_actions_space,
+                    obs=obs_space,
+                    partial_action=partial_action_space,
+                    resources=resources_space,
                 )
             )
         )
@@ -432,7 +432,7 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            workers = np.array(
+            next_actions = np.array(
                 [WorkerActions.index(a) for a in state.next_action.values()]
             )
             action_mask = np.array([*state.action.mask(self.a_size)])
@@ -443,9 +443,9 @@ class Env(gym.Env):
                     Obs(
                         obs=array,
                         resources=resources,
-                        workers=workers,
                         lines=preprocessed,
                         mask=mask,
+                        next_actions=next_actions,
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
