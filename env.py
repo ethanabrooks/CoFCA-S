@@ -613,10 +613,9 @@ class Env(gym.Env):
         assignments: Dict[WorkerID, Assignment] = {}
         next_actions: Dict[WorkerID, WorkerAction] = {}
         for worker_id in WorkerID:
-            assignments[worker_id] = Resource.MINERALS
+            assignments[worker_id] = self.initial_assignment()
 
         required = Counter(l.building for l in lines if l.required)
-        remaining: Dict[Resource, int] = self.max.as_dict()
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
@@ -693,7 +692,7 @@ class Env(gym.Env):
                             if positions[resource] == worker_position:
                                 if (
                                     resource != Resource.GAS
-                                    or building_positions[worker_position]
+                                    or building_positions.get(worker_position, None)
                                     == Building.ASSIMILATOR
                                 ):
                                     resources[resource] += 1
@@ -707,16 +706,14 @@ class Env(gym.Env):
                         positions,
                         assignment.location,
                     ):
-                        self.update_buildings(
-                            building, building_positions, assignment.location
-                        )
+                        building_positions[worker_position] = building
                         resources -= Costs[building]
                 else:
                     raise RuntimeError
 
     @staticmethod
-    def update_buildings(building, building_positions, worker_position):
-        building_positions[worker_position] = building
+    def initial_assignment():
+        return Resource.MINERALS
 
     @staticmethod
     def building_allowed(

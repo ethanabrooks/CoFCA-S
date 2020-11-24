@@ -72,6 +72,10 @@ class DebugCompoundAction(CompoundAction):
     def is_op(self):
         return True
 
+    @staticmethod
+    def initial_assignment():
+        return Resource.GAS
+
 
 class Env(env.Env):
     @staticmethod
