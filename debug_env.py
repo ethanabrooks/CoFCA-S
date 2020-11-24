@@ -14,6 +14,7 @@ from data_types import (
     WORLD_SIZE,
     Resource,
     Target,
+    Building,
 )
 
 
@@ -69,9 +70,13 @@ class DebugCompoundAction(CompoundAction):
     def worker(self) -> Worker:
         return Worker(1)
 
+    def coord(self):
+        assert isinstance(self.action1, DebugAction1)
+        return self.action1.i, self.action1.j
+
     def assignment(self) -> Assignment:
-        assert isinstance(self.action1.target, Target)
-        return self.action1.target.assignment(astuple(self.action3))
+        assert isinstance(self.action1, DebugAction1)
+        return self.action1.target.assignment(self.coord())
 
     def is_op(self):
         return True

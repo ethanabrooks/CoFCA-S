@@ -44,6 +44,7 @@ from data_types import (
     WorkerActions,
     WORLD_SIZE,
 )
+
 from utils import RESET
 
 Dependencies = Dict[Building, Building]
@@ -184,30 +185,6 @@ class Env(gym.Env):
             yield from instructions_for(dependencies[building])
             yield building
 
-        def instructions_under(n: int, include_assimilator: bool = True):
-            if n < 0:
-                raise RuntimeError
-            if n == 0:
-                yield []
-                return
-            for building in Building:
-                not_assimilator = building is not Building.ASSIMILATOR
-                if building is not Building.NEXUS and (
-                    include_assimilator or not_assimilator
-                ):
-                    inst = *first, last = [*instructions_for(building)]
-                    assert last is not Building.NEXUS
-                    if len(inst) <= n:
-                        for remainder in instructions_under(
-                            n=n - len(inst),
-                            include_assimilator=include_assimilator and not_assimilator,
-                        ):
-                            yield [
-                                *[Line(False, i) for i in first],
-                                Line(True, last),
-                                *remainder,
-                            ]
-
         def random_instructions_under(
             n: int, include_assimilator: bool = True
         ) -> Generator[List[Line], None, None]:
@@ -215,29 +192,28 @@ class Env(gym.Env):
                 raise RuntimeError
             if n == 0:
                 return
-            building = self.random.choice(
-                [
-                    *filter(
-                        lambda b: b is not Building.NEXUS
-                        and (include_assimilator or b is not Building.ASSIMILATOR),
-                        Building,
-                    )
-                ]
-            )
-
-            inst = *first, last = [*instructions_for(building)]
-            assert last is not Building.NEXUS
-            if len(inst) <= n:
-                for i in first:
-                    yield Line(False, i)
-                yield Line(True, last)
-                yield from random_instructions_under(
-                    n=n - len(inst),
-                    include_assimilator=include_assimilator
-                    and building is not Building.ASSIMILATOR,
+            building, first, last, inst = None, None, None, None
+            while None in (building, first, last, inst) or len(inst) > n:
+                building = self.random.choice(
+                    [
+                        *filter(
+                            lambda b: b is not Building.NEXUS
+                            and (include_assimilator or b is not Building.ASSIMILATOR),
+                            Building,
+                        )
+                    ]
                 )
-            else:
-                yield from random_instructions_under(n, include_assimilator)
+
+                inst = *first, last = [*instructions_for(building)]
+                assert last is not Building.NEXUS
+            for i in first:
+                yield Line(False, i)
+            yield Line(True, last)
+            yield from random_instructions_under(
+                n=n - len(inst),
+                include_assimilator=include_assimilator
+                and building is not Building.ASSIMILATOR,
+            )
 
         n_lines = self.random.randint(self.min_lines, self.max_lines + 1)
         instructions = [*random_instructions_under(n_lines)]
@@ -520,7 +496,7 @@ class Env(gym.Env):
         return s
 
     def room_strings(self, room):
-        grid_size = 4
+        grid_size = 5
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
