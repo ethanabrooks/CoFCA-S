@@ -82,7 +82,7 @@ class Env(env.Env):
         positions,
         assignment_location,
     ) -> bool:
-        if assignment_location in building_positions:
+        if insufficient_resources or assignment_location in building_positions:
             return False
         # if building is Building.ASSIMILATOR:
         #     return assignment_location == positions[Resource.GAS]
