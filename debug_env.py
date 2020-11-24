@@ -134,6 +134,15 @@ class Env(env.Env):
     def compound_action(*args, **kwargs) -> DebugCompoundAction:
         return DebugCompoundAction(*args, **kwargs)
 
+    def gathered_resource(
+        self, building_positions, positions, resource, worker_position
+    ):
+        return positions[resource] == worker_position
+
+    @staticmethod
+    def initial_assignment():
+        return Resource.GAS
+
     def main(self):
         def action_fn(string: str):
             try:

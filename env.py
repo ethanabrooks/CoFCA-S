@@ -664,13 +664,10 @@ class Env(gym.Env):
                     positions[worker_id] = new_position
                     if building_positions.get(new_position, None) == Building.NEXUS:
                         for resource in Resource:
-                            if positions[resource] == worker_position:
-                                if (
-                                    resource != Resource.GAS
-                                    or building_positions.get(worker_position, None)
-                                    == Building.ASSIMILATOR
-                                ):
-                                    resources[resource] += 1
+                            if self.gathered_resource(
+                                building_positions, positions, resource, worker_position
+                            ):
+                                resources[resource] += 1
                 elif isinstance(worker_action, Building):
                     building = worker_action
                     insufficient_resources = Costs[building] - resources
@@ -685,6 +682,14 @@ class Env(gym.Env):
                         resources -= Costs[building]
                 else:
                     raise RuntimeError
+
+    def gathered_resource(
+        self, building_positions, positions, resource, worker_position
+    ):
+        return positions[resource] == worker_position and (
+            resource != Resource.GAS
+            or building_positions.get(worker_position, None) == Building.ASSIMILATOR
+        )
 
     @staticmethod
     def initial_assignment():
