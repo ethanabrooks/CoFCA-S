@@ -6,11 +6,10 @@ import keyboard_control
 from data_types import (
     ActionType,
     X,
-    WorkerID,
+    Worker,
     Assignment,
     CompoundAction,
     Action,
-    BuildOrder,
     Targets,
     WORLD_SIZE,
     Resource,
@@ -67,8 +66,8 @@ class DebugCompoundAction(CompoundAction):
     def actions(self):
         yield self.action1
 
-    def worker(self) -> WorkerID:
-        return WorkerID(1)
+    def worker(self) -> Worker:
+        return Worker(1)
 
     def assignment(self) -> Assignment:
         assert isinstance(self.action1.target, Target)

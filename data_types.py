@@ -25,7 +25,7 @@ class Unit(Enum):
 
 
 @unique
-class WorkerID(Enum):
+class Worker(Enum):
     A = auto()
     B = auto()
     C = auto()
@@ -36,7 +36,7 @@ class Assignment:
     def action(
         self,
         current_position: Coord,
-        positions: Dict[Union["Resource", WorkerID], Coord],
+        positions: Dict[Union["Resource", Worker], Coord],
         nexus_positions: List[Coord],
     ) -> "WorkerAction":
         raise NotImplementedError
@@ -88,7 +88,7 @@ class Resource(Target, Assignment, Enum):
     def action(
         self,
         current_position: Coord,
-        positions: Dict[Union["Resource", WorkerID], Coord],
+        positions: Dict[Union["Resource", Worker], Coord],
         nexus_positions: List[Coord],
     ) -> "Movement":
         target_position = positions[self]
@@ -238,11 +238,11 @@ class Action2(Action):
     def parse(cls, a) -> "Action":
         ints = super().parse(a)
         assert isinstance(ints, cls)
-        return cls(worker=WorkerID(ints.worker + 1), target=Targets[ints.target])
+        return cls(worker=Worker(ints.worker + 1), target=Targets[ints.target])
 
     @classmethod
     def num_values(cls) -> "Action2":
-        return cls(worker=len(WorkerID), target=len(Targets))
+        return cls(worker=len(Worker), target=len(Targets))
 
     def reset(self):
         return isinstance(self.target, Resource)
@@ -251,7 +251,7 @@ class Action2(Action):
         return Action3
 
     def to_ints(self) -> Generator[int, None, None]:
-        if isinstance(self.worker, WorkerID):
+        if isinstance(self.worker, Worker):
             yield self.worker.value
         else:
             yield int(self.worker)
@@ -346,7 +346,7 @@ class CompoundAction:
     def is_op(self):
         return None not in astuple(self)
 
-    def worker(self) -> WorkerID:
+    def worker(self) -> Worker:
         assert self.action2.worker is not None
         return self.action2.worker
 
@@ -357,7 +357,7 @@ class CompoundAction:
 
 @dataclass(frozen=True)
 class Command:
-    worker: WorkerID
+    worker: Worker
     assignment: Assignment
 
 
@@ -429,15 +429,15 @@ Tree = List[Union[Node, Leaf]]
 class State:
     action: CompoundAction
     building_positions: Dict[Coord, Building]
-    next_action: Dict[WorkerID, WorkerAction]
+    next_action: Dict[Worker, WorkerAction]
     pointer: int
-    positions: Dict[Union[Resource, WorkerID], Coord]
+    positions: Dict[Union[Resource, Worker], Coord]
     resources: typing.Counter[Resource]
     success: bool
 
 
-WorldObject = Union[Building, Resource, WorkerID]
-WorldObjects = list(Building) + list(Resource) + list(WorkerID)
+WorldObject = Union[Building, Resource, Worker]
+WorldObjects = list(Building) + list(Resource) + list(Worker)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PYLON: "p",
@@ -454,9 +454,9 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     # Building.FLEET_BEACON: "b",
     # Building.ROBOTICS_FACILITY: "F",
     # Building.ROBOTICS_BAY: "B",
-    WorkerID.A: 1,
-    WorkerID.B: 2,
-    WorkerID.C: 3,
+    Worker.A: 1,
+    Worker.B: 2,
+    Worker.C: 3,
     Resource.GAS: fg("green") + "G" + RESET,
     Resource.MINERALS: fg("blue") + "M" + RESET,
 }

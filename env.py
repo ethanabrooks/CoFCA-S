@@ -27,7 +27,7 @@ from data_types import (
     WorldObject,
     WorldObjects,
     Movement,
-    WorkerID,
+    Worker,
     Resources,
     State,
     Line,
@@ -44,7 +44,6 @@ from data_types import (
     WorkerActions,
     WORLD_SIZE,
 )
-
 from utils import RESET
 
 Dependencies = Dict[Building, Building]
@@ -127,7 +126,7 @@ class Env(gym.Env):
         resources_space = spaces.MultiDiscrete(
             1 + np.array([self.max.minerals, self.max.gas])
         )
-        next_actions_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
+        next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
                 1 + a
@@ -376,7 +375,7 @@ class Env(gym.Env):
                         return
                     i, j = 0, 0
                     worker = 1
-                worker = WorkerID(worker + 1)
+                worker = Worker(worker + 1)
                 target = Targets[target]
                 return self.compound_action(
                     Action1(is_op=True),
@@ -468,7 +467,7 @@ class Env(gym.Env):
     def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
         yield Building.NEXUS, nexus
-        for w in WorkerID:
+        for w in Worker:
             yield w, nexus
         resource_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
         resource_locations = [
@@ -607,12 +606,12 @@ class Env(gym.Env):
         building_positions: Dict[Coord, Building] = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
-        positions: Dict[Union[Resource, WorkerID], Coord] = dict(
+        positions: Dict[Union[Resource, Worker], Coord] = dict(
             [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
         )
-        assignments: Dict[WorkerID, Assignment] = {}
-        next_actions: Dict[WorkerID, WorkerAction] = {}
-        for worker_id in WorkerID:
+        assignments: Dict[Worker, Assignment] = {}
+        next_actions: Dict[Worker, WorkerAction] = {}
+        for worker_id in Worker:
             assignments[worker_id] = self.initial_assignment()
 
         required = Counter(l.building for l in lines if l.required)
@@ -670,7 +669,7 @@ class Env(gym.Env):
 
             assignments[action.worker()] = action.assignment()
 
-            worker_id: WorkerID
+            worker_id: Worker
             assignment: Assignment
             for worker_id, assignment in sorted(
                 assignments.items(), key=lambda w: isinstance(w[1], BuildOrder)
