@@ -1,4 +1,4 @@
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass
 from typing import Generator
 
 import env
@@ -13,7 +13,7 @@ from data_types import (
     Targets,
     WORLD_SIZE,
     Resource,
-    Target,
+    Coord,
     Building,
 )
 
@@ -29,17 +29,41 @@ class DebugAction(Action):
 @dataclass(frozen=True)
 class DebugAction1(DebugAction):
     target: X
+    worker: X
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield Targets.index(self.target)
+        yield self.worker.value - 1
+
+    @classmethod
+    def num_values(cls) -> "DebugAction1":
+        return cls(target=len(Targets), worker=len(Worker))
+
+    def reset(self):
+        return isinstance(self.target, Resource)
+
+    def next_if_not_reset(self) -> ActionType:
+        return DebugAction2
+
+    @classmethod
+    def parse(cls, a) -> "Action":
+        parsed = super().parse(a)
+        assert isinstance(parsed, DebugAction1)
+        return cls(target=Targets[parsed.target], worker=Worker(parsed.worker + 1))
+
+
+@dataclass(frozen=True)
+class DebugAction2(DebugAction):
     i: X
     j: X
 
     def to_ints(self) -> Generator[int, None, None]:
-        yield Targets.index(self.target)
         yield self.i
         yield self.j
 
     @classmethod
-    def num_values(cls) -> "DebugAction1":
-        return cls(len(Targets), i=WORLD_SIZE, j=WORLD_SIZE)
+    def num_values(cls) -> "DebugAction2":
+        return cls(i=WORLD_SIZE, j=WORLD_SIZE)
 
     def reset(self):
         return True
@@ -50,40 +74,40 @@ class DebugAction1(DebugAction):
     @classmethod
     def parse(cls, a) -> "Action":
         parsed = super().parse(a)
-        assert isinstance(parsed, DebugAction1)
-        return cls(target=Targets[parsed.target], i=parsed.i, j=parsed.j)
+        assert isinstance(parsed, DebugAction2)
+        return cls(i=parsed.i, j=parsed.j)
 
 
 @dataclass(frozen=True)
 class DebugCompoundAction(CompoundAction):
     action1: DebugAction1 = None
+    action2: DebugAction2 = None
     ptr: int = 0
     active: ActionType = DebugAction1
 
     @classmethod
     def classes(cls):
         yield DebugAction1
+        yield DebugAction2
 
     def actions(self):
         yield self.action1
+        yield self.action2
+
+    def coord(self) -> Coord:
+        assert isinstance(self.action2, DebugAction2)
+        return self.action2.i, self.action2.j
 
     def worker(self) -> Worker:
-        return Worker(1)
-
-    def coord(self):
-        assert isinstance(self.action1, DebugAction1)
-        return self.action1.i, self.action1.j
+        assert isinstance(self.action1.worker, Worker)
+        return self.action1.worker
 
     def assignment(self) -> Assignment:
-        assert isinstance(self.action1, DebugAction1)
-        return self.action1.target.assignment(self.coord())
-
-    def is_op(self):
-        return True
-
-    @staticmethod
-    def initial_assignment():
-        return Resource.GAS
+        if isinstance(self.action1.target, Building):
+            assert isinstance(self.action2, DebugAction2)
+        return self.action1.target.assignment(
+            None if self.action2 is None else self.coord()
+        )
 
 
 class Env(env.Env):
@@ -113,10 +137,16 @@ class Env(env.Env):
     def main(self):
         def action_fn(string: str):
             try:
-                b, i, j = map(int, string.split())
-                action1 = DebugAction1(building=Targets[b], i=i, j=j)
-                act = self.compound_action(action1)
-                return act
+                ints = [*map(int, string.split())]
+                try:
+                    b, i, j = ints
+                    action1 = DebugAction1(target=Targets[b], worker=Worker.A)
+                    action2 = DebugAction2(i=i, j=j)
+                except ValueError:
+                    (r,) = ints
+                    action1 = DebugAction1(target=Targets[r], worker=Worker.B)
+                    action2 = None
+                return self.compound_action(action1, action2)
             except (ValueError, TypeError) as e:
                 print(e)
 
