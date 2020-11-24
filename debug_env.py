@@ -93,9 +93,8 @@ class Env(env.Env):
     ) -> bool:
         if assignment_location in building_positions:
             return False
-        # if building is Building.ASSIMILATOR:
-        #     return assignment_location == positions[Resource.GAS]
-        # else:
+        if building is Building.ASSIMILATOR:
+            return assignment_location == positions[Resource.GAS]
         return assignment_location not in (
             *building_positions,
             positions[Resource.GAS],
