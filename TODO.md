@@ -1,1 +1,7 @@
-- resources
+- Identification of open spots in environment
+- Multi-stage action
+- `IntEncoding` / Resource management
+- Next-action encoding
+- Assimilator building restriction
+- Buildings requiring Assimilator
+- control-flow
