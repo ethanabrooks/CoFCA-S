@@ -206,7 +206,7 @@ class Action(metaclass=ActionType):
 
     def next(self) -> ActionType:
         if self.reset():
-            return Action1
+            return next(CompoundAction.classes())
         return self.next_if_not_reset()
 
     @abstractmethod
@@ -344,7 +344,9 @@ class CompoundAction:
         return self.active.mask(size)
 
     def is_op(self):
-        return None not in astuple(self)
+        initial_action = all(x is None for x in self.actions())
+        next_action1 = self.active is next(self.classes())
+        return not initial_action and next_action1
 
     def worker(self) -> Worker:
         assert self.action2.worker is not None

@@ -621,6 +621,7 @@ class Env(gym.Env):
             def render():
                 print("Resources:")
                 pprint(resources)
+                pprint(assignments)
                 if destroyed_buildings:
                     print(fg("red"), "Destroyed:", sep="")
                     print(*destroyed_buildings, sep="\n", end=RESET + "\n")
