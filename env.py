@@ -691,8 +691,12 @@ class Env(gym.Env):
                     if building_positions.get(new_position, None) == Building.NEXUS:
                         for resource in Resource:
                             if positions[resource] == worker_position:
-                                resources[resource] += 1
-                                remaining[resource] -= 1
+                                if (
+                                    resource != Resource.GAS
+                                    or building_positions[worker_position]
+                                    == Building.ASSIMILATOR
+                                ):
+                                    resources[resource] += 1
                 elif isinstance(worker_action, Building):
                     building = worker_action
                     insufficient_resources = Costs[building] - resources
