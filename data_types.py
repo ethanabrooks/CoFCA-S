@@ -436,6 +436,7 @@ class State:
     positions: Dict[Union[Resource, Worker], Coord]
     resources: typing.Counter[Resource]
     success: bool
+    time_remaining: int
 
 
 WorldObject = Union[Building, Resource, Worker]

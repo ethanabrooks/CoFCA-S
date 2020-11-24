@@ -121,7 +121,7 @@ class Env(gym.Env):
             high=np.ones(shape, dtype=np.float32),
         )
         self.max = Resources(*sum(Costs.values(), Counter()).values(), gas=2)
-        self.time_per_line = 6 * max(
+        self.time_per_line = 2 * max(
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
         resources_space = spaces.MultiDiscrete(
@@ -241,19 +241,14 @@ class Env(gym.Env):
             create_nodes(building)
         return set(trees.values())
 
-    def done_generator(self, *lines):
+    @staticmethod
+    def done_generator():
         state: State
         state = yield
-        time_remaining = (
-            self.eval_steps - 1 if self.evaluating else self.time_limit(lines)
-        )
 
         while True:
             # noinspection PyTypeChecker
-            state = yield state.success or time_remaining == 0, lambda: print(
-                "Time remaining:", time_remaining
-            )
-            time_remaining -= 1
+            state = yield state.success or not state.time_remaining, lambda: None
 
     def failure_buffer_wrapper(self, iterator):
         if self.evaluating or len(self.failure_buffer) == 0:
@@ -313,8 +308,6 @@ class Env(gym.Env):
         done: bool
         state, done = yield
         info = dict(len_failure_buffer=float(len(self.failure_buffer)))
-        time_limit = self.time_limit(lines)
-        time_elapsed = 0
 
         while True:
             if done:
@@ -322,19 +315,16 @@ class Env(gym.Env):
                     instruction_len=len(lines),
                     len_failure_buffer=len(self.failure_buffer),
                     success=float(state.success),
-                    train_time_success=float(time_elapsed <= time_limit),
-                    normalized_elapsed_time=time_elapsed / time_limit,
+                    train_time_success=float(state.success and state.time_remaining),
                 )
                 if self.evaluating:
                     bucket = 10 * (len(lines) // 10)
-                    info[f"time_elapsed{bucket}"] = time_elapsed
                     for key in [
                         "success",
                         "train_time_success",
                         "normalized_elapsed_time",
                     ]:
                         info[f"{key}{bucket}"] = info[key]
-            time_elapsed += 1
             state, done = yield info, lambda: None
             info = {}
 
@@ -527,7 +517,7 @@ class Env(gym.Env):
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
-        done_iterator = self.done_generator(*lines)
+        done_iterator = self.done_generator()
         info_iterator = self.info_generator(*lines)
         state_iterator = self.state_generator(*lines)
         next(obs_iterator)
@@ -572,6 +562,8 @@ class Env(gym.Env):
 
             if action.is_op():
                 state, render_state = state_iterator.send(action)
+            elif self.evaluating:
+                state = replace(state, time_remaining=state.time_remaining - 1)
 
     @staticmethod
     def compound_action(*args, **kwargs) -> CompoundAction:
@@ -594,6 +586,10 @@ class Env(gym.Env):
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
+        time_remaining = (
+            self.eval_steps - 1 if self.evaluating else len(lines) * self.time_per_line
+        )
+
         while True:
             destroyed_buildings = [
                 (c, b)
@@ -616,9 +612,11 @@ class Env(gym.Env):
                 success=success,
                 pointer=ptr,
                 action=action,
+                time_remaining=time_remaining,
             )
 
             def render():
+                print("Time remaining:", time_remaining)
                 print("Resources:")
                 pprint(resources)
                 pprint(assignments)
@@ -644,6 +642,7 @@ class Env(gym.Env):
             action = yield state, render
             ptr = action.ptr
 
+            time_remaining -= 1
             assignments[action.worker()] = action.assignment()
 
             worker_id: Worker
