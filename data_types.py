@@ -455,8 +455,8 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     # Building.ROBOTICS_FACILITY: "F",
     # Building.ROBOTICS_BAY: "B",
     WorkerID.A: 1,
-    WorkerID.B: 1,
-    WorkerID.C: 1,
+    WorkerID.B: 2,
+    WorkerID.C: 3,
     Resource.GAS: fg("green") + "G" + RESET,
     Resource.MINERALS: fg("blue") + "M" + RESET,
 }
