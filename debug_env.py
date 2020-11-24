@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, astuple
+from typing import Generator
 
 import env
 import keyboard_control
 from data_types import (
     ActionType,
-    Building,
     X,
     WorkerID,
     Assignment,
@@ -14,6 +14,7 @@ from data_types import (
     Targets,
     WORLD_SIZE,
     Resource,
+    Target,
 )
 
 
@@ -27,13 +28,18 @@ class DebugAction(Action):
 
 @dataclass(frozen=True)
 class DebugAction1(DebugAction):
-    building: X
+    target: X
     i: X
     j: X
 
+    def to_ints(self) -> Generator[int, None, None]:
+        yield Targets.index(self.target)
+        yield self.i
+        yield self.j
+
     @classmethod
     def num_values(cls) -> "DebugAction1":
-        return cls(len(Building), i=WORLD_SIZE, j=WORLD_SIZE)
+        return cls(len(Targets), i=WORLD_SIZE, j=WORLD_SIZE)
 
     def reset(self):
         return True
@@ -45,7 +51,7 @@ class DebugAction1(DebugAction):
     def parse(cls, a) -> "Action":
         parsed = super().parse(a)
         assert isinstance(parsed, DebugAction1)
-        return cls(building=Building(1 + parsed.building), i=parsed.i, j=parsed.j)
+        return cls(target=Targets[parsed.target], i=parsed.i, j=parsed.j)
 
 
 @dataclass(frozen=True)
@@ -65,9 +71,8 @@ class DebugCompoundAction(CompoundAction):
         return WorkerID(1)
 
     def assignment(self) -> Assignment:
-        return BuildOrder(
-            self.action1.building, location=(self.action1.i, self.action1.j)
-        )
+        assert isinstance(self.action1.target, Target)
+        return self.action1.target.assignment(astuple(self.action3))
 
     def is_op(self):
         return True

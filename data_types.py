@@ -181,7 +181,7 @@ class Action(metaclass=ActionType):
     @classmethod
     def mask(cls, size):
         for i in range(size):
-            yield i < cls.size_a()
+            yield i >= cls.size_a()
 
     @classmethod
     def can_open_gate(cls, size) -> Generator[bool, None, None]:
