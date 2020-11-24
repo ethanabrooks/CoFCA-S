@@ -9,11 +9,8 @@ from data_types import (
     WorkerID,
     Assignment,
     CompoundAction,
-    State,
     Action,
     BuildOrder,
-    Coord,
-    WorkerAction,
     Targets,
     WORLD_SIZE,
     Resource,
@@ -52,12 +49,6 @@ class DebugAction1(DebugAction):
 
 
 @dataclass(frozen=True)
-class DebugBuildOrder(BuildOrder):
-    def action(self, current_position: Coord, *args, **kwargs) -> "WorkerAction":
-        return self.building
-
-
-@dataclass(frozen=True)
 class DebugCompoundAction(CompoundAction):
     action1: DebugAction1 = None
     ptr: int = 0
@@ -74,7 +65,7 @@ class DebugCompoundAction(CompoundAction):
         return WorkerID(1)
 
     def assignment(self) -> Assignment:
-        return DebugBuildOrder(
+        return BuildOrder(
             self.action1.building, location=(self.action1.i, self.action1.j)
         )
 
@@ -106,10 +97,6 @@ class Env(env.Env):
     def compound_action(*args, **kwargs) -> DebugCompoundAction:
         return DebugCompoundAction(*args, **kwargs)
 
-    def done_generator(self, *lines):
-        while True:
-            yield True, lambda: None
-
     def main(self):
         def action_fn(string: str):
             try:
@@ -121,22 +108,6 @@ class Env(env.Env):
                 print(e)
 
         keyboard_control.run(self, action_fn)
-
-    def reward_generator(self):
-        state: State
-        state = yield
-        while True:
-            reward = int(state.success)
-
-            # noinspection PyTypeChecker
-            state = yield reward, lambda: print("Reward:", reward)
-
-    @staticmethod
-    def update_buildings(building, building_positions, worker_position):
-        for i in range(WORLD_SIZE):
-            for j in range(WORLD_SIZE):
-                if (i, j) not in building_positions:
-                    building_positions[(i, j)] = building
 
 
 def main(debug_env: bool, **kwargs):

@@ -120,11 +120,13 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        self.max = Resources(*sum(Costs.values(), Counter()).values(), gas=1)
+        self.max = Resources(*sum(Costs.values(), Counter()).values(), gas=2)
         self.time_per_line = 2 * max(
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
-        resources_space = spaces.MultiDiscrete([self.max.minerals, self.max.gas])
+        resources_space = spaces.MultiDiscrete(
+            1 + np.array([self.max.minerals, self.max.gas])
+        )
         next_actions_space = MultiDiscrete(np.ones(len(WorkerID)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
@@ -452,14 +454,14 @@ class Env(gym.Env):
                     )
                 )
             )
-            for (k, space), (n, o) in zip(
-                self.observation_space.spaces.items(), obs.items()
-            ):
-                if not space.contains(o):
-                    import ipdb
+            # for (k, space), (n, o) in zip(
+            # self.observation_space.spaces.items(), obs.items()
+            # ):
+            # if not space.contains(o):
+            # import ipdb
 
-                    ipdb.set_trace()
-                    space.contains(o)
+            # ipdb.set_trace()
+            # space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
 
@@ -707,11 +709,6 @@ class Env(gym.Env):
                         resources -= Costs[building]
                 else:
                     raise RuntimeError
-
-            # remove exhausted resources
-            for resource, _remaining in remaining.items():
-                if not _remaining:
-                    del positions[resource]
 
     @staticmethod
     def update_buildings(building, building_positions, worker_position):
