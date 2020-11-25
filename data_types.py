@@ -5,7 +5,7 @@ from abc import abstractmethod
 from collections import Counter
 from dataclasses import dataclass, astuple, fields, replace
 from enum import unique, Enum, auto, EnumMeta
-from typing import Tuple, Union, List, Generator, Dict, Generic
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import numpy as np
 import torch
@@ -44,7 +44,7 @@ class Assignment:
 
 class Target:
     @abstractmethod
-    def assignment(self, coord: Coord) -> "Assignment":
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
         raise NotImplementedError
 
     @classmethod
@@ -73,8 +73,9 @@ class Building(Target, WorkerAction, Enum):
     # ROBOTICS_FACILITY = auto()
     # ROBOTICS_BAY = auto()
 
-    def assignment(self, coord: Coord) -> "Assignment":
-        return BuildOrder(building=self, location=coord)
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
+        assert isinstance(action3, Action3)
+        return BuildOrder(building=self, location=(action3.i, action3.j))
 
 
 @unique
@@ -82,7 +83,7 @@ class Resource(Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
 
-    def assignment(self, coord: Coord) -> "Assignment":
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
         return self
 
     def action(
@@ -344,9 +345,7 @@ class CompoundAction:
         return self.active.mask(size)
 
     def is_op(self):
-        initial_action = all(x is None for x in self.actions())
-        next_action1 = self.active is next(self.classes())
-        return not initial_action and next_action1
+        return self.action1.is_op and self.active is next(self.classes())
 
     def worker(self) -> Worker:
         assert self.action2.worker is not None
@@ -354,7 +353,7 @@ class CompoundAction:
 
     def assignment(self) -> Assignment:
         assert isinstance(self.action2.target, Target)
-        return self.action2.target.assignment(astuple(self.action3))
+        return self.action2.target.assignment(self.action3)
 
 
 @dataclass(frozen=True)
