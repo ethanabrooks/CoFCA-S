@@ -58,7 +58,7 @@ class WorkerAction:
 
 @unique
 class Building(Target, WorkerAction, Enum):
-    # PYLON = auto()
+    PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
     # FORGE = auto()
@@ -70,7 +70,7 @@ class Building(Target, WorkerAction, Enum):
     # DARK_SHRINE = auto()
     # STARGATE = auto()
     # FLEET_BEACON = auto()
-    # ROBOTICS_FACILITY = auto()
+    ROBOTICS_FACILITY = auto()
     # ROBOTICS_BAY = auto()
 
     def assignment(self, action3: Optional["Action3"]) -> "Assignment":
@@ -383,7 +383,7 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
-    # Building.PYLON: Resources(minerals=1, gas=0),
+    Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
     # Building.FORGE: Resources(minerals=2, gas=0),
     # Building.GATEWAY: Resources(minerals=2, gas=0),
@@ -391,7 +391,7 @@ costs = {
     # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
     Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
     # Building.STARGATE: Resources(minerals=2, gas=2),
-    # Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
+    Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
     # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
     # Building.DARK_SHRINE: Resources(minerals=2, gas=2),
     # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
@@ -442,7 +442,7 @@ WorldObject = Union[Building, Resource, Worker]
 WorldObjects = list(Building) + list(Resource) + list(Worker)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
-    # Building.PYLON: "p",
+    Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
     # Building.FORGE: "f",
@@ -454,7 +454,7 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     # Building.DARK_SHRINE: "D",
     # Building.STARGATE: "S",
     # Building.FLEET_BEACON: "b",
-    # Building.ROBOTICS_FACILITY: "F",
+    Building.ROBOTICS_FACILITY: "F",
     # Building.ROBOTICS_BAY: "B",
     Worker.A: 1,
     Worker.B: 2,
