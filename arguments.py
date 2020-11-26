@@ -35,8 +35,8 @@ def add_arguments(parser):
     )
     parser.add_argument("--name")
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--gpus-per-trial", "-g", type=int, default=0.5)
-    parser.add_argument("--cpus-per-trial", "-c", type=int, default=6)
+    parser.add_argument("--gpus-per-trial", "-g", type=float, default=0.25)
+    parser.add_argument("--cpus-per-trial", "-c", type=float, default=1.5)
     parser.add_argument("--num-frames", type=int)
     parser.add_argument(
         "--num-processes",
