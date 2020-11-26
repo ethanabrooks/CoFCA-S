@@ -78,6 +78,7 @@ starcraft_default = {
     "max_lines": 10,
     "min_eval_lines": 1,
     "min_lines": 1,
+    "next_actions_embed_size": 64,
     "no_eval": False,
     "no_pointer": False,
     "no_roll": False,
@@ -98,7 +99,7 @@ starcraft_default = {
     "seed": 0,
     "stride": 1,
     "synchronous": False,
-    "task_embed_size": 64,
+    "task_embed_size": 128,
     "tau": 0.95,
     "train_steps": 30,
     "transformer": False,
@@ -108,19 +109,18 @@ starcraft_default = {
 
 search_starcraft = copy.deepcopy(starcraft_default)
 search_starcraft.update(
-    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64, 128]),
-    entropy_coef=hp.choice("entropy_coef", [0.01, 0.015]),
-    hidden_size=hp.choice("hidden_size", [64, 128, 256, 512, 1024]),
-    resources_hidden_size=hp.choice("resources_hidden_size", [64, 128, 256, 512]),
-    learning_rate=hp.choice("learning_rate", [0.001, 0.002, 0.0025, 0.003, 0.01]),
-    lower_embed_size=hp.choice("lower_embed_size", [32, 64, 128, 256]),
+    conv_hidden_size=hp.choice("conv_hidden_size", [32, 64]),
+    entropy_coef=hp.choice("entropy_coef", [0.02, 0.025]),
+    hidden_size=hp.choice("hidden_size", [64, 128, 256]),
+    learning_rate=hp.choice("learning_rate", [0.001, 0.0015, 0.002, 0.0025]),
+    lower_embed_size=hp.choice("lower_embed_size", [32, 64]),
+    next_actions_embed_size=hp.choice("next_actions_embed_size", [32, 64]),
     num_batch=hp.choice("num_batch", [1, 2]),
     num_edges=hp.choice("num_edges", [1]),
     num_processes=hp.choice("num_processes", [150, 16]),
-    ppo_epoch=hp.choice("ppo_epoch", [2, 3, 4, 10, 15]),
-    tgt_success_rate=hp.choice("tgt_success_rate", [0.8, 0.9]),
-    task_embed_size=hp.choice("task_embed_size", [32, 64, 128, 256]),
-    train_steps=hp.choice("train_steps", [30, 35, 40]),
+    ppo_epoch=hp.choice("ppo_epoch", [3, 4, 10, 15]),
+    tgt_success_rate=hp.choice("tgt_success_rate", [0.75, 0.8, 0.9]),
+    train_steps=hp.choice("train_steps", [20, 25, 30]),
 )
 
 

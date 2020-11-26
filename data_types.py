@@ -5,7 +5,7 @@ from abc import abstractmethod
 from collections import Counter
 from dataclasses import dataclass, astuple, fields, replace
 from enum import unique, Enum, auto, EnumMeta
-from typing import Tuple, Union, List, Generator, Dict, Generic
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import numpy as np
 import torch
@@ -25,7 +25,7 @@ class Unit(Enum):
 
 
 @unique
-class WorkerID(Enum):
+class Worker(Enum):
     A = auto()
     B = auto()
     C = auto()
@@ -36,7 +36,7 @@ class Assignment:
     def action(
         self,
         current_position: Coord,
-        positions: Dict[Union["Resource", WorkerID], Coord],
+        positions: Dict[Union["Resource", Worker], Coord],
         nexus_positions: List[Coord],
     ) -> "WorkerAction":
         raise NotImplementedError
@@ -44,7 +44,7 @@ class Assignment:
 
 class Target:
     @abstractmethod
-    def assignment(self, coord: Coord) -> "Assignment":
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
         raise NotImplementedError
 
     @classmethod
@@ -58,23 +58,24 @@ class WorkerAction:
 
 @unique
 class Building(Target, WorkerAction, Enum):
-    PYLON = auto()
+    # PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
-    FORGE = auto()
-    PHOTON_CANNON = auto()
-    GATEWAY = auto()
-    CYBERNETICS_CORE = auto()
+    # FORGE = auto()
+    # PHOTON_CANNON = auto()
+    # GATEWAY = auto()
+    # CYBERNETICS_CORE = auto()
     TWILIGHT_COUNCIL = auto()
-    TEMPLAR_ARCHIVES = auto()
-    DARK_SHRINE = auto()
-    STARGATE = auto()
-    FLEET_BEACON = auto()
-    ROBOTICS_FACILITY = auto()
-    ROBOTICS_BAY = auto()
+    # TEMPLAR_ARCHIVES = auto()
+    # DARK_SHRINE = auto()
+    # STARGATE = auto()
+    # FLEET_BEACON = auto()
+    # ROBOTICS_FACILITY = auto()
+    # ROBOTICS_BAY = auto()
 
-    def assignment(self, coord: Coord) -> "Assignment":
-        return BuildOrder(building=self, location=coord)
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
+        assert isinstance(action3, Action3)
+        return BuildOrder(building=self, location=(action3.i, action3.j))
 
 
 @unique
@@ -82,13 +83,13 @@ class Resource(Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
 
-    def assignment(self, coord: Coord) -> "Assignment":
+    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
         return self
 
     def action(
         self,
         current_position: Coord,
-        positions: Dict[Union["Resource", WorkerID], Coord],
+        positions: Dict[Union["Resource", Worker], Coord],
         nexus_positions: List[Coord],
     ) -> "Movement":
         target_position = positions[self]
@@ -153,10 +154,10 @@ class Obs(typing.Generic[O]):
     can_open_gate: O
     lines: O
     mask: O
+    next_actions: O
     obs: O
     partial_action: O
     resources: O
-    workers: O
 
 
 X = typing.TypeVar("X")
@@ -181,7 +182,7 @@ class Action(metaclass=ActionType):
     @classmethod
     def mask(cls, size):
         for i in range(size):
-            yield i < cls.size_a()
+            yield i >= cls.size_a()
 
     @classmethod
     def can_open_gate(cls, size) -> Generator[bool, None, None]:
@@ -200,9 +201,13 @@ class Action(metaclass=ActionType):
     def reset(self) -> bool:
         raise NotImplementedError
 
+    @abstractmethod
+    def to_ints(self) -> Generator[int, None, None]:
+        yield from map(int, astuple(self))
+
     def next(self) -> ActionType:
         if self.reset():
-            return Action1
+            return next(CompoundAction.classes())
         return self.next_if_not_reset()
 
     @abstractmethod
@@ -234,17 +239,27 @@ class Action2(Action):
     def parse(cls, a) -> "Action":
         ints = super().parse(a)
         assert isinstance(ints, cls)
-        return cls(worker=WorkerID(ints.worker + 1), target=Targets[ints.target])
+        return cls(worker=Worker(ints.worker + 1), target=Targets[ints.target])
 
     @classmethod
     def num_values(cls) -> "Action2":
-        return cls(worker=len(WorkerID), target=len(Targets))
+        return cls(worker=len(Worker), target=len(Targets))
 
     def reset(self):
         return isinstance(self.target, Resource)
 
     def next_if_not_reset(self) -> ActionType:
         return Action3
+
+    def to_ints(self) -> Generator[int, None, None]:
+        if isinstance(self.worker, Worker):
+            yield self.worker.value
+        else:
+            yield int(self.worker)
+        if isinstance(self.target, Target):
+            yield Targets.index(self.target)
+        else:
+            yield int(self.target)
 
 
 @dataclass(frozen=True)
@@ -299,7 +314,7 @@ class CompoundAction:
         actions = [*self.actions()][:index]
         for cls, action in itertools.zip_longest(self.classes(), actions):
             if isinstance(action, Action):
-                yield from [1 + x for x in astuple(action)]
+                yield from action.to_ints()
             elif issubclass(cls, Action):
                 assert action is None
                 yield from [0 for _ in astuple(cls.num_values())]
@@ -314,11 +329,12 @@ class CompoundAction:
         action = self.active.parse(action.a)
         index = [*self.classes()].index(self.active)
         new_keys = (f.name for f in fields(self))
-        new_actions = (*[*self.actions()][:index], action)
-        kwargs = dict(zip(new_keys, new_actions))
-        assert None not in kwargs.values()
+        new_actions = [*[*self.actions()][:index], action]
+        assert None not in new_actions
+        kwargs = dict(itertools.zip_longest(new_keys, new_actions))
+        kwargs.update(active=action.next(), ptr=ptr)
         # noinspection PyTypeChecker
-        return replace(self, **kwargs, active=action.next(), ptr=ptr)
+        return replace(self, **kwargs)
 
     def can_open_gate(self, size):
         assert issubclass(self.active, Action)
@@ -329,20 +345,20 @@ class CompoundAction:
         return self.active.mask(size)
 
     def is_op(self):
-        return None not in astuple(self)
+        return self.action1.is_op and self.active is next(self.classes())
 
-    def worker(self) -> WorkerID:
+    def worker(self) -> Worker:
         assert self.action2.worker is not None
         return self.action2.worker
 
     def assignment(self) -> Assignment:
         assert isinstance(self.action2.target, Target)
-        return self.action2.target.assignment(astuple(self.action3))
+        return self.action2.target.assignment(self.action3)
 
 
 @dataclass(frozen=True)
 class Command:
-    worker: WorkerID
+    worker: Worker
     assignment: Assignment
 
 
@@ -367,19 +383,19 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
-    Building.PYLON: Resources(minerals=1, gas=0),
+    # Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
-    Building.FORGE: Resources(minerals=2, gas=0),
-    Building.GATEWAY: Resources(minerals=2, gas=0),
-    Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
-    Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
+    # Building.FORGE: Resources(minerals=2, gas=0),
+    # Building.GATEWAY: Resources(minerals=2, gas=0),
+    # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
+    # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
     Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
-    Building.STARGATE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
-    Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
-    Building.DARK_SHRINE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
-    Building.FLEET_BEACON: Resources(minerals=3, gas=2),
+    # Building.STARGATE: Resources(minerals=2, gas=2),
+    # Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
+    # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
+    # Building.DARK_SHRINE: Resources(minerals=2, gas=2),
+    # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
+    # Building.FLEET_BEACON: Resources(minerals=3, gas=2),
 }
 
 Costs: Dict[Building, typing.Counter[Resource]] = {
@@ -409,83 +425,40 @@ class Node:
 
 Tree = List[Union[Node, Leaf]]
 
-build_tree = [
-    Leaf(Building.PYLON),
-    Leaf(Building.ASSIMILATOR),
-    Node(
-        Building.NEXUS,
-        [
-            Node(Building.FORGE, [Leaf(Building.PHOTON_CANNON)]),
-            Node(
-                Building.GATEWAY,
-                [
-                    Node(
-                        Building.CYBERNETICS_CORE,
-                        [
-                            Node(
-                                Building.TWILIGHT_COUNCIL,
-                                [
-                                    Leaf(Building.TEMPLAR_ARCHIVES),
-                                    Leaf(Building.DARK_SHRINE),
-                                ],
-                            ),
-                            Node(Building.STARGATE, [Leaf(Building.FLEET_BEACON)]),
-                            Node(
-                                Building.ROBOTICS_FACILITY,
-                                [Leaf(Building.ROBOTICS_BAY)],
-                            ),
-                        ],
-                    )
-                ],
-            ),
-        ],
-    ),
-]
-
-
-def flatten(tree: Tree) -> Generator[Building, None, None]:
-    for node in tree:
-        yield node.building
-        if isinstance(node, Node):
-            yield from flatten(node.children)
-
-
-# ensure all buildings are in build_tree
-assert set(flatten(build_tree)) == set(Building)
-
 
 @dataclass
 class State:
     action: CompoundAction
     building_positions: Dict[Coord, Building]
-    next_action: Dict[WorkerID, WorkerAction]
+    next_action: Dict[Worker, WorkerAction]
     pointer: int
-    positions: Dict[Union[Resource, WorkerID], Coord]
+    positions: Dict[Union[Resource, Worker], Coord]
     resources: typing.Counter[Resource]
     success: bool
+    time_remaining: int
 
 
-WorldObject = Union[Building, Resource, WorkerID]
-WorldObjects = list(Building) + list(Resource) + list(WorkerID)
+WorldObject = Union[Building, Resource, Worker]
+WorldObjects = list(Building) + list(Resource) + list(Worker)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
-    Building.PYLON: "p",
+    # Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
-    Building.FORGE: "f",
-    Building.PHOTON_CANNON: "c",
-    Building.GATEWAY: "g",
-    Building.CYBERNETICS_CORE: "C",
+    # Building.FORGE: "f",
+    # Building.PHOTON_CANNON: "c",
+    # Building.GATEWAY: "g",
+    # Building.CYBERNETICS_CORE: "C",
     Building.TWILIGHT_COUNCIL: "T",
-    Building.TEMPLAR_ARCHIVES: "A",
-    Building.DARK_SHRINE: "D",
-    Building.STARGATE: "S",
-    Building.FLEET_BEACON: "b",
-    Building.ROBOTICS_FACILITY: "F",
-    Building.ROBOTICS_BAY: "B",
-    WorkerID.A: 1,
-    WorkerID.B: 1,
-    WorkerID.C: 1,
+    # Building.TEMPLAR_ARCHIVES: "A",
+    # Building.DARK_SHRINE: "D",
+    # Building.STARGATE: "S",
+    # Building.FLEET_BEACON: "b",
+    # Building.ROBOTICS_FACILITY: "F",
+    # Building.ROBOTICS_BAY: "B",
+    Worker.A: 1,
+    Worker.B: 2,
+    Worker.C: 3,
     Resource.GAS: fg("green") + "G" + RESET,
     Resource.MINERALS: fg("blue") + "M" + RESET,
 }
