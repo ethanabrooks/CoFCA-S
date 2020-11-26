@@ -58,7 +58,7 @@ class WorkerAction:
 
 @unique
 class Building(Target, WorkerAction, Enum):
-    # PYLON = auto()
+    PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
     # FORGE = auto()
@@ -383,7 +383,7 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
-    # Building.PYLON: Resources(minerals=1, gas=0),
+    Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
     # Building.FORGE: Resources(minerals=2, gas=0),
     # Building.GATEWAY: Resources(minerals=2, gas=0),
@@ -442,7 +442,7 @@ WorldObject = Union[Building, Resource, Worker]
 WorldObjects = list(Building) + list(Resource) + list(Worker)
 
 Symbols: Dict[WorldObject, Union[str, int]] = {
-    # Building.PYLON: "p",
+    Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
     # Building.FORGE: "f",
