@@ -2,6 +2,8 @@ import pickle
 from itertools import islice
 from pathlib import Path
 
+import wandb
+
 import debug_env as _debug_env
 import env
 import our_agent
@@ -36,26 +38,24 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
         yield from super().items()
 
 
+FAILURE_BUFFER_NAME = "failure_buffer.pkl"
+
+
 class UpperTrainer(Trainer):
     metric = "reward"
     default = starcraft_default
 
+    def run(self, *args, **kwargs):
+        wandb.save(FAILURE_BUFFER_NAME)
+
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
 
-    def report_generator(self, log_dir):
-        reporter = super().report_generator(log_dir)
-        next(reporter)
+    def report(self, failure_buffer, **kwargs):
+        super().report(**kwargs)
 
-        def report(failure_buffer=None, **kwargs):
-            if failure_buffer is not None:
-                with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                    pickle.dump(failure_buffer, f)
-            reporter.send(kwargs)
-
-        while True:
-            msg = yield
-            report(**msg)
+        with Path(wandb.run.dir, FAILURE_BUFFER_NAME).open("wb") as f:
+            pickle.dump(failure_buffer, f)
 
     def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
         del agent_args["recurrent"]
@@ -126,7 +126,7 @@ class UpperTrainer(Trainer):
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
-        parser.main.add_argument("--no-eval", action="store_true")
+        parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--min-eval-lines", type=int)
         parser.main.add_argument("--max-eval-lines", type=int)
         env_parser = parser.main.add_argument_group("env_args")

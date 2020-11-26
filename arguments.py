@@ -19,6 +19,7 @@ def get_config(name):
 
 def add_arguments(parser):
     parser.add_argument("--config", type=get_config)
+    parser.add_argument("--cpus-per-trial", "-c", type=int, default=1)
     parser.add_argument(
         "--cuda-deterministic",
         action="store_true",
@@ -28,15 +29,15 @@ def add_arguments(parser):
         "--eval-interval", type=int, help="eval interval, one eval per n updates"
     )
     parser.add_argument("--eval-steps", type=int, help="number of steps for evaluation")
+    parser.add_argument("--group", help="wandb group")
+    parser.add_argument("--gpus-per-trial", "-g", type=float, default=0.25)
     parser.add_argument(
         "--log-interval",
         type=int,
         help="log interval, one log per n updates",
     )
-    parser.add_argument("--name")
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--gpus-per-trial", "-g", type=float, default=0.25)
-    parser.add_argument("--cpus-per-trial", "-c", type=float, default=1.5)
+    parser.add_argument("--notes", help="Notes to add to run for wandb")
     parser.add_argument("--num-frames", type=int)
     parser.add_argument(
         "--num-processes",
@@ -50,9 +51,11 @@ def add_arguments(parser):
         help="Number of times to sample from the hyperparameter space. See tune docs for details: "
         "https://docs.ray.io/en/latest/tune/api_docs/execution.html?highlight=run#ray.tune.run",
     )
+    parser.add_argument("--project", help="wandb project name")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render-eval", action="store_true")
     parser.add_argument("--seed", type=int, help="random seed")
+    parser.add_argument("--tags", nargs="*", help="wandb tag")
     parser.add_argument(
         "--train-steps",
         type=int,
@@ -64,13 +67,12 @@ def add_arguments(parser):
         help="environment to train on",
     )
     parser.add_argument("--load-path", type=Path)
-    parser.add_argument("--log-dir", type=Path, help="directory to save agent logs")
     parser.add_argument(
         "--no-cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument("--num-batch", type=int, help="number of batches for ppo")
-    # parser.add_argument("--success-reward", type=float)
+    parser.add_argument("--wandb-key-file", type=Path, default=Path(".wandb_key"))
 
     agent_parser = parser.add_argument_group("agent_args")
     agent_parser.add_argument(
