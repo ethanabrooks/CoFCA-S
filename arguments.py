@@ -2,11 +2,34 @@ import json
 from collections import namedtuple
 from pathlib import Path
 
+import yaml
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
+def load_config(yml_or_path: str):
+    path = Path(yml_or_path)
+    if path.exists():
+        with path.open() as f:
+
+            def parse():
+                for k, v in yaml.load(f).items():
+                    try:
+                        yield k, v["value"]
+                    except TypeError:
+                        pass
+
+            return dict(parse())
+    return yaml.load(yml_or_path)
+
+
 def add_arguments(parser):
+    parser.add_argument(
+        "--config",
+        type=load_config,
+        default={},
+        help="Config that is used to update given params",
+    )
     parser.add_argument(
         "--cuda_deterministic",
         action="store_true",
@@ -51,6 +74,7 @@ def add_arguments(parser):
     parser.add_argument(
         "--no_cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
+    parser.add_argument("--no_wandb", action="store_true", help="Do not use wandb.")
     parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
         "--num_batch", type=int, help="number of batches for ppo", default=2

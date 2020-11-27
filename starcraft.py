@@ -43,11 +43,11 @@ class Trainer(trainer.Trainer):
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
 
-    def report(self, failure_buffer, **kwargs):
+    def report(self, failure_buffer, log_dir: Path, **kwargs):
         if failure_buffer is not None:
-            with Path(wandb.run.dir, "failure_buffer.pkl").open("wb") as f:
+            with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
                 pickle.dump(failure_buffer, f)
-        super().report(**kwargs)
+        super().report(**kwargs, log_dir=log_dir)
 
     def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
         del agent_args["recurrent"]

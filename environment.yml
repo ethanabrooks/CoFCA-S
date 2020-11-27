@@ -3,16 +3,16 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - colored=1.4.2=py_0
-  - cudatoolkit=11.0.221=h6bb024c_0
-  - gym=0.17.3=py38h32f6830_0
-  - ipdb=0.13.4=pyhd3deb0d_0
-  - ipython=7.19.0=py38h81c977d_0
-  - pip=20.2.4=py38h06a4308_0
-  - python=3.8.5=h7579374_1
-  - pytorch=1.4.0=cpu_py38h7e40bad_0
-  - pyyaml=5.3.1=py38h8df0ef7_1
-  - treelib=1.6.1=pyh9f0ad1d_0
+  - colored=1.4.2
+  - cudatoolkit=11.0
+  - gym=0.17.3
+  - ipdb=0.13.4
+  - ipython=7.19.0
+  - pip=20.2.4
+  - python=3.8.5
+  - pytorch=1.4.0
+  - pyyaml=5.3.1
+  - treelib=1.6.1
   - pip: 
     - wandb==0.10.11
 prefix: /home/ethanbro/miniconda3/envs/ppo

@@ -48,6 +48,9 @@ class Trainer:
     def structure_config(
         cls, **config
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        if config["render"]:
+            config["num_processes"] = 1
+
         def parameters(*ms):
             for method in ms:
                 yield from inspect.signature(method).parameters
@@ -55,6 +58,8 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in config.items():
+            if k in ("_wandb", "wandb_version"):
+                continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
                 if k in parameters(*methods):
@@ -66,7 +71,7 @@ class Trainer:
         return args
 
     @staticmethod
-    def save_checkpoint(save_path, ppo, agent, step):
+    def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):
         modules = dict(
             optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
@@ -78,7 +83,7 @@ class Trainer:
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
-        state_dict = torch.load(checkpoint_path, map_location=device)
+        state_dict = torch.load(str(checkpoint_path), map_location=device)
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
         # if isinstance(self.envs.venv, VecNormalize):
@@ -92,6 +97,7 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
+        log_dir: Path,
         log_interval: int,
         normalize: float,
         num_frames: int,
@@ -114,8 +120,7 @@ class Trainer:
         #  - https://github.com/ray-project/ray/issues/3609
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
-        save_path = Path(wandb.run.dir, CHECKPOINT_NAME)
-        wandb.save(str(save_path))
+        save_path = Path(log_dir, CHECKPOINT_NAME)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -246,6 +251,7 @@ class Trainer:
                             **dict(eval_report.items()),
                             **dict(eval_infos.items()),
                             frames=frames["so_far"],
+                            log_dir=log_dir,
                         )
                         print("Done evaluating...")
                     eval_envs.close()
@@ -262,6 +268,7 @@ class Trainer:
                         time_logging=time_spent["logging"],
                         time_saving=time_spent["saving"],
                         frames=frames["so_far"],
+                        log_dir=log_dir,
                     )
                     train_report.reset()
                     train_infos.reset()
@@ -323,10 +330,13 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report(frames: int, **kwargs):
+    def report(frames: int, log_dir: Path, **kwargs):
         print("Frames:", frames)
         pprint(kwargs)
-        wandb.log(kwargs, step=frames)
+        try:
+            wandb.log(kwargs, step=frames)
+        except wandb.Error:
+            pass
 
     def build_infos_aggregator(self):
         return InfosAggregator()
@@ -354,12 +364,18 @@ class Trainer:
     def main(cls):
         parser = ArgumentParser()
         cls.add_arguments(parser)
-        args = vars(parser.parse_args())
-        wandb.init()
-        config: dict = wandb.config.as_dict()
-        args.update(config)
-        args = cls.structure_config(**args)
-        cls().run(**args)
+
+        def run(config, no_wandb, **kwargs):
+            if no_wandb:
+                log_dir = Path("/tmp")
+            else:
+                wandb.init()
+                kwargs.update(wandb.config.as_dict())
+                log_dir = Path(wandb.run.dir)
+            kwargs.update(config, log_dir=log_dir)
+            cls().run(**cls.structure_config(**kwargs))
+
+        run(**vars(parser.parse_args()))
 
 
 if __name__ == "__main__":
