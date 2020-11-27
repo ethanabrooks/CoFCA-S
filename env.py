@@ -197,15 +197,15 @@ class Env(gym.Env):
                 building = self.random.choice(
                     [
                         *filter(
-                            lambda b: b is not Building.NEXUS
-                            and (include_assimilator or b is not Building.ASSIMILATOR),
+                            lambda b: (
+                                include_assimilator or b is not Building.ASSIMILATOR
+                            ),
                             Building,
                         )
                     ]
                 )
 
                 inst = *first, last = [*instructions_for(building)]
-                assert last is not Building.NEXUS
             for i in first:
                 yield Line(False, i)
             yield Line(True, last)
