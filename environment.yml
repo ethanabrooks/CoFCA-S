@@ -8,6 +8,7 @@ dependencies:
   - gym=0.17.3=py38h32f6830_0
   - ipdb=0.13.4=pyhd3deb0d_0
   - ipython=7.19.0=py38h81c977d_0
+  - pip=20.2.4=py38h06a4308_0
   - python=3.8.5=h7579374_1
   - pytorch=1.4.0=cpu_py38h7e40bad_0
   - pyyaml=5.3.1=py38h8df0ef7_1
