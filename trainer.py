@@ -6,17 +6,15 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, Optional, DefaultDict, Union, List
+from typing import Dict, Optional, DefaultDict, Union
 
 import gym
 import ray
 import torch
 import torch.nn as nn
-import wandb
-from wandb.sweeps.config import tune
-from wandb.sweeps.config.tune.suggest.hyperopt import HyperOptSearch
-
-from ray.tune.integration.wandb import wandb_mixin
+from ray import tune
+from ray.tune.suggest.hyperopt import HyperOptSearch
+from tensorboardX import SummaryWriter
 
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
@@ -31,12 +29,9 @@ from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 
-CHECKPOINT_NAME = "checkpoint.pt"
-
 
 class Trainer:
     metric = "reward"
-    mode = "max"
     default = default
 
     @classmethod
@@ -64,33 +59,30 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in config.items():
-            if k == "wandb":
-                continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
                 if k in parameters(*methods):
                     args[arg_name][k] = v
                     assigned = True
-            assert assigned, k
+            assert assigned
         run_args = args.pop("run_args")
         args.update(**run_args)
         return args
 
     @staticmethod
-    def save_checkpoint(ppo, agent, step):
+    def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
         modules = dict(
             optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(wandb.run.dir, CHECKPOINT_NAME)
+        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
         torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
 
     @staticmethod
-    def load_checkpoint(ppo, agent, device):
-        checkpoint_path = Path(wandb.run.dir, CHECKPOINT_NAME)
+    def load_checkpoint(checkpoint_path, ppo, agent, device):
         state_dict = torch.load(checkpoint_path, map_location=device)
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
@@ -105,6 +97,7 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
+        log_dir: Optional[str],
         log_interval: int,
         normalize: float,
         num_frames: int,
@@ -127,7 +120,13 @@ class Trainer:
         #  - https://github.com/ray-project/ray/issues/3609
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
-        wandb.save(Path(wandb.run.dir, CHECKPOINT_NAME))
+
+        if tune.is_session_enabled():
+            with tune.checkpoint_dir(0) as _dir:
+                log_dir = str(Path(_dir).parent)
+
+        reporter = self.report_generator(log_dir)
+        next(reporter)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -205,8 +204,7 @@ class Trainer:
             train_infos = self.build_infos_aggregator()
             train_results = {}
             if load_path:
-                wandb.restore(CHECKPOINT_NAME)
-                self.load_checkpoint(ppo, agent, device)
+                self.load_checkpoint(load_path, ppo, agent, device)
 
             rollouts.obs[0].copy_(train_envs.reset())
             frames_per_update = train_steps * num_processes
@@ -239,7 +237,6 @@ class Trainer:
                             agent.recurrent_hidden_state_size,
                             device=device,
                         )
-                        print("evaluating...")
 
                         for output in run_epoch(
                             obs=eval_envs.reset(),
@@ -253,12 +250,13 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
-                        self.report(
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
-                            training_iteration=frames["so_far"],
+                        reporter.send(
+                            dict(
+                                **dict(eval_report.items()),
+                                **dict(eval_infos.items()),
+                                training_iteration=frames["so_far"],
+                            )
                         )
-                        print("done evaluating")
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
@@ -266,13 +264,15 @@ class Trainer:
                 if done or frames["since_log"] > log_interval:
                     tick = time.time()
                     frames["since_log"] = 0
-                    self.report(
-                        **train_results,
-                        **dict(train_report.items()),
-                        **dict(train_infos.items()),
-                        time_logging=time_spent["logging"],
-                        time_saving=time_spent["saving"],
-                        training_iteration=frames["so_far"],
+                    reporter.send(
+                        dict(
+                            **train_results,
+                            **dict(train_report.items()),
+                            **dict(train_infos.items()),
+                            time_logging=time_spent["logging"],
+                            time_saving=time_spent["saving"],
+                            training_iteration=frames["so_far"],
+                        )
                     )
                     train_report.reset()
                     train_infos.reset()
@@ -281,7 +281,8 @@ class Trainer:
                 if done or (save_interval and frames["since_save"] > save_interval):
                     tick = time.time()
                     frames["since_save"] = 0
-                    self.save_checkpoint(ppo=ppo, agent=agent, step=i)
+                    if log_dir:
+                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
                     time_spent["saving"] += time.time() - tick
 
                 if done:
@@ -329,12 +330,22 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report(training_iteration: int, **kwargs):
+    def report_generator(log_dir: Optional[str]):
+
         if tune.is_session_enabled():
-            tune.report(**kwargs, training_iteration=training_iteration)
+            report = tune.report
         else:
-            pprint(kwargs)
-        wandb.log(kwargs, global_step=training_iteration)
+            writer = SummaryWriter(logdir=log_dir) if log_dir else None
+
+            def report(training_iteration, **args):
+                pprint(args)
+                if writer:
+                    for k, v in args.items():
+                        writer.add_scalar(k, v, global_step=training_iteration)
+
+        while True:
+            kwargs = yield
+            report(**kwargs)
 
     def build_infos_aggregator(self):
         return InfosAggregator()
@@ -357,16 +368,13 @@ class Trainer:
     @classmethod
     def launch(
         cls,
-        config: dict,
-        cpus_per_trial: float,
         gpus_per_trial: float,
-        group: str,
-        notes: str,
+        cpus_per_trial: float,
+        log_dir: str,
         num_samples: int,
-        project: str,
+        name: str,
+        config: dict,
         seed: Optional[int],
-        tags: List[str],
-        wandb_key_file: Path,
         **kwargs,
     ):
         if config is None:
@@ -382,54 +390,43 @@ class Trainer:
                 else:
                     config[k] = v
 
-        config.update(
-            wandb=dict(
-                project=project,
-                api_key_file=str(wandb_key_file),
-                group=group,
-                notes=notes,
-                save_code=True,
-                tags=tags,
-            ),
-        )
+        config.update(log_dir=log_dir)
 
-        @wandb_mixin
         def run(c):
             c = cls.structure_config(**c)
             cls().run(**c)
 
-        wandb.init(project=project)
         if num_samples is None:
             print("Not using tune, because num_samples was not specified")
             run(config)
         else:
-            ray.init(dashboard_host="127.0.0.1")
+            local_mode = num_samples is None
+            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
             resources_per_trial = dict(
                 gpu=gpus_per_trial if torch.cuda.is_available() else 0,
                 cpu=cpus_per_trial,
             )
 
-            kwargs = dict(
-                search_alg=HyperOptSearch(
-                    config, metric=cls.metric, mode=cls.mode, random_state_seed=seed
-                ),
-                num_samples=num_samples,
-            )
+            if local_mode:
+                print("Using local mode because num_samples is None")
+                kwargs = dict()
+            else:
+                kwargs = dict(
+                    search_alg=HyperOptSearch(
+                        config, metric=cls.metric, mode="max", random_state_seed=seed
+                    ),
+                    num_samples=num_samples,
+                )
+            if log_dir is not None:
+                kwargs.update(local_dir=log_dir)
 
-            tune_config = tune.run(
+            tune.run(
                 run,
-                name=group,
+                name=name,
                 config=config,
                 resources_per_trial=resources_per_trial,
-                # loggers=DEFAULT_LOGGERS + (WandbLogger,),
                 **kwargs,
             )
-
-            # Save sweep as yaml config file
-            tune_config.save("sweep-hyperopt.yaml")
-
-            # Create the sweep
-            wandb.sweep(tune_config)
 
     @classmethod
     def add_arguments(cls, parser):

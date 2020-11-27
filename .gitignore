@@ -116,5 +116,3 @@ run2.json
 instructions.json
 run.zsh
 condaenv.o6eafk7y.requirements.txt
-.wandb_key
-wandb/
