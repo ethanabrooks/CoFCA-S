@@ -13,7 +13,7 @@ def load_config(yml_or_path: str):
         with path.open() as f:
 
             def parse():
-                for k, v in yaml.load(f).items():
+                for k, v in yaml.load(f, Loader=yaml.FullLoader).items():
                     try:
                         yield k, v["value"]
                     except TypeError:

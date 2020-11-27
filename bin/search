@@ -1,4 +1,4 @@
 #!/usr/bin/env zsh
  
-matches=(.runs/logdir/$1/$1/*_$2_*/$3)
+matches=(wandb/**$1/files/$2)
 echo ${matches}
