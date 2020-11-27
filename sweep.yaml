@@ -7,10 +7,10 @@ parameters:
   conv_hidden_size:
     distribution: categorical
     values:
-      - 25
       - 50
       - 75
       - 100
+      - 150
   entropy_coef:
     distribution: categorical
     values:
@@ -36,7 +36,6 @@ parameters:
   lower_embed_size:
     distribution: categorical
     values:
-      - 25
       - 50
       - 75
       - 100
@@ -52,7 +51,6 @@ parameters:
     values:
       - 1
       - 2
-      - 5
   num_edges:
     distribution: categorical
     values:
