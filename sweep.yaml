@@ -7,19 +7,24 @@ parameters:
   conv_hidden_size:
     distribution: categorical
     values:
-      - 32
-      - 64
+      - 25
+      - 50
+      - 75
+      - 100
   entropy_coef:
     distribution: categorical
     values:
+      - 0.015
       - 0.02
       - 0.025
   hidden_size:
     distribution: categorical
     values:
-      - 64
-      - 128
-      - 256
+      - 50
+      - 100
+      - 150
+      - 200
+      - 250
   learning_rate:
     distribution: categorical
     values:
@@ -27,21 +32,28 @@ parameters:
       - 0.0015
       - 0.002
       - 0.0025
+      - 0.003
+      - 0.0035
   lower_embed_size:
     distribution: categorical
     values:
-      - 32
-      - 64
+      - 25
+      - 50
+      - 75
+      - 100
   next_actions_embed_size:
     distribution: categorical
     values:
-      - 32
-      - 64
+      - 25
+      - 50
+      - 75
+      - 100
   num_batch:
     distribution: categorical
     values:
       - 1
       - 2
+      - 4
   num_edges:
     distribution: categorical
     values:
@@ -50,6 +62,9 @@ parameters:
     distribution: categorical
     values:
       - 16
+      - 32
+      - 64
+      - 128
   ppo_epoch:
     distribution: categorical
     values:
@@ -57,11 +72,13 @@ parameters:
       - 4
       - 10
       - 15
+      - 20
   tgt_success_rate:
     distribution: categorical
     values:
       - 0.75
       - 0.8
+      - 0.85
       - 0.9
   train_steps:
     distribution: categorical
@@ -69,3 +86,4 @@ parameters:
       - 20
       - 25
       - 30
+      - 35
