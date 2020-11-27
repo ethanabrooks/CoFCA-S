@@ -61,7 +61,7 @@ class Building(Target, WorkerAction, Enum):
     PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
-    # FORGE = auto()
+    FORGE = auto()
     # PHOTON_CANNON = auto()
     # GATEWAY = auto()
     # CYBERNETICS_CORE = auto()
@@ -385,7 +385,7 @@ costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
     Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
-    # Building.FORGE: Resources(minerals=2, gas=0),
+    Building.FORGE: Resources(minerals=2, gas=0),
     # Building.GATEWAY: Resources(minerals=2, gas=0),
     # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
     # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
@@ -445,7 +445,7 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
-    # Building.FORGE: "f",
+    Building.FORGE: "f",
     # Building.PHOTON_CANNON: "c",
     # Building.GATEWAY: "g",
     # Building.CYBERNETICS_CORE: "C",
