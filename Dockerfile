@@ -8,5 +8,7 @@ RUN conda env create -f /tmp/environment.yml \
     && echo "source activate ppo" >> /root/.bashrc
 SHELL ["conda", "run", "-n", "ppo", "/bin/bash", "-c"]
 
-WORKDIR "/root"
-COPY . .
+VOLUME ["/ppo"]
+WORKDIR "/ppo"
+#COPY entrypoint.sh /ppo/
+#ENTRYPOINT ["/ppo/entrypoint.sh"]
