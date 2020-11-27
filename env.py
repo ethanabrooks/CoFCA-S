@@ -154,15 +154,15 @@ class Env(gym.Env):
 
     @classmethod
     def add_arguments(cls, p):
-        p.add_argument("--break-on-fail", action="store_true")
-        p.add_argument("--debug-env", action="store_true")
-        p.add_argument("--destroy-building-prob", type=float)
-        p.add_argument("--failure-buffer-load-path", type=Path, default=None)
-        p.add_argument("--failure-buffer-size", type=int)
-        p.add_argument("--min-lines", type=int)
-        p.add_argument("--max-lines", type=int)
-        p.add_argument("--num-initial-buildings", type=int)
-        p.add_argument("--tgt-success-rate", type=float)
+        p.add_argument("--break_on_fail", action="store_true")
+        p.add_argument("--debug_env", action="store_true")
+        p.add_argument("--destroy_building_prob", type=float, default=0)
+        p.add_argument("--failure_buffer_load_path", type=Path)
+        p.add_argument("--failure_buffer_size", type=int, default=500)
+        p.add_argument("--min_lines", type=int, default=1)
+        p.add_argument("--max_lines", type=int, default=1)
+        p.add_argument("--num_initial_buildings", type=int, default=0)
+        p.add_argument("--tgt_success_rate", type=float, default=0.8)
 
     def build_dependencies(self):
         n = len(Building)

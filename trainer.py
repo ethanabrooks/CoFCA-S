@@ -6,15 +6,12 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, Optional, DefaultDict, Union
+from typing import Dict, DefaultDict, Union
 
 import gym
-import ray
 import torch
 import torch.nn as nn
-from ray import tune
-from ray.tune.suggest.hyperopt import HyperOptSearch
-from tensorboardX import SummaryWriter
+import wandb
 
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
@@ -22,17 +19,16 @@ from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from configs import default
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
+CHECKPOINT_NAME = "checkpoint.pt"
 
 
 class Trainer:
     metric = "reward"
-    default = default
 
     @classmethod
     def args_to_methods(cls):
@@ -64,20 +60,19 @@ class Trainer:
                 if k in parameters(*methods):
                     args[arg_name][k] = v
                     assigned = True
-            assert assigned
+            assert assigned, k
         run_args = args.pop("run_args")
         args.update(**run_args)
         return args
 
     @staticmethod
-    def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
+    def save_checkpoint(save_path, ppo, agent, step):
         modules = dict(
             optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
         # if isinstance(self.envs.venv, VecNormalize):
         #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
         torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
 
@@ -97,7 +92,6 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
-        log_dir: Optional[str],
         log_interval: int,
         normalize: float,
         num_frames: int,
@@ -120,13 +114,8 @@ class Trainer:
         #  - https://github.com/ray-project/ray/issues/3609
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
-
-        if tune.is_session_enabled():
-            with tune.checkpoint_dir(0) as _dir:
-                log_dir = str(Path(_dir).parent)
-
-        reporter = self.report_generator(log_dir)
-        next(reporter)
+        save_path = Path(wandb.run.dir, CHECKPOINT_NAME)
+        wandb.save(str(save_path))
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
@@ -206,7 +195,9 @@ class Trainer:
             if load_path:
                 self.load_checkpoint(load_path, ppo, agent, device)
 
+            print("resetting environment...")
             rollouts.obs[0].copy_(train_envs.reset())
+            print("Reset environment")
             frames_per_update = train_steps * num_processes
             frames = Counter()
             time_spent = Counter()
@@ -219,6 +210,7 @@ class Trainer:
                     or done
                     or (eval_interval and frames["since_eval"] > eval_interval)
                 ):
+                    print("Evaluating...")
                     eval_report = EvalWrapper(EpisodeAggregator())
                     eval_infos = EvalWrapper(InfosAggregator())
                     frames["since_eval"] = 0
@@ -250,29 +242,26 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
-                        reporter.send(
-                            dict(
-                                **dict(eval_report.items()),
-                                **dict(eval_infos.items()),
-                                training_iteration=frames["so_far"],
-                            )
+                        self.report(
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            frames=frames["so_far"],
                         )
+                        print("Done evaluating...")
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
-                if done or frames["since_log"] > log_interval:
+                if done or i == 0 or frames["since_log"] > log_interval:
                     tick = time.time()
                     frames["since_log"] = 0
-                    reporter.send(
-                        dict(
-                            **train_results,
-                            **dict(train_report.items()),
-                            **dict(train_infos.items()),
-                            time_logging=time_spent["logging"],
-                            time_saving=time_spent["saving"],
-                            training_iteration=frames["so_far"],
-                        )
+                    self.report(
+                        **train_results,
+                        **dict(train_report.items()),
+                        **dict(train_infos.items()),
+                        time_logging=time_spent["logging"],
+                        time_saving=time_spent["saving"],
+                        frames=frames["so_far"],
                     )
                     train_report.reset()
                     train_infos.reset()
@@ -281,8 +270,12 @@ class Trainer:
                 if done or (save_interval and frames["since_save"] > save_interval):
                     tick = time.time()
                     frames["since_save"] = 0
-                    if log_dir:
-                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    self.save_checkpoint(
+                        save_path,
+                        ppo=ppo,
+                        agent=agent,
+                        step=i,
+                    )
                     time_spent["saving"] += time.time() - tick
 
                 if done:
@@ -330,22 +323,10 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report_generator(log_dir: Optional[str]):
-
-        if tune.is_session_enabled():
-            report = tune.report
-        else:
-            writer = SummaryWriter(logdir=log_dir) if log_dir else None
-
-            def report(training_iteration, **args):
-                pprint(args)
-                if writer:
-                    for k, v in args.items():
-                        writer.add_scalar(k, v, global_step=training_iteration)
-
-        while True:
-            kwargs = yield
-            report(**kwargs)
+    def report(frames: int, **kwargs):
+        print("Frames:", frames)
+        pprint(kwargs)
+        wandb.log(kwargs, step=frames)
 
     def build_infos_aggregator(self):
         return InfosAggregator()
@@ -366,69 +347,6 @@ class Trainer:
         return env
 
     @classmethod
-    def launch(
-        cls,
-        gpus_per_trial: float,
-        cpus_per_trial: float,
-        log_dir: str,
-        num_samples: int,
-        name: str,
-        config: dict,
-        seed: Optional[int],
-        **kwargs,
-    ):
-        if config is None:
-            config = cls.default
-        if seed is not None:
-            config.update(seed=seed)
-
-        for k, v in kwargs.items():
-            if k not in config or v is not None:
-                if isinstance(v, bool):  # handle store_{true, false} differently
-                    if v != cls.default[k]:  # flag used
-                        config[k] = v
-                else:
-                    config[k] = v
-
-        config.update(log_dir=log_dir)
-
-        def run(c):
-            c = cls.structure_config(**c)
-            cls().run(**c)
-
-        if num_samples is None:
-            print("Not using tune, because num_samples was not specified")
-            run(config)
-        else:
-            local_mode = num_samples is None
-            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            resources_per_trial = dict(
-                gpu=gpus_per_trial if torch.cuda.is_available() else 0,
-                cpu=cpus_per_trial,
-            )
-
-            if local_mode:
-                print("Using local mode because num_samples is None")
-                kwargs = dict()
-            else:
-                kwargs = dict(
-                    search_alg=HyperOptSearch(
-                        config, metric=cls.metric, mode="max", random_state_seed=seed
-                    ),
-                    num_samples=num_samples,
-                )
-            if log_dir is not None:
-                kwargs.update(local_dir=log_dir)
-
-            tune.run(
-                run,
-                name=name,
-                config=config,
-                resources_per_trial=resources_per_trial,
-                **kwargs,
-            )
-
-    @classmethod
     def add_arguments(cls, parser):
         return arguments.add_arguments(parser)
 
@@ -436,7 +354,12 @@ class Trainer:
     def main(cls):
         parser = ArgumentParser()
         cls.add_arguments(parser)
-        cls.launch(**vars(parser.parse_args()))
+        args = vars(parser.parse_args())
+        wandb.init()
+        config: dict = wandb.config.as_dict()
+        args.update(config)
+        args = cls.structure_config(**args)
+        cls().run(**args)
 
 
 if __name__ == "__main__":

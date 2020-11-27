@@ -2,13 +2,14 @@ import pickle
 from itertools import islice
 from pathlib import Path
 
+import wandb
+
 import debug_env as _debug_env
 import env
 import our_agent
 import ours
 from aggregator import InfosAggregator
-from configs import starcraft_default
-from trainer import Trainer
+import trainer
 from wrappers import VecPyTorch
 
 
@@ -36,26 +37,17 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
         yield from super().items()
 
 
-class UpperTrainer(Trainer):
+class Trainer(trainer.Trainer):
     metric = "reward"
-    default = starcraft_default
 
     def build_infos_aggregator(self):
         return InfosAggregatorWithFailureBufferWriter()
 
-    def report_generator(self, log_dir):
-        reporter = super().report_generator(log_dir)
-        next(reporter)
-
-        def report(failure_buffer=None, **kwargs):
-            if failure_buffer is not None:
-                with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                    pickle.dump(failure_buffer, f)
-            reporter.send(kwargs)
-
-        while True:
-            msg = yield
-            report(**msg)
+    def report(self, failure_buffer, **kwargs):
+        if failure_buffer is not None:
+            with Path(wandb.run.dir, "failure_buffer.pkl").open("wb") as f:
+                pickle.dump(failure_buffer, f)
+        super().report(**kwargs)
 
     def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
         del agent_args["recurrent"]
@@ -108,36 +100,33 @@ class UpperTrainer(Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--conv-hidden-size", type=int)
+        parser.add_argument("--conv_hidden_size", type=int, default=64)
         parser.add_argument("--debug", action="store_true")
-        parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--resources-hidden-size", type=int)
-        parser.add_argument("--kernel-size", type=int)
+        parser.add_argument("--gate_coef", type=float, default=0.01)
+        parser.add_argument("--resources_hidden_size", type=int, default=128)
+        parser.add_argument("--kernel_size", type=int, default=2)
+        parser.add_argument("--lower_embed_size", type=int, default=128)
         parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--next-actions-embed-size", type=int)
-        parser.add_argument("--num-edges", type=int)
-        parser.add_argument("--no-pointer", action="store_true")
-        parser.add_argument("--no-roll", action="store_true")
-        parser.add_argument("--no-scan", action="store_true")
-        parser.add_argument("--stride", type=int)
-        parser.add_argument("--task-embed-size", type=int)
+        parser.add_argument("--next_actions_embed_size", type=int, default=64)
+        parser.add_argument("--num_edges", type=int, default=2)
+        parser.add_argument("--no_pointer", action="store_true")
+        parser.add_argument("--no_roll", action="store_true")
+        parser.add_argument("--no_scan", action="store_true")
+        parser.add_argument("--stride", type=int, default=1)
+        parser.add_argument("--task_embed_size", type=int, default=128)
         parser.add_argument("--transformer", action="store_true")
 
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
-        parser.main.add_argument("--no-eval", action="store_true")
-        parser.main.add_argument("--min-eval-lines", type=int)
-        parser.main.add_argument("--max-eval-lines", type=int)
+        parser.main.add_argument("--eval", dest="no_eval", action="store_false")
+        parser.main.add_argument("--min_eval_lines", type=int, default=1)
+        parser.main.add_argument("--max_eval_lines", type=int, default=50)
         env_parser = parser.main.add_argument_group("env_args")
         cls.add_env_arguments(env_parser)
         cls.add_agent_arguments(parser.agent)
         return parser
 
-    @classmethod
-    def launch(cls, env_id, **kwargs):
-        super().launch(env_id="experiment", **kwargs)
-
 
 if __name__ == "__main__":
-    UpperTrainer.main()
+    Trainer.main()

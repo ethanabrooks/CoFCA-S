@@ -1,0 +1,71 @@
+program: starcraft.py
+method: bayes
+metric:
+  goal: maximize
+  name: reward
+parameters:
+  conv_hidden_size:
+    distribution: categorical
+    values:
+      - 32
+      - 64
+  entropy_coef:
+    distribution: categorical
+    values:
+      - 0.02
+      - 0.025
+  hidden_size:
+    distribution: categorical
+    values:
+      - 64
+      - 128
+      - 256
+  learning_rate:
+    distribution: categorical
+    values:
+      - 0.001
+      - 0.0015
+      - 0.002
+      - 0.0025
+  lower_embed_size:
+    distribution: categorical
+    values:
+      - 32
+      - 64
+  next_actions_embed_size:
+    distribution: categorical
+    values:
+      - 32
+      - 64
+  num_batch:
+    distribution: categorical
+    values:
+      - 1
+      - 2
+  num_edges:
+    distribution: categorical
+    values:
+      - 1
+  num_processes:
+    distribution: categorical
+    values:
+      - 16
+  ppo_epoch:
+    distribution: categorical
+    values:
+      - 3
+      - 4
+      - 10
+      - 15
+  tgt_success_rate:
+    distribution: categorical
+    values:
+      - 0.75
+      - 0.8
+      - 0.9
+  train_steps:
+    distribution: categorical
+    values:
+      - 20
+      - 25
+      - 30
