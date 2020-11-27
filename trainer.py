@@ -206,6 +206,7 @@ class Trainer:
             frames_per_update = train_steps * num_processes
             frames = Counter()
             time_spent = Counter()
+            iter_tick = None
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
@@ -259,9 +260,9 @@ class Trainer:
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
                 if done or i == 0 or frames["since_log"] > log_interval:
-                    tick = time.time()
+                    log_tick = time.time()
                     frames["since_log"] = 0
-                    self.report(
+                    report = dict(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
@@ -270,9 +271,13 @@ class Trainer:
                         frames=frames["so_far"],
                         log_dir=log_dir,
                     )
+                    if iter_tick is not None:
+                        report.update(time_this_iter=time.time() - iter_tick)
+                    iter_tick = time.time()
+                    self.report(**report)
                     train_report.reset()
                     train_infos.reset()
-                    time_spent["logging"] += time.time() - tick
+                    time_spent["logging"] += time.time() - log_tick
 
                 if done or (save_interval and frames["since_save"] > save_interval):
                     tick = time.time()
