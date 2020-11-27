@@ -88,3 +88,6 @@ parameters:
       - 25
       - 30
       - 35
+early_terminate:
+  type: hyperband
+  min_iter: 10
