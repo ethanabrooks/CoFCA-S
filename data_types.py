@@ -61,11 +61,11 @@ class Building(Target, WorkerAction, Enum):
     PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
-    # FORGE = auto()
-    # PHOTON_CANNON = auto()
-    # GATEWAY = auto()
-    # CYBERNETICS_CORE = auto()
-    TWILIGHT_COUNCIL = auto()
+    FORGE = auto()
+    PHOTON_CANNON = auto()
+    GATEWAY = auto()
+    CYBERNETICS_CORE = auto()
+    # TWILIGHT_COUNCIL = auto()
     # TEMPLAR_ARCHIVES = auto()
     # DARK_SHRINE = auto()
     # STARGATE = auto()
@@ -385,11 +385,11 @@ costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
     Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
-    # Building.FORGE: Resources(minerals=2, gas=0),
-    # Building.GATEWAY: Resources(minerals=2, gas=0),
-    # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
-    # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
-    Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
+    Building.FORGE: Resources(minerals=2, gas=0),
+    Building.GATEWAY: Resources(minerals=2, gas=0),
+    Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
+    Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
+    # Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
     # Building.STARGATE: Resources(minerals=2, gas=2),
     # Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
     # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
@@ -445,11 +445,11 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
-    # Building.FORGE: "f",
-    # Building.PHOTON_CANNON: "c",
-    # Building.GATEWAY: "g",
-    # Building.CYBERNETICS_CORE: "C",
-    Building.TWILIGHT_COUNCIL: "T",
+    Building.FORGE: "f",
+    Building.PHOTON_CANNON: "c",
+    Building.GATEWAY: "g",
+    Building.CYBERNETICS_CORE: "C",
+    # Building.TWILIGHT_COUNCIL: "T",
     # Building.TEMPLAR_ARCHIVES: "A",
     # Building.DARK_SHRINE: "D",
     # Building.STARGATE: "S",

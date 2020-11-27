@@ -120,7 +120,7 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        self.max = Resources(*sum(Costs.values(), Counter()).values())
+        self.max = Resources(*sum(Costs.values(), Counter()).values(), gas=2)
         self.time_per_line = 2 * max(
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
