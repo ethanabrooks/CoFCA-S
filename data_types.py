@@ -62,7 +62,7 @@ class Building(Target, WorkerAction, Enum):
     ASSIMILATOR = auto()
     NEXUS = auto()
     FORGE = auto()
-    # PHOTON_CANNON = auto()
+    PHOTON_CANNON = auto()
     # GATEWAY = auto()
     # CYBERNETICS_CORE = auto()
     # TWILIGHT_COUNCIL = auto()
@@ -388,7 +388,7 @@ costs = {
     Building.FORGE: Resources(minerals=2, gas=0),
     # Building.GATEWAY: Resources(minerals=2, gas=0),
     # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
-    # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
+    Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
     # Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
     # Building.STARGATE: Resources(minerals=2, gas=2),
     # Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
@@ -446,7 +446,7 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
     Building.FORGE: "f",
-    # Building.PHOTON_CANNON: "c",
+    Building.PHOTON_CANNON: "c",
     # Building.GATEWAY: "g",
     # Building.CYBERNETICS_CORE: "C",
     # Building.TWILIGHT_COUNCIL: "T",
