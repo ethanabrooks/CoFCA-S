@@ -69,7 +69,7 @@ class Building(Target, WorkerAction, Enum):
     TEMPLAR_ARCHIVES = auto()
     DARK_SHRINE = auto()
     STARGATE = auto()
-    # FLEET_BEACON = auto()
+    FLEET_BEACON = auto()
     # ROBOTICS_FACILITY = auto()
     # ROBOTICS_BAY = auto()
 
@@ -395,7 +395,7 @@ costs = {
     Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
     Building.DARK_SHRINE: Resources(minerals=2, gas=2),
     # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
-    # Building.FLEET_BEACON: Resources(minerals=3, gas=2),
+    Building.FLEET_BEACON: Resources(minerals=3, gas=2),
 }
 
 Costs: Dict[Building, typing.Counter[Resource]] = {
@@ -453,7 +453,7 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.TEMPLAR_ARCHIVES: "A",
     Building.DARK_SHRINE: "D",
     Building.STARGATE: "S",
-    # Building.FLEET_BEACON: "b",
+    Building.FLEET_BEACON: "b",
     # Building.ROBOTICS_FACILITY: "F",
     # Building.ROBOTICS_BAY: "B",
     Worker.A: 1,
