@@ -3,12 +3,12 @@
 runs_per_gpu=4
 
 
-while getopts n:k:i: flag
+while getopts n:i: flag
 do
     case "${flag}" in
       n) runs_per_gpu=${OPTARG};;
-      k) key=${OPTARG};;
       i) id=${OPTARG};;
+      *) echo "args are -n and -i" && exit;;
     esac
 done
 
