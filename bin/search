@@ -1,4 +1,5 @@
 #!/usr/bin/env zsh
  
-matches=(wandb/**$1/files/$2)
+run_id=${1#"ethanabrooks/ppo/"}
+matches=(wandb/**$run_id/files/$2)
 echo ${matches}
