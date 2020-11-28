@@ -120,7 +120,7 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        self.max = Resources(*sum(Costs.values(), Counter()).values(), gas=2)
+        self.max = Resources(*sum(Costs.values(), Counter()).values())
         self.time_per_line = 2 * max(
             reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         )
@@ -685,10 +685,12 @@ class Env(gym.Env):
     def gathered_resource(
         self, building_positions, positions, resource, worker_position
     ):
-        return positions[resource] == worker_position and (
-            resource != Resource.GAS
-            or building_positions.get(worker_position, None) == Building.ASSIMILATOR
-        )
+        return positions[resource] == worker_position
+
+    # and (
+    # resource != Resource.GAS
+    # or building_positions.get(worker_position, None) == Building.ASSIMILATOR
+    # )
 
     @staticmethod
     def initial_assignment():
