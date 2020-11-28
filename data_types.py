@@ -78,6 +78,21 @@ class Building(Target, WorkerAction, Enum):
         return BuildOrder(building=self, location=(action3.i, action3.j))
 
 
+def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
+    nearest = int(
+        np.argmin(
+            np.max(
+                np.abs(
+                    np.expand_dims(np.array(current_position), 0)
+                    - np.stack(candidate_positions),
+                ),
+                axis=-1,
+            )
+        )
+    )
+    return candidate_positions[nearest]
+
+
 @unique
 class Resource(Target, Assignment, Enum):
     MINERALS = auto()
@@ -94,18 +109,7 @@ class Resource(Target, Assignment, Enum):
     ) -> "Movement":
         target_position = positions[self]
         if current_position == target_position:
-            nearest = int(
-                np.argmin(
-                    np.max(
-                        np.abs(
-                            np.expand_dims(np.array(current_position), 0)
-                            - np.stack(nexus_positions),
-                        ),
-                        axis=-1,
-                    )
-                )
-            )
-            target_position = nexus_positions[nearest]
+            target_position = get_nearest(current_position, nexus_positions)
         return Movement.from_(current_position, to=target_position)
 
 
