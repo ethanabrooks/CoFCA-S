@@ -1,0 +1,9 @@
+program: starcraft.py
+method: grid
+parameters:
+  seed:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
