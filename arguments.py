@@ -51,7 +51,7 @@ def add_arguments(parser):
         default=int(2e4),
     )
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--num_frames", type=int, default=int(5e6))
+    parser.add_argument("--num_frames", type=int, default=int(1e7))
     parser.add_argument(
         "--num_processes",
         type=int,
