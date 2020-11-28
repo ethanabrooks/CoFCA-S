@@ -642,7 +642,7 @@ class Env(gym.Env):
             action = yield state, render
             ptr = action.ptr
             time_remaining -= 1
-            assignments[action.worker()] = action.assignment()
+            assignments[action.worker()] = action.assignment(positions[Resource.GAS])
 
             worker_id: Worker
             assignment: Assignment
