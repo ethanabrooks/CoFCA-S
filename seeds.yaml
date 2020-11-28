@@ -1,6 +1,42 @@
 program: starcraft.py
 method: grid
 parameters:
+  conv_hidden_size:
+    desc: null
+    value: 100
+  entropy_coef:
+    desc: null
+    value: 0.02
+  hidden_size:
+    desc: null
+    value: 150
+  learning_rate:
+    desc: null
+    value: 0.0025
+  lower_embed_size:
+    desc: null
+    value: 50
+  next_actions_embed_size:
+    desc: null
+    value: 75
+  num_batch:
+    desc: null
+    value: 1
+  num_edges:
+    desc: null
+    value: 1
+  num_processes:
+    desc: null
+    value: 150
+  ppo_epoch:
+    desc: null
+    value: 10
+  tgt_success_rate:
+    desc: null
+    value: 0.85
+  train_steps:
+    desc: null
+    value: 35
   seed:
     values:
       - 0

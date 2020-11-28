@@ -1,23 +1,27 @@
 #! /usr/bin/env bash
 
 runs_per_gpu=4
+ngpu=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+nruns=$(($ngpu * $runs_per_gpu))
+session='session'
 
 
-while getopts n:i: flag
+while getopts n:s:i: flag
 do
     case "${flag}" in
-      n) runs_per_gpu=${OPTARG};;
+      n) nruns=${OPTARG};;
+      s) session=${OPTARG};;
       i) id=${OPTARG};;
       *) echo "args are -n and -i" && exit;;
     esac
 done
 
-ngpu=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
-nruns=$(($ngpu * $runs_per_gpu))
+echo "Creating $nruns sessions..."
 
 for i in $(seq 1 $nruns); do
   gpu=$(($i % $ngpu));
-  tmux new-session -d -s "session$i" "CUDA_VISIBLE_DEVICES=$gpu wandb agent $id"
+  echo "Creating session $session$i..."
+  tmux new-session -d -s "$session$i" "CUDA_VISIBLE_DEVICES=$gpu wandb agent $id"
   #echo docker run \
     #--rm \
     #--detach \
