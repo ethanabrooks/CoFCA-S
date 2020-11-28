@@ -86,18 +86,16 @@ class Building(Target, WorkerAction, Enum):
 
 
 def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
-    nearest = int(
-        np.argmin(
-            np.max(
-                np.abs(
-                    np.expand_dims(np.array(current_position), 0)
-                    - np.stack(candidate_positions),
-                ),
-                axis=-1,
-            )
+    nearest = np.argmin(
+        np.max(
+            np.abs(
+                np.expand_dims(np.array(current_position), 0)
+                - np.stack(candidate_positions),
+            ),
+            axis=-1,
         )
     )
-    return candidate_positions[nearest]
+    return candidate_positions[int(nearest)]
 
 
 @unique

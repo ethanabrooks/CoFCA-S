@@ -685,12 +685,10 @@ class Env(gym.Env):
     def gathered_resource(
         self, building_positions, positions, resource, worker_position
     ):
-        return positions[resource] == worker_position
-
-    # and (
-    # resource != Resource.GAS
-    # or building_positions.get(worker_position, None) == Building.ASSIMILATOR
-    # )
+        return positions[resource] == worker_position and (
+            resource != Resource.GAS
+            or building_positions.get(worker_position, None) == Building.ASSIMILATOR
+        )
 
     @staticmethod
     def initial_assignment():
