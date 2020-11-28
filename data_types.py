@@ -71,7 +71,7 @@ class Building(Target, WorkerAction, Enum):
     STARGATE = auto()
     FLEET_BEACON = auto()
     ROBOTICS_FACILITY = auto()
-    # ROBOTICS_BAY = auto()
+    ROBOTICS_BAY = auto()
 
     def assignment(self, action3: Optional["Action3"]) -> "Assignment":
         assert isinstance(action3, Action3)
@@ -394,7 +394,7 @@ costs = {
     Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
     Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
     Building.DARK_SHRINE: Resources(minerals=2, gas=2),
-    # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
+    Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
     Building.FLEET_BEACON: Resources(minerals=3, gas=2),
 }
 
@@ -455,7 +455,7 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.STARGATE: "S",
     Building.FLEET_BEACON: "b",
     Building.ROBOTICS_FACILITY: "F",
-    # Building.ROBOTICS_BAY: "B",
+    Building.ROBOTICS_BAY: "B",
     Worker.A: 1,
     Worker.B: 2,
     Worker.C: 3,
