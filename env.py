@@ -36,10 +36,10 @@ from data_types import (
     CompoundAction,
     RawAction,
     Assignment,
-    Action1,
-    Action2,
+    IsOpAction,
+    WorkerTargetAction,
     Targets,
-    Action3,
+    IJAction,
     WorkerAction,
     WorkerActions,
     WORLD_SIZE,
@@ -344,9 +344,9 @@ class Env(gym.Env):
                 worker = Worker(worker + 1)
                 target = Targets[target]
                 return self.compound_action(
-                    Action1(is_op=True),
-                    Action2(worker, target),
-                    Action3(i, j),
+                    IsOpAction(is_op=True),
+                    WorkerTargetAction(worker, target),
+                    IJAction(i, j),
                 )
             except (ValueError, TypeError) as e:
                 print(e)

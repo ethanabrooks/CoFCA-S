@@ -4,7 +4,7 @@ import typing
 from abc import abstractmethod
 from collections import Counter
 from dataclasses import dataclass, astuple, fields, replace
-from enum import unique, Enum, auto, EnumMeta
+from enum import unique, Enum, auto
 from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import numpy as np
@@ -44,7 +44,7 @@ class Assignment:
 
 class Target:
     @abstractmethod
-    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         raise NotImplementedError
 
     @classmethod
@@ -73,8 +73,8 @@ class Building(Target, WorkerAction, Enum):
     ROBOTICS_FACILITY = auto()
     ROBOTICS_BAY = auto()
 
-    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
-        assert isinstance(action3, Action3)
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
+        assert isinstance(action3, IJAction)
         return BuildOrder(building=self, location=(action3.i, action3.j))
 
 
@@ -98,7 +98,7 @@ class Resource(Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
 
-    def assignment(self, action3: Optional["Action3"]) -> "Assignment":
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         return self
 
     def action(
@@ -220,22 +220,25 @@ class Action(metaclass=ActionType):
 
 
 @dataclass(frozen=True)
-class Action1(Action):
+class IsOpAction(Action):
     is_op: X
 
+    def to_ints(self) -> Generator[int, None, None]:
+        yield int(self.is_op)
+
     @classmethod
-    def num_values(cls) -> "Action1":
+    def num_values(cls) -> "IsOpAction":
         return cls(2)
 
     def reset(self):
         return not self.is_op
 
     def next_if_not_reset(self) -> ActionType:
-        return Action2
+        return WorkerTargetAction
 
 
 @dataclass(frozen=True)
-class Action2(Action):
+class WorkerTargetAction(Action):
     worker: X
     target: X
 
@@ -246,14 +249,14 @@ class Action2(Action):
         return cls(worker=Worker(ints.worker + 1), target=Targets[ints.target])
 
     @classmethod
-    def num_values(cls) -> "Action2":
+    def num_values(cls) -> "WorkerTargetAction":
         return cls(worker=len(Worker), target=len(Targets))
 
     def reset(self):
         return isinstance(self.target, Resource)
 
     def next_if_not_reset(self) -> ActionType:
-        return Action3
+        return IJAction
 
     def to_ints(self) -> Generator[int, None, None]:
         if isinstance(self.worker, Worker):
@@ -267,12 +270,16 @@ class Action2(Action):
 
 
 @dataclass(frozen=True)
-class Action3(Action):
+class IJAction(Action):
     i: X
     j: X
 
+    def to_ints(self) -> Generator[int, None, None]:
+        yield self.i
+        yield self.j
+
     @classmethod
-    def num_values(cls) -> "Action3":
+    def num_values(cls) -> "IJAction":
         return cls(i=WORLD_SIZE, j=WORLD_SIZE)
 
     def reset(self):
@@ -296,11 +303,10 @@ class RawAction(RecurringActions):
 
 @dataclass(frozen=True)
 class CompoundAction:
-    action1: Action1 = None
-    action2: Action2 = None
-    action3: Action3 = None
+    action1: WorkerTargetAction = None
+    action2: IJAction = None
     ptr: int = 0
-    active: ActionType = Action1
+    active: ActionType = WorkerTargetAction
 
     @classmethod
     def classes(cls):
@@ -349,15 +355,15 @@ class CompoundAction:
         return self.active.mask(size)
 
     def is_op(self):
-        return self.action1.is_op and self.active is next(self.classes())
+        return self.active is next(self.classes())
 
     def worker(self) -> Worker:
-        assert self.action2.worker is not None
-        return self.action2.worker
+        assert self.action1.worker is not None
+        return self.action1.worker
 
     def assignment(self) -> Assignment:
-        assert isinstance(self.action2.target, Target)
-        return self.action2.target.assignment(self.action3)
+        assert isinstance(self.action1.target, Target)
+        return self.action1.target.assignment(self.action2)
 
 
 @dataclass(frozen=True)
