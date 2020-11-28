@@ -162,7 +162,7 @@ class Env(gym.Env):
         p.add_argument("--min_lines", type=int, default=1)
         p.add_argument("--max_lines", type=int, default=1)
         p.add_argument("--num_initial_buildings", type=int, default=0)
-        p.add_argument("--tgt_success_rate", type=float, default=0.8)
+        p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(self):
         n = len(Building)

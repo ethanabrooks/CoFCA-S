@@ -100,15 +100,15 @@ class Trainer(trainer.Trainer):
 
     @classmethod
     def add_agent_arguments(cls, parser):
-        parser.add_argument("--conv_hidden_size", type=int, default=64)
+        parser.add_argument("--conv_hidden_size", type=int, default=100)
         parser.add_argument("--debug", action="store_true")
         parser.add_argument("--gate_coef", type=float, default=0.01)
         parser.add_argument("--resources_hidden_size", type=int, default=128)
         parser.add_argument("--kernel_size", type=int, default=2)
-        parser.add_argument("--lower_embed_size", type=int, default=128)
+        parser.add_argument("--lower_embed_size", type=int, default=75)
         parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--next_actions_embed_size", type=int, default=64)
-        parser.add_argument("--num_edges", type=int, default=2)
+        parser.add_argument("--next_actions_embed_size", type=int, default=25)
+        parser.add_argument("--num_edges", type=int, default=1)
         parser.add_argument("--no_pointer", action="store_true")
         parser.add_argument("--no_roll", action="store_true")
         parser.add_argument("--no_scan", action="store_true")
