@@ -719,7 +719,7 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
     def time_limit(self, lines):
-        return len(lines) * self.time_per_line
+        return (1 + len(lines)) * self.time_per_line
 
 
 def main(debug_env: bool, **kwargs):
