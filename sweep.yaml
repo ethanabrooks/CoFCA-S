@@ -90,4 +90,4 @@ parameters:
       - 35
 early_terminate:
   type: hyperband
-  min_iter: 10
+  min_iter: 100
