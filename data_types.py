@@ -44,9 +44,7 @@ class Assignment:
 
 class Target:
     @abstractmethod
-    def assignment(
-        self, action3: Optional["IJAction"], gas_position: Coord
-    ) -> "Assignment":
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         raise NotImplementedError
 
     @classmethod
@@ -75,14 +73,9 @@ class Building(Target, WorkerAction, Enum):
     ROBOTICS_FACILITY = auto()
     ROBOTICS_BAY = auto()
 
-    def assignment(
-        self, action3: Optional["IJAction"], gas_position: Coord
-    ) -> "Assignment":
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         assert isinstance(action3, IJAction)
-        location = (
-            gas_position if self is Building.ASSIMILATOR else (action3.i, action3.j)
-        )
-        return BuildOrder(building=self, location=location)
+        return BuildOrder(building=self, location=(action3.i, action3.j))
 
 
 def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
@@ -103,7 +96,7 @@ class Resource(Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
 
-    def assignment(self, *args, **kwargs) -> "Assignment":
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         return self
 
     def action(
@@ -366,9 +359,9 @@ class CompoundAction:
         assert self.action1.worker is not None
         return self.action1.worker
 
-    def assignment(self, gas_position: Coord) -> Assignment:
+    def assignment(self) -> Assignment:
         assert isinstance(self.action1.target, Target)
-        return self.action1.target.assignment(self.action2, gas_position)
+        return self.action1.target.assignment(self.action2)
 
 
 @dataclass(frozen=True)
