@@ -202,23 +202,27 @@ def get_device(name):
 
 
 def astuple(obj):
-    def gen():
-        for f in fields(obj):
-            yield astuple(getattr(obj, f.name))
-
-    if is_dataclass(obj):
-        return tuple(gen())
+    # def gen():
+    #     for f in fields(obj):
+    #         yield astuple(getattr(obj, f.name))
+    #
+    # if is_dataclass(obj):
+    #     return tuple(gen())
     return obj
 
 
 def asdict(obj):
-    def gen():
-        for f in fields(obj):
-            yield f.name, asdict(getattr(obj, f.name))
+    # def gen():
+    #     for f in fields(obj):
+    #         yield f.name, asdict(getattr(obj, f.name))
+    #
+    # if hasattr(obj, "_asdict"):
+    #     # noinspection PyProtectedMember
+    #     return obj._asdict()
+    # if is_dataclass(obj):
+    #     return dict(gen())
+    return obj._asdict()
 
-    if hasattr(obj, "_asdict"):
-        # noinspection PyProtectedMember
-        return obj._asdict()
-    if is_dataclass(obj):
-        return dict(gen())
-    return obj
+
+def replace(obj, **kwargs):
+    return obj._replace(**kwargs)

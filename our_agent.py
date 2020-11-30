@@ -8,7 +8,7 @@ from torch.nn import functional as F
 import agents
 import ours
 from agents import AgentOutputs, NNBase
-from data_types import RawAction
+from ours import RawAction
 from distributions import FixedCategorical
 from utils import astuple
 
