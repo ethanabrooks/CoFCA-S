@@ -584,9 +584,6 @@ class Env(gym.Env):
         next_actions: Dict[Worker, WorkerAction] = {}
         for worker_id in Worker:
             assignments[worker_id] = self.initial_assignment()
-        assignments[Worker.A] = BuildOrder(
-            building=Building.ASSIMILATOR, location=positions[Resource.GAS]
-        )
 
         required = Counter(l.building for l in lines if l.required)
         resources: typing.Counter[Resource] = Counter()
