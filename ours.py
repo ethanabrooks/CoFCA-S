@@ -106,11 +106,9 @@ class Recurrence(nn.Module):
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_resources = nn.Sequential(
-            IntEncoding(self.resources_hidden_size),
-            nn.Flatten(),
-            init_(
-                nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
-            ),
+            # IntEncoding(self.resources_hidden_size),
+            # nn.Flatten(),
+            init_(nn.Linear(self.obs_spaces.resources.n, self.resources_hidden_size)),
             nn.ReLU(),
         )
         m_size = (
