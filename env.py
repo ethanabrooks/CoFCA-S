@@ -69,6 +69,7 @@ class Env(gym.Env):
     rank: int
     random_seed: int
     tgt_success_rate: int
+    time_per_line: int
     alpha: float = 0.05
     evaluating: bool = None
     i: int = 0
@@ -121,9 +122,9 @@ class Env(gym.Env):
             high=np.ones(shape, dtype=np.float32),
         )
         self.max = Resources(*sum(Costs.values(), Counter()).values())
-        self.time_per_line = 2 * max(
-            reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
-        )
+        # self.time_per_line = 2 * max(
+        # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
+        # )
         resources_space = spaces.MultiDiscrete(
             1 + np.array([self.max.minerals, self.max.gas])
         )
@@ -162,6 +163,7 @@ class Env(gym.Env):
         p.add_argument("--min_lines", type=int, default=1)
         p.add_argument("--max_lines", type=int, default=1)
         p.add_argument("--num_initial_buildings", type=int, default=0)
+        p.add_argument("--time_per_line", type=int, default=4)
         p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(self):
