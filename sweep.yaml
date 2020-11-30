@@ -55,6 +55,12 @@ parameters:
     distribution: categorical
     values:
       - 1
+  num_initial_buildings:
+    distribution: categorical
+    values:
+      - 1
+      - 2
+      - 3
   num_processes:
     distribution: categorical
     values:
