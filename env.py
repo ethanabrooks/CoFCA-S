@@ -593,7 +593,7 @@ class Env(gym.Env):
         ptr: int = 0
         action = self.compound_action()
         time_remaining = (
-            self.eval_steps - 1 if self.evaluating else len(lines) * self.time_per_line
+            self.eval_steps - 1 if self.evaluating else (1 + len(lines)) * self.time_per_line
         )
 
         while True:
@@ -723,9 +723,6 @@ class Env(gym.Env):
         if isinstance(action, np.ndarray):
             action = RawAction(*action)
         return self.iterator.send(action)
-
-    def time_limit(self, lines):
-        return (1 + len(lines)) * self.time_per_line
 
 
 def main(debug_env: bool, **kwargs):
