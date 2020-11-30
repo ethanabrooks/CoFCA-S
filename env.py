@@ -125,9 +125,9 @@ class Env(gym.Env):
         # self.time_per_line = 2 * max(
         # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         # )
-        # resources_space = spaces.MultiDiscrete( 1 + np.array([self.max.minerals, self.max.gas])
-        # )
-        resources_space = spaces.MultiBinary(len(Building))
+        resources_space = spaces.MultiDiscrete(
+            1 + np.array([self.max.minerals, self.max.gas])
+        )
         next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
@@ -400,8 +400,7 @@ class Env(gym.Env):
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
-            # resources = np.array([state.resources[r] for r in Resource])
-            resources = np.array([bool(Costs[b] - state.resources) for b in Building])
+            resources = np.array([state.resources[r] for r in Resource])
             next_actions = np.array(
                 [WorkerActions.index(a) for a in state.next_action.values()]
             )
