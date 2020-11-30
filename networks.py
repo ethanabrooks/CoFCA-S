@@ -38,3 +38,12 @@ class IntEncoding(torch.jit.ScriptModule):
         sins = torch.sin(x * div_term)
         coss = torch.cos(x * div_term)
         return torch.stack([sins, coss], dim=-1)
+
+
+class GRU(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(GRU, self).__init__()
+        self.gru = torch.nn.GRU(*args, **kwargs)
+
+    def forward(self, x):
+        return self.gru(x)

@@ -12,20 +12,32 @@ class MyDecisionGate(torch.nn.Module):
             return -x
 
 
-@dataclass
 class MyCell(torch.nn.Module):
-    def __init__(self, dg):
+    def __init__(self):
         super(MyCell, self).__init__()
-        self.dg = dg
-        self.linear = torch.nn.Linear(4, 4)
+        self.gru = torch.nn.GRU(4, 4)
 
-    def forward(self, x, h):
-        new_h = torch.tanh(self.dg(self.linear(x)) + h)
-        return new_h, new_h
+    def forward(self, x):
+        return self.gru(x)
 
 
 scripted_gate = torch.jit.script(MyDecisionGate())
 
-my_cell = MyCell(scripted_gate)
+
+class ScriptGRU(torch.nn.Module):
+    def __init__(self, *args, **kwargs):
+        super(ScriptGRU, self).__init__()
+        self.gru = torch.nn.GRU(*args, **kwargs)
+
+    def forward(self, x):
+        return self.gru(x)
+
+
+my_cell = ScriptGRU(4, 4)
 traced_cell = torch.jit.script(my_cell)
-print(traced_cell(torch.randn(2, 4), torch.randn(2, 4)))
+print(traced_cell(torch.randn(1, 2, 4)))
+their_cell = torch.nn.GRU(4, 4)
+traced_cell = torch.jit.script(their_cell)
+print(traced_cell(torch.randn(1, 2, 4)))
+# gru = ScriptGRU(4, 4)
+# print(gru(torch.randn(1, 2, 4)))

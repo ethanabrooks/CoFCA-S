@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-from networks import MultiEmbeddingBag, IntEncoding
+from networks import MultiEmbeddingBag, IntEncoding, GRU
 from data_types import ParsedInput, RecurrentState, RawAction
 from distributions import FixedCategorical
 from env import Obs
@@ -84,10 +84,12 @@ class Recurrence(nn.Module):
             )
         )
         self.task_encoder = (
-            TransformerModel(
-                ntoken=self.num_edges * self.d_space(),
-                ninp=self.task_embed_size,
-                nhid=self.task_embed_size,
+            torch.jit.script(
+                TransformerModel(
+                    ntoken=self.num_edges * self.d_space(),
+                    ninp=self.task_embed_size,
+                    nhid=self.task_embed_size,
+                )
             )
             if self.transformer
             else nn.GRU(
