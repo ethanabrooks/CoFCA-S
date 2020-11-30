@@ -1,7 +1,7 @@
 import math
 from collections import namedtuple
 from contextlib import contextmanager
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 import torch
@@ -287,10 +287,10 @@ class MLPBase(NNBase):
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
 
 
-class MultiEmbeddingBag(nn.Module):
-    def __init__(self, nvec: Union[np.ndarray, torch.Tensor], **kwargs):
+class MultiEmbeddingBag(torch.jit.ScriptModule):
+    def __init__(self, nvec: List[int], **kwargs):
         super().__init__()
-        self.embedding = nn.Embedding(num_embeddings=nvec.sum(), **kwargs)
+        self.embedding = nn.Embedding(num_embeddings=sum(nvec), **kwargs)
         self.register_buffer(
             "offset",
             F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
@@ -300,7 +300,7 @@ class MultiEmbeddingBag(nn.Module):
         return self.embedding(self.offset + inputs).sum(-2)
 
 
-class IntEncoding(nn.Module):
+class IntEncoding(torch.jit.ScriptModule):
     def __init__(self, d_model: int):
         self.d_model = d_model
         nn.Module.__init__(self)
@@ -312,9 +312,10 @@ class IntEncoding(nn.Module):
         )
 
     def forward(self, x):
-        shape = x.shape
-        div_term = self.div_term.view(*(1 for _ in shape), -1)
+        div_term = self.div_term
         x = x.unsqueeze(-1)
+        while len(div_term.shape) < len(x.shape):
+            div_term = div_term.unsqueeze(0)
         sins = torch.sin(x * div_term)
         coss = torch.cos(x * div_term)
-        return torch.stack([sins, coss], dim=-1).view(*shape, self.d_model)
+        return torch.stack([sins, coss], dim=-1)
