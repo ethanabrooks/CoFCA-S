@@ -2,7 +2,7 @@ program: starcraft.py
 method: bayes
 metric:
   goal: maximize
-  name: reward
+  name: success
 parameters:
   conv_hidden_size:
     distribution: categorical
