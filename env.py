@@ -452,7 +452,7 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
-        if self.random.random() < 0.9:
+        if self.random.random() < 0.5:
             yield Building.ASSIMILATOR, gas
         occupied = [nexus, minerals, gas]
         while True:
