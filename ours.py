@@ -220,10 +220,6 @@ class Recurrence(nn.Module):
             np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
         )
 
-    @property
-    def gru_in_size(self):
-        return self.hidden_size + self.conv_hidden_size + self.encoder_hidden_size
-
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):
         T, N, dim = raw_inputs.shape
@@ -270,7 +266,6 @@ class Recurrence(nn.Module):
 
         p = hx.p.long().squeeze(-1)
         h = hx.h
-        hx.a[new_episode] = -1
         R = torch.arange(N, device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = RawAction(*inputs.actions.unbind(dim=2))
