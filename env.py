@@ -452,6 +452,7 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
+        yield Building.ASSIMILATOR, gas
         occupied = [nexus, minerals, gas]
         while True:
             initial_pos = self.random.choice(
@@ -589,7 +590,9 @@ class Env(gym.Env):
         ptr: int = 0
         action = self.compound_action()
         time_remaining = (
-            self.eval_steps - 1 if self.evaluating else (1 + len(lines)) * self.time_per_line
+            self.eval_steps - 1
+            if self.evaluating
+            else (1 + len(lines)) * self.time_per_line
         )
 
         while True:
