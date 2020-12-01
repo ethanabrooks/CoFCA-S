@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-from agents import MultiEmbeddingBag, IntEncoding
+from layers import MultiEmbeddingBag, IntEncoding
 from data_types import ParsedInput, RecurrentState, RawAction, Action
 from distributions import FixedCategorical
 from env import Obs
