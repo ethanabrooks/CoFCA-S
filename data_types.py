@@ -289,18 +289,18 @@ class TwilightCouncil(Building):
 
 Buildings: List[Building] = [
     Assimilator(),
-    CyberneticsCore(),
-    DarkShrine(),
-    FleetBeacon(),
-    Forge(),
-    Gateway(),
+    # CyberneticsCore(),
+    # DarkShrine(),
+    # FleetBeacon(),
+    # Forge(),
+    # Gateway(),
     Nexus(),
-    PhotonCannon(),
+    # PhotonCannon(),
     Pylon(),
-    RoboticsBay(),
+    # RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    TemplarArchives(),
+    # TemplarArchives(),
     TwilightCouncil(),
 ]
 
