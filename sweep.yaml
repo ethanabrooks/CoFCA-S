@@ -11,6 +11,7 @@ parameters:
       - 75
       - 100
       - 150
+      - 200
   entropy_coef:
     distribution: categorical
     values:
@@ -99,9 +100,8 @@ parameters:
   train_steps:
     distribution: categorical
     values:
-      - 25
-      - 30
       - 35
+      - 40
 early_terminate:
   type: hyperband
   min_iter: 100
