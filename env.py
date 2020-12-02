@@ -531,7 +531,7 @@ class Env(gym.Env):
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
         info_iterator = self.info_generator(*lines)
-        state_iterator = self.state_generator(*lines)
+        state_iterator = self.state_generator(lines, dependencies)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
@@ -581,7 +581,9 @@ class Env(gym.Env):
     def compound_action(*args, **kwargs) -> CompoundAction:
         return CompoundAction(*args, **kwargs)
 
-    def state_generator(self, *lines: Line) -> Generator[State, CompoundAction, None]:
+    def state_generator(
+        self, lines: List[Line], dependencies: Dict[Building, Building]
+    ) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
         building_positions: Dict[Coord, Building] = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
@@ -683,13 +685,16 @@ class Env(gym.Env):
                                 resources[resource] += 1
                 elif isinstance(worker_action, Building):
                     building = worker_action
-                    insufficient_resources = building.cost.as_counter() - resources
+                    insufficient_resources = bool(
+                        building.cost.as_counter() - resources
+                    )
                     if self.building_allowed(
-                        building,
-                        building_positions,
-                        insufficient_resources,
-                        positions,
-                        assignment.location,
+                        building=building,
+                        dependency=dependencies[building],
+                        building_positions=[*building_positions],
+                        insufficient_resources=insufficient_resources,
+                        positions=positions,
+                        assignment_location=assignment.location,
                     ):
                         building_positions[worker_position] = building
                         resources -= building.cost.as_counter()
@@ -708,21 +713,25 @@ class Env(gym.Env):
     def initial_assignment():
         return Resource.MINERALS
 
-    @staticmethod
     def building_allowed(
-        building,
-        building_positions,
-        insufficient_resources,
-        positions,
-        assignment_location,
+        self,
+        building: Building,
+        dependency: Optional[Building],
+        building_positions: List[Coord],
+        insufficient_resources: bool,
+        positions: Dict[WorldObject, Coord],
+        assignment_location: Coord,
     ) -> bool:
-        if insufficient_resources or assignment_location in building_positions:
+        if (
+            insufficient_resources
+            or assignment_location in building_positions
+            or dependency not in [*building_positions, None]
+        ):
             return False
         if isinstance(building, Assimilator):
             return assignment_location == positions[Resource.GAS]
         else:
             return assignment_location not in (
-                *building_positions,
                 positions[Resource.GAS],
                 positions[Resource.MINERALS],
             )
