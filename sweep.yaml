@@ -2,7 +2,7 @@ program: starcraft.py
 method: bayes
 metric:
   goal: maximize
-  name: success
+  name: curriculum+success
 parameters:
   assimilator_prob:
     distribution: categorical
