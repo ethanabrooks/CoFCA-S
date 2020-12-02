@@ -31,6 +31,10 @@ class Trainer:
     metric = "reward"
 
     @classmethod
+    def add_arguments(cls, parser):
+        return arguments.add_arguments(parser)
+
+    @classmethod
     def args_to_methods(cls):
         return dict(
             agent_args=[
@@ -44,42 +48,18 @@ class Trainer:
             run_args=[cls.run],
         )
 
-    @classmethod
-    def structure_config(
-        cls, **config
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        if config["render"]:
-            config["num_processes"] = 1
-
-        def parameters(*ms):
-            for method in ms:
-                yield from inspect.signature(method).parameters
-
-        args = defaultdict(dict)
-        args_to_methods = cls.args_to_methods()
-        for k, v in config.items():
-            if k in ("_wandb", "wandb_version"):
-                continue
-            assigned = False
-            for arg_name, methods in args_to_methods.items():
-                if k in parameters(*methods):
-                    args[arg_name][k] = v
-                    assigned = True
-            assert assigned, k
-        run_args = args.pop("run_args")
-        args.update(**run_args)
-        return args
+    @staticmethod
+    def build_agent(envs, activation=nn.ReLU(), **agent_args):
+        return Agent(
+            envs.observation_space.shape,
+            envs.action_space,
+            activation=activation,
+            **agent_args,
+        )
 
     @staticmethod
-    def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):
-        modules = dict(
-            optimizer=ppo.optimizer, agent=agent
-        )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
-        state_dict = {name: module.state_dict() for name, module in modules.items()}
-        torch.save(dict(step=step, **state_dict), save_path)
-        print(f"Saved parameters to {save_path}")
+    def build_infos_aggregator():
+        return InfosAggregator()
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
@@ -91,8 +71,41 @@ class Trainer:
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
+    @classmethod
+    def main(cls):
+        parser = ArgumentParser()
+        cls.add_arguments(parser)
+
+        def run(config, no_wandb, group, **kwargs):
+            if no_wandb:
+                log_dir = Path("/tmp")
+            else:
+                wandb.init(group=group)
+                kwargs.update(wandb.config.as_dict())
+                log_dir = Path(wandb.run.dir)
+            kwargs.update(config, log_dir=log_dir)
+            cls().run(**cls.structure_config(**kwargs))
+
+        run(**vars(parser.parse_args()))
+
+    @staticmethod
+    def make_env(env_id, seed, rank, evaluating, **kwargs):
+        env = gym.make(env_id, **kwargs)
+        env.seed(seed + rank)
+        return env
+
+    @staticmethod
+    def report(frames: int, log_dir: Path, **kwargs):
+        print("Frames:", frames)
+        pprint(kwargs)
+        try:
+            wandb.log(kwargs, step=frames)
+        except wandb.Error:
+            pass
+
+    @classmethod
     def run(
-        self,
+        cls,
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
@@ -124,7 +137,7 @@ class Trainer:
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
-                return lambda: self.make_env(
+                return lambda: cls.make_env(
                     rank=rank, evaluating=evaluating, **env_args
                 )
 
@@ -179,7 +192,7 @@ class Trainer:
         train_envs = make_vec_envs(evaluating=False)
         try:
             train_envs.to(device)
-            agent = self.build_agent(envs=train_envs, **agent_args)
+            agent = cls.build_agent(envs=train_envs, **agent_args)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
                 obs_space=train_envs.observation_space,
@@ -195,10 +208,10 @@ class Trainer:
 
             ppo = PPO(agent=agent, **ppo_args)
             train_report = EpisodeAggregator()
-            train_infos = self.build_infos_aggregator()
+            train_infos = cls.build_infos_aggregator()
             train_results = {}
             if load_path:
-                self.load_checkpoint(load_path, ppo, agent, device)
+                cls.load_checkpoint(load_path, ppo, agent, device)
 
             print("resetting environment...")
             rollouts.obs[0].copy_(train_envs.reset())
@@ -248,7 +261,7 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
-                        self.report(
+                        cls.report(
                             **dict(eval_report.items()),
                             **dict(eval_infos.items()),
                             frames=frames["so_far"],
@@ -274,7 +287,7 @@ class Trainer:
                     if iter_tick is not None:
                         report.update(time_this_iter=time.time() - iter_tick)
                     iter_tick = time.time()
-                    self.report(**report)
+                    cls.report(**report)
                     train_report.reset()
                     train_infos.reset()
                     time_spent["logging"] += time.time() - log_tick
@@ -282,7 +295,7 @@ class Trainer:
                 if done or (save_interval and frames["since_save"] > save_interval):
                     tick = time.time()
                     frames["since_save"] = 0
-                    self.save_checkpoint(
+                    cls.save_checkpoint(
                         save_path,
                         ppo=ppo,
                         agent=agent,
@@ -335,52 +348,41 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report(frames: int, log_dir: Path, **kwargs):
-        print("Frames:", frames)
-        pprint(kwargs)
-        try:
-            wandb.log(kwargs, step=frames)
-        except wandb.Error:
-            pass
-
-    def build_infos_aggregator(self):
-        return InfosAggregator()
-
-    @staticmethod
-    def build_agent(envs, activation=nn.ReLU(), **agent_args):
-        return Agent(
-            envs.observation_space.shape,
-            envs.action_space,
-            activation=activation,
-            **agent_args,
-        )
-
-    @staticmethod
-    def make_env(env_id, seed, rank, evaluating, **kwargs):
-        env = gym.make(env_id, **kwargs)
-        env.seed(seed + rank)
-        return env
+    def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):
+        modules = dict(
+            optimizer=ppo.optimizer, agent=agent
+        )  # type: Dict[str, torch.nn.Module]
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        torch.save(dict(step=step, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
 
     @classmethod
-    def add_arguments(cls, parser):
-        return arguments.add_arguments(parser)
+    def structure_config(
+        cls, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        if config["render"]:
+            config["num_processes"] = 1
 
-    @classmethod
-    def main(cls):
-        parser = ArgumentParser()
-        cls.add_arguments(parser)
+        def parameters(*ms):
+            for method in ms:
+                yield from inspect.signature(method).parameters
 
-        def run(config, no_wandb, group, **kwargs):
-            if no_wandb:
-                log_dir = Path("/tmp")
-            else:
-                wandb.init(group=group)
-                kwargs.update(wandb.config.as_dict())
-                log_dir = Path(wandb.run.dir)
-            kwargs.update(config, log_dir=log_dir)
-            cls().run(**cls.structure_config(**kwargs))
-
-        run(**vars(parser.parse_args()))
+        args = defaultdict(dict)
+        args_to_methods = cls.args_to_methods()
+        for k, v in config.items():
+            if k in ("_wandb", "wandb_version"):
+                continue
+            assigned = False
+            for arg_name, methods in args_to_methods.items():
+                if k in parameters(*methods):
+                    args[arg_name][k] = v
+                    assigned = True
+            assert assigned, k
+        run_args = args.pop("run_args")
+        args.update(**run_args)
+        return args
 
 
 if __name__ == "__main__":

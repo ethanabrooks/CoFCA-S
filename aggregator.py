@@ -39,6 +39,9 @@ class EpisodeAggregator(Aggregator):
     def reset(self):
         self.complete_episodes = defaultdict(list)
 
+    def mean_success(self):
+        return np.mean(self.complete_episodes.get("success", [0]))
+
 
 class InfosAggregator(EpisodeAggregator):
     def update(self, *infos: dict, dones: Collection[bool]):
