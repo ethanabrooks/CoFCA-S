@@ -58,6 +58,7 @@ def delete_nth(d, n):
 
 @dataclass
 class Env(gym.Env):
+    assimilator_prob: float
     break_on_fail: bool
     destroy_building_prob: float
     eval_steps: int
@@ -155,6 +156,7 @@ class Env(gym.Env):
 
     @classmethod
     def add_arguments(cls, p):
+        p.add_argument("--assimilator_prob", type=float, default=0.5)
         p.add_argument("--break_on_fail", action="store_true")
         p.add_argument("--debug_env", action="store_true")
         p.add_argument("--destroy_building_prob", type=float, default=0)
@@ -452,7 +454,7 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
-        if self.random.random() < 0.5:
+        if self.random.random() < self.assimilator_prob:
             yield Building.ASSIMILATOR, gas
         occupied = [nexus, minerals, gas]
         while True:
