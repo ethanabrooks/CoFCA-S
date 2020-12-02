@@ -61,17 +61,17 @@ class Building(Target, WorkerAction, Enum):
     PYLON = auto()
     ASSIMILATOR = auto()
     NEXUS = auto()
-    FORGE = auto()
-    PHOTON_CANNON = auto()
-    GATEWAY = auto()
-    CYBERNETICS_CORE = auto()
+    # FORGE = auto()
+    # PHOTON_CANNON = auto()
+    # GATEWAY = auto()
+    # CYBERNETICS_CORE = auto()
     TWILIGHT_COUNCIL = auto()
-    TEMPLAR_ARCHIVES = auto()
-    DARK_SHRINE = auto()
+    # TEMPLAR_ARCHIVES = auto()
+    # DARK_SHRINE = auto()
     STARGATE = auto()
-    FLEET_BEACON = auto()
+    # FLEET_BEACON = auto()
     ROBOTICS_FACILITY = auto()
-    ROBOTICS_BAY = auto()
+    # ROBOTICS_BAY = auto()
 
     def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         assert isinstance(action3, IJAction)
@@ -393,17 +393,17 @@ costs = {
     Building.NEXUS: Resources(minerals=4, gas=0),
     Building.PYLON: Resources(minerals=1, gas=0),
     Building.ASSIMILATOR: Resources(minerals=1, gas=0),
-    Building.FORGE: Resources(minerals=2, gas=0),
-    Building.GATEWAY: Resources(minerals=2, gas=0),
-    Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
-    Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
+    # Building.FORGE: Resources(minerals=2, gas=0),
+    # Building.GATEWAY: Resources(minerals=2, gas=0),
+    # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
+    # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
     Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
     Building.STARGATE: Resources(minerals=2, gas=2),
     Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
-    Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
-    Building.DARK_SHRINE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
-    Building.FLEET_BEACON: Resources(minerals=3, gas=2),
+    # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
+    # Building.DARK_SHRINE: Resources(minerals=2, gas=2),
+    # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
+    # Building.FLEET_BEACON: Resources(minerals=3, gas=2),
 }
 
 Costs: Dict[Building, typing.Counter[Resource]] = {
@@ -453,17 +453,17 @@ Symbols: Dict[WorldObject, Union[str, int]] = {
     Building.PYLON: "p",
     Building.ASSIMILATOR: "a",
     Building.NEXUS: "n",
-    Building.FORGE: "f",
-    Building.PHOTON_CANNON: "c",
-    Building.GATEWAY: "g",
-    Building.CYBERNETICS_CORE: "C",
+    # Building.FORGE: "f",
+    # Building.PHOTON_CANNON: "c",
+    # Building.GATEWAY: "g",
+    # Building.CYBERNETICS_CORE: "C",
     Building.TWILIGHT_COUNCIL: "T",
-    Building.TEMPLAR_ARCHIVES: "A",
-    Building.DARK_SHRINE: "D",
+    # Building.TEMPLAR_ARCHIVES: "A",
+    # Building.DARK_SHRINE: "D",
     Building.STARGATE: "S",
-    Building.FLEET_BEACON: "b",
+    # Building.FLEET_BEACON: "b",
     Building.ROBOTICS_FACILITY: "F",
-    Building.ROBOTICS_BAY: "B",
+    # Building.ROBOTICS_BAY: "B",
     Worker.A: 1,
     Worker.B: 2,
     Worker.C: 3,
