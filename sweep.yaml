@@ -70,7 +70,9 @@ parameters:
   num_edges:
     distribution: categorical
     values:
-      - 1
+      - 2
+      - 3
+      - 4
   num_initial_buildings:
     distribution: categorical
     values:
