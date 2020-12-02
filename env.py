@@ -69,6 +69,7 @@ class Env(gym.Env):
     tgt_success_rate: int
     time_per_line: int
     alpha: float = 0.05
+    curriculum_level: int = 0
     evaluating: bool = None
     i: int = 0
     iterator = None
@@ -312,6 +313,7 @@ class Env(gym.Env):
             min(high - 1, self.n_lines_space.low + 1),
             high,
         )
+        self.curriculum_level += 1
 
     def info_generator(self, *lines):
         state: State
@@ -322,12 +324,20 @@ class Env(gym.Env):
         while True:
             if done:
                 info.update(
-                    instruction_len=len(lines),
-                    len_failure_buffer=len(self.failure_buffer),
                     success=float(state.success),
-                    train_time_success=float(state.success and state.time_remaining),
+                    **{
+                        "len(instruction)": len(lines),
+                        "len(failure_buffer)": len(self.failure_buffer),
+                        "curriculum+success": float(
+                            self.curriculum_level + state.success
+                        ),
+                    },
                 )
                 if self.evaluating:
+                    info.update(
+                        train_time_success=float(state.success and state.time_remaining)
+                    )
+                    assert info["success"] <= info["train_time_success"]
                     bucket = 10 * (len(lines) // 10)
                     for key in [
                         "success",
