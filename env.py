@@ -164,18 +164,16 @@ class Env(gym.Env):
         p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(self):
-        n = len(Buildings)
-        dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
-        buildings = copy(Buildings)
+        buildings = [b for b in Buildings if not isinstance(b, Assimilator)]
         self.random.shuffle(buildings)
+        head, *tail = buildings
+        n = len(buildings)
+        dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int)
+        dependencies = [buildings[i] for i in dependencies]
 
-        def generate_dependencies():
-            for b1, b2 in zip(buildings, dependencies):
-                yield b1, (
-                    None if isinstance(b1, Assimilator) or b2 < 0 else buildings[b2]
-                )
-
-        return dict(generate_dependencies())
+        yield Assimilator(), None
+        yield head, None
+        yield from zip(tail, dependencies)
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
@@ -514,7 +512,7 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        dependencies = self.build_dependencies()
+        dependencies = dict(self.build_dependencies())
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
