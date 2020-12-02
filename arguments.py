@@ -36,6 +36,9 @@ def add_arguments(parser):
         help="sets flags for determinism when using CUDA (potentially slow!)",
     )
     parser.add_argument(
+        "--env", dest="env_id", help="environment to train on", default="CartPole-v0"
+    )
+    parser.add_argument(
         "--eval_interval",
         type=int,
         help="eval interval, one eval per n updates",
@@ -44,13 +47,22 @@ def add_arguments(parser):
     parser.add_argument(
         "--eval_steps", type=int, help="number of steps for evaluation", default=500
     )
+    parser.add_argument("--group")
+    parser.add_argument("--load_path", type=Path)
     parser.add_argument(
         "--log_interval",
         type=int,
         help="log interval, one log per n updates",
         default=int(2e4),
     )
+    parser.add_argument(
+        "--no_cuda", dest="cuda", action="store_false", help="enables CUDA training"
+    )
+    parser.add_argument("--no_wandb", action="store_true", help="Do not use wandb.")
     parser.add_argument("--normalize", action="store_true")
+    parser.add_argument(
+        "--num_batch", type=int, help="number of batches for ppo", default=2
+    )
     parser.add_argument("--num_frames", type=int, default=int(1e7))
     parser.add_argument(
         "--num_processes",
@@ -61,23 +73,12 @@ def add_arguments(parser):
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--render_eval", action="store_true")
     parser.add_argument("--seed", type=int, help="random seed", default=0)
+    parser.add_argument("--synchronous", action="store_true")
     parser.add_argument(
         "--train_steps",
         type=int,
         help="number of forward steps in A2C",
         default=25,
-    )
-    parser.add_argument(
-        "--env", dest="env_id", help="environment to train on", default="CartPole-v0"
-    )
-    parser.add_argument("--load_path", type=Path)
-    parser.add_argument(
-        "--no_cuda", dest="cuda", action="store_false", help="enables CUDA training"
-    )
-    parser.add_argument("--no_wandb", action="store_true", help="Do not use wandb.")
-    parser.add_argument("--synchronous", action="store_true")
-    parser.add_argument(
-        "--num_batch", type=int, help="number of batches for ppo", default=2
     )
     # parser.add_argument("--success-reward", type=float)
 
