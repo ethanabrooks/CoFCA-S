@@ -65,7 +65,7 @@ def add_arguments(parser):
     parser.add_argument(
         "--num_batch", type=int, help="number of batches for ppo", default=2
     )
-    parser.add_argument("--num_frames", type=int, default=int(1e7))
+    parser.add_argument("--num_frames", type=int, default=int(1e8))
     parser.add_argument(
         "--num_processes",
         type=int,
@@ -113,7 +113,7 @@ def add_arguments(parser):
     )
     ppo_parser.add_argument("--learning_rate", type=float, help="", default=0.0025)
     ppo_parser.add_argument(
-        "--eps", type=float, help="RMSprop optimizer epsilon", default=1e-5
+        "--eps", type=float, help="RMSProp optimizer epsilon", default=1e-5
     )
     ppo_parser.add_argument(
         "--max_grad_norm", type=float, help="max norm of gradients", default=0.5
