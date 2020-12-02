@@ -1,19 +1,18 @@
 # third party
-import csv
-import re
-from collections import namedtuple
-from io import StringIO
-import random
-import subprocess
-
 import argparse
+import csv
+import random
+import re
+import subprocess
+from dataclasses import fields, is_dataclass
+from io import StringIO
+from typing import List
+
 import numpy as np
 import torch
-from dataclasses import fields, is_dataclass
-from torch import nn as nn
 import torch.jit
 import torch.nn as nn
-from typing import List
+from gym import spaces
 
 
 def round(x, dec):
@@ -222,3 +221,26 @@ def asdict(obj):
     if is_dataclass(obj):
         return dict(gen())
     return obj
+
+
+class Discrete(spaces.Discrete):
+    def __init__(self, low: int, high: int):
+        self.low = low
+        self.high = high
+        super().__init__(1 + high - low)
+
+    def sample(self) -> int:
+        return self.low + super().sample()
+
+    def contains(self, x) -> bool:
+        return super().contains(x - self.low)
+
+    def __repr__(self) -> str:
+        return f"Discrete({self.low}, {self.high})"
+
+    def __eq__(self, other) -> bool:
+        return (
+            isinstance(other, Discrete)
+            and self.low == other.low
+            and self.high == other.high
+        )

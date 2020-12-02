@@ -8,7 +8,9 @@ import our_agent
 import ours
 import trainer
 from aggregator import InfosAggregator
+from common.vec_env import VecEnv
 from wrappers import VecPyTorch
+import numpy as np
 
 
 class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
@@ -33,6 +35,9 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
         failure_buffer = list(islice(self.concat_buffers(), 50))
         yield "failure_buffer", failure_buffer
         yield from super().items()
+
+    def mean_success(self):
+        return np.mean(self.complete_episodes.get("success", [0]))
 
 
 class Trainer(trainer.Trainer):
@@ -59,6 +64,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
+        parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--min_eval_lines", type=int, default=1)
         parser.main.add_argument("--max_eval_lines", type=int, default=50)
@@ -92,6 +98,16 @@ class Trainer(trainer.Trainer):
     @staticmethod
     def build_infos_aggregator():
         return InfosAggregatorWithFailureBufferWriter()
+
+    # noinspection PyMethodOverriding
+    @staticmethod
+    def handle_curriculum(
+        infos: InfosAggregatorWithFailureBufferWriter,
+        envs: VecEnv,
+        curriculum_threshold: float,
+    ):
+        if infos.mean_success() >= curriculum_threshold:
+            envs.increment_curriculum()
 
     @staticmethod
     def make_env(

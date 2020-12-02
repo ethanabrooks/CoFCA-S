@@ -137,6 +137,10 @@ class VecEnv(ABC):
     def to(self, device):
         pass
 
+    @abstractmethod
+    def increment_curriculum(self):
+        pass
+
 
 class VecEnvWrapper(VecEnv):
     """

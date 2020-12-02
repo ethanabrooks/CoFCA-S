@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, DefaultDict, Union
+from typing import Dict, DefaultDict, Union, Optional
 
 import gym
 import torch
@@ -42,6 +42,7 @@ class Trainer:
                 Agent.__init__,
                 MLPBase.__init__,
             ],
+            handle_curriculum_args=[cls.handle_curriculum],
             rollouts_args=[RolloutStorage.__init__],
             ppo_args=[PPO.__init__],
             env_args=[cls.make_env],
@@ -60,6 +61,10 @@ class Trainer:
     @staticmethod
     def build_infos_aggregator():
         return InfosAggregator()
+
+    @staticmethod
+    def handle_curriculum(infos, envs):
+        pass
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
@@ -110,23 +115,25 @@ class Trainer:
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
+        eval_interval: Optional[int],
+        eval_steps: Optional[int],
+        handle_curriculum_args: dict,
+        load_path: Path,
         log_dir: Path,
         log_interval: int,
+        no_eval: bool,
         normalize: float,
         num_frames: int,
         num_processes: int,
         ppo_args: dict,
+        render: bool,
+        render_eval: bool,
         rollouts_args: dict,
         seed: int,
         save_interval: int,
         synchronous: bool,
+        threshold: Optional[float],
         train_steps: int,
-        eval_interval: int = None,
-        eval_steps: int = None,
-        load_path: Path = None,
-        no_eval: bool = False,
-        render: bool = False,
-        render_eval: bool = False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
@@ -332,6 +339,9 @@ class Trainer:
                         since_log=num_processes,
                         since_eval=num_processes,
                     )
+
+                # noinspection PyArgumentList
+                cls.handle_curriculum(train_infos, train_envs, **handle_curriculum_args)
 
                 with torch.no_grad():
                     next_value = agent.get_value(

@@ -42,10 +42,12 @@ def add_arguments(parser):
         "--eval_interval",
         type=int,
         help="eval interval, one eval per n updates",
-        default=int(1e6),
+        # default=int(1e6),
     )
     parser.add_argument(
-        "--eval_steps", type=int, help="number of steps for evaluation", default=500
+        "--eval_steps",
+        type=int,
+        help="number of steps for evaluation",
     )
     parser.add_argument("--group")
     parser.add_argument("--load_path", type=Path)
@@ -74,6 +76,11 @@ def add_arguments(parser):
     parser.add_argument("--render_eval", action="store_true")
     parser.add_argument("--seed", type=int, help="random seed", default=0)
     parser.add_argument("--synchronous", action="store_true")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        help="Curriculum threshold for incrementing curriculum, if implemented",
+    )
     parser.add_argument(
         "--train_steps",
         type=int,

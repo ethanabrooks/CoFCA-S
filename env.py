@@ -1,7 +1,6 @@
 import pickle
 import typing
 from collections import Counter, deque, OrderedDict
-from copy import copy
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from pathlib import Path
@@ -32,7 +31,6 @@ from data_types import (
     CompoundAction,
     RawAction,
     Assignment,
-    IsOpAction,
     WorkerTargetAction,
     Targets,
     IJAction,
@@ -43,7 +41,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -54,6 +52,7 @@ def delete_nth(d, n):
     d.rotate(n)
 
 
+# noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
     assimilator_prob: float
@@ -78,6 +77,11 @@ class Env(gym.Env):
 
     def __post_init__(self):
         super().__init__()
+        assert self.min_lines >= 1
+        assert self.max_lines >= self.min_lines
+        self.n_lines_space = Discrete(
+            low=self.min_lines, high=min(self.min_lines + 1, self.max_lines)
+        )
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
         self.failure_buffer = deque(maxlen=self.failure_buffer_size)
@@ -163,7 +167,9 @@ class Env(gym.Env):
         p.add_argument("--time_per_line", type=int, default=4)
         p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
-    def build_dependencies(self):
+    def build_dependencies(
+        self,
+    ) -> Generator[Tuple[Building, Optional[Building]], None, None]:
         buildings = [b for b in Buildings if not isinstance(b, Assimilator)]
         self.random.shuffle(buildings)
         head, *tail = buildings
@@ -212,7 +218,7 @@ class Env(gym.Env):
                 and not isinstance(building, Assimilator),
             )
 
-        n_lines = self.random.randint(self.min_lines, self.max_lines + 1)
+        n_lines = self.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
         required = [i.building for i in instructions if i.required]
         assert required.count(Assimilator()) <= 1
@@ -299,6 +305,13 @@ class Env(gym.Env):
                 # noinspection PyAttributeOutsideInit
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
+
+    def increment_curriculum(self):
+        high = min(self.max_lines, self.n_lines_space.high + 1)
+        self.n_lines_space = Discrete(
+            min(high - 1, self.n_lines_space.low + 1),
+            high,
+        )
 
     def info_generator(self, *lines):
         state: State
