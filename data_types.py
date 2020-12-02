@@ -146,6 +146,9 @@ class Building(WorldObject, Target, WorkerAction, ABC):
     def __hash__(self):
         return hash(type)
 
+    def __str__(self):
+        return self.__class__.__name__
+
 
 class Assimilator(Building):
     @property
