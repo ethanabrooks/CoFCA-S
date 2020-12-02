@@ -1,8 +1,8 @@
 import pickle
 import typing
 from collections import Counter, deque, OrderedDict
+from copy import copy
 from dataclasses import astuple, asdict, dataclass, replace
-from functools import reduce
 from itertools import zip_longest
 from pathlib import Path
 from pprint import pprint
@@ -22,16 +22,12 @@ from data_types import (
     Resource,
     Building,
     Coord,
-    Costs,
-    costs,
     WorldObject,
     WorldObjects,
     Movement,
     Worker,
-    Resources,
     State,
     Line,
-    Symbols,
     BuildOrder,
     CompoundAction,
     RawAction,
@@ -43,8 +39,10 @@ from data_types import (
     WorkerAction,
     WorkerActions,
     WORLD_SIZE,
+    Buildings,
+    Assimilator,
+    Nexus,
 )
-
 from utils import RESET
 
 Dependencies = Dict[Building, Building]
@@ -108,7 +106,7 @@ class Env(gym.Env):
         )
 
         lines_space = spaces.MultiDiscrete(
-            np.array([[2, len(Building)]] * self.max_lines)
+            np.array([[2, len(Buildings)]] * self.max_lines)
         )
         mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
@@ -122,13 +120,10 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        self.max = Resources(*sum(Costs.values(), Counter()).values())
         # self.time_per_line = 2 * max(
         # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         # )
-        resources_space = spaces.MultiDiscrete(
-            1 + np.array([self.max.minerals, self.max.gas])
-        )
+        resources_space = spaces.MultiDiscrete(np.inf * np.ones(2))
         next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
@@ -169,15 +164,15 @@ class Env(gym.Env):
         p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(self):
-        n = len(Building)
+        n = len(Buildings)
         dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
-        buildings = list(Building)
+        buildings = copy(Buildings)
         self.random.shuffle(buildings)
 
         def generate_dependencies():
             for b1, b2 in zip(buildings, dependencies):
                 yield b1, (
-                    None if b1 is Building.ASSIMILATOR or b2 < 0 else buildings[b2]
+                    None if isinstance(b1, Assimilator) or b2 < 0 else buildings[b2]
                 )
 
         return dict(generate_dependencies())
@@ -202,9 +197,9 @@ class Env(gym.Env):
                     [
                         *filter(
                             lambda b: (
-                                include_assimilator or b is not Building.ASSIMILATOR
+                                include_assimilator or not isinstance(b, Assimilator)
                             ),
-                            Building,
+                            Buildings,
                         )
                     ]
                 )
@@ -216,13 +211,13 @@ class Env(gym.Env):
             yield from random_instructions_under(
                 n=n - len(inst),
                 include_assimilator=include_assimilator
-                and building is not Building.ASSIMILATOR,
+                and not isinstance(building, Assimilator),
             )
 
         n_lines = self.random.randint(self.min_lines, self.max_lines + 1)
         instructions = [*random_instructions_under(n_lines)]
-        required = [l.building for l in instructions if l.required]
-        assert required.count(Building.ASSIMILATOR) <= 1
+        required = [i.building for i in instructions if i.required]
+        assert required.count(Assimilator()) <= 1
         return instructions
 
     @staticmethod
@@ -239,9 +234,9 @@ class Env(gym.Env):
             else:
                 create_nodes(dependency)
                 trees[bldg] = trees[dependency]
-            trees[bldg].create_node(bldg.name.capitalize(), bldg, parent=dependency)
+            trees[bldg].create_node(str(bldg), bldg, parent=dependency)
 
-        for building in Building:
+        for building in Buildings:
             create_nodes(building)
         return set(trees.values())
 
@@ -348,7 +343,7 @@ class Env(gym.Env):
                 worker = Worker(worker + 1)
                 target = Targets[target]
                 return self.compound_action(
-                    IsOpAction(is_op=True),
+                    # IsOpAction(is_op=True),
                     WorkerTargetAction(worker, target),
                     IJAction(i, j),
                 )
@@ -383,7 +378,7 @@ class Env(gym.Env):
                         "*" if line.required else " ",
                         Targets.index(line.building),
                         str(line.building),
-                        costs[line.building],
+                        line.building.cost,
                     )
                 )
             print("Obs:")
@@ -436,7 +431,7 @@ class Env(gym.Env):
 
     def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
-        yield Building.NEXUS, nexus
+        yield Nexus(), nexus
         for w in Worker:
             yield w, nexus
         resource_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
@@ -455,7 +450,7 @@ class Env(gym.Env):
         yield Resource.GAS, gas
 
         if self.random.random() < self.assimilator_prob:
-            yield Building.ASSIMILATOR, gas
+            yield Assimilator(), gas
         occupied = [nexus, minerals, gas]
         while True:
             initial_pos = self.random.choice(
@@ -468,17 +463,17 @@ class Env(gym.Env):
             )
             if not initial_in_occupied:
                 initial_buildings = self.random.choice(
-                    Building, size=self.num_initial_buildings
+                    Buildings, size=self.num_initial_buildings
                 )
                 for b, p in zip(initial_buildings, initial_pos):
-                    yield b, gas if b is Building.ASSIMILATOR else p
+                    yield b, gas if isinstance(b, Assimilator) else p
                 return
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
         if line is None:
             return [0, 0]
-        return [int(line.required), line.building.value - 1]
+        return [int(line.required), Buildings.index(line.building)]
 
     def render(self, mode="human", pause=True):
         self.render_thunk()
@@ -497,12 +492,12 @@ class Env(gym.Env):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
                 assert len(nonzero) <= grid_size
-                for _, i in zip_longest(range(grid_size), nonzero):
-                    if i is None:
+                for _, k in zip_longest(range(grid_size), nonzero):
+                    if k is None:
                         yield " "
                     else:
-                        world_obj = WorldObjects[i]
-                        yield Symbols[world_obj]
+                        world_obj = WorldObjects[k]
+                        yield world_obj.symbol
                 yield RESET
                 yield "|"
             yield "\n" + "-" * (grid_size + 1) * self.world_size + "\n"
@@ -588,7 +583,7 @@ class Env(gym.Env):
         for worker_id in Worker:
             assignments[worker_id] = self.initial_assignment()
 
-        required = Counter(l.building for l in lines if l.required)
+        required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
@@ -603,7 +598,7 @@ class Env(gym.Env):
                 (c, b)
                 for c, b in building_positions.items()
                 if self.random.random() < self.destroy_building_prob
-                and b is not Building.NEXUS
+                and not isinstance(b, Nexus)
             ]
             if destroyed_buildings:
                 destroy_coords, destroyed_buildings = zip(*destroyed_buildings)
@@ -635,14 +630,14 @@ class Env(gym.Env):
             self.render_thunk = render
 
             nexus_positions: List[Coord] = [
-                p for p, b in building_positions.items() if b is Building.NEXUS
+                p for p, b in building_positions.items() if isinstance(b, Nexus)
             ]
             assert nexus_positions
             for worker_id, assignment in assignments.items():
                 next_actions[worker_id] = assignment.action(
                     positions[worker_id],
                     positions,
-                    [p for p, b in building_positions.items() if b is Building.NEXUS],
+                    [p for p, b in building_positions.items() if isinstance(b, Nexus)],
                 )
 
             action: CompoundAction
@@ -669,7 +664,7 @@ class Env(gym.Env):
                         np.array(worker_position) + np.array(astuple(worker_action))
                     )
                     positions[worker_id] = new_position
-                    if building_positions.get(new_position, None) == Building.NEXUS:
+                    if isinstance(building_positions.get(new_position, None), Nexus):
                         for resource in Resource:
                             if self.gathered_resource(
                                 building_positions, positions, resource, worker_position
@@ -677,7 +672,7 @@ class Env(gym.Env):
                                 resources[resource] += 1
                 elif isinstance(worker_action, Building):
                     building = worker_action
-                    insufficient_resources = Costs[building] - resources
+                    insufficient_resources = building.cost.as_counter() - resources
                     if self.building_allowed(
                         building,
                         building_positions,
@@ -686,7 +681,7 @@ class Env(gym.Env):
                         assignment.location,
                     ):
                         building_positions[worker_position] = building
-                        resources -= Costs[building]
+                        resources -= building.cost.as_counter()
                 else:
                     raise RuntimeError
 
@@ -695,7 +690,7 @@ class Env(gym.Env):
     ):
         return positions[resource] == worker_position and (
             resource != Resource.GAS
-            or building_positions.get(worker_position, None) == Building.ASSIMILATOR
+            or isinstance(building_positions.get(worker_position, None), Assimilator)
         )
 
     @staticmethod
@@ -712,7 +707,7 @@ class Env(gym.Env):
     ) -> bool:
         if insufficient_resources or assignment_location in building_positions:
             return False
-        if building is Building.ASSIMILATOR:
+        if isinstance(building, Assimilator):
             return assignment_location == positions[Resource.GAS]
         else:
             return assignment_location not in (

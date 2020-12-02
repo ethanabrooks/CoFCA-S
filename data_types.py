@@ -1,7 +1,7 @@
 import itertools
 import os
 import typing
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from collections import Counter
 from dataclasses import dataclass, astuple, fields, replace
 from enum import unique, Enum, auto
@@ -19,16 +19,34 @@ Coord = Tuple[int, int]
 WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 3))
 
 
-@unique
-class Unit(Enum):
-    WORKER = auto()
+class WorldObject:
+    @property
+    @abstractmethod
+    def symbol(self):
+        return
+
+    @abstractmethod
+    def __eq__(self, other):
+        pass
 
 
 @unique
-class Worker(Enum):
+class Worker(WorldObject, Enum):
     A = auto()
     B = auto()
     C = auto()
+
+    @property
+    def symbol(self):
+        return self.value
+
+    def __eq__(self, other):
+        # noinspection PyArgumentList
+        return Enum.__eq__(self, other)
+
+    def __hash__(self):
+        # noinspection PyArgumentList
+        return Enum.__hash__(self)
 
 
 class Assignment:
@@ -57,44 +75,12 @@ class WorkerAction:
 
 
 @unique
-class Building(Target, WorkerAction, Enum):
-    PYLON = auto()
-    ASSIMILATOR = auto()
-    NEXUS = auto()
-    # FORGE = auto()
-    # PHOTON_CANNON = auto()
-    # GATEWAY = auto()
-    # CYBERNETICS_CORE = auto()
-    TWILIGHT_COUNCIL = auto()
-    # TEMPLAR_ARCHIVES = auto()
-    # DARK_SHRINE = auto()
-    STARGATE = auto()
-    # FLEET_BEACON = auto()
-    ROBOTICS_FACILITY = auto()
-    # ROBOTICS_BAY = auto()
-
-    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
-        assert isinstance(action3, IJAction)
-        return BuildOrder(building=self, location=(action3.i, action3.j))
-
-
-def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
-    nearest = np.argmin(
-        np.max(
-            np.abs(
-                np.expand_dims(np.array(current_position), 0)
-                - np.stack(candidate_positions),
-            ),
-            axis=-1,
-        )
-    )
-    return candidate_positions[int(nearest)]
-
-
-@unique
-class Resource(Target, Assignment, Enum):
+class Resource(WorldObject, Target, Assignment, Enum):
     MINERALS = auto()
     GAS = auto()
+
+    def __hash__(self):
+        return Enum.__hash__(self)
 
     def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
         return self
@@ -110,8 +96,228 @@ class Resource(Target, Assignment, Enum):
             target_position = get_nearest(current_position, nexus_positions)
         return Movement.from_(current_position, to=target_position)
 
+    @property
+    def symbol(self):
+        if self is Resource.GAS:
+            return fg("green") + "G" + RESET
+        if self is Resource.MINERALS:
+            return fg("blue") + "M" + RESET
+        raise RuntimeError
 
-Targets = [*Resource, *Building]
+    def __eq__(self, other):
+        return Enum.__eq__(self, other)
+
+
+@dataclass(frozen=True)
+class Resources:
+    minerals: int
+    gas: int
+
+    def as_dict(self) -> Dict[Resource, int]:
+        return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
+
+    def as_counter(self) -> typing.Counter[Resource]:
+        return Counter(self.as_dict())
+
+
+assert set(Resources(0, 0).__annotations__.keys()) == {
+    r.lower() for r in Resource.__members__
+}
+
+
+class Building(WorldObject, Target, WorkerAction, ABC):
+    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
+        assert isinstance(action3, IJAction)
+        return BuildOrder(building=self, location=(action3.i, action3.j))
+
+    @property
+    @abstractmethod
+    def cost(self) -> Resources:
+        pass
+
+    @property
+    @abstractmethod
+    def symbol(self) -> str:
+        pass
+
+    def __eq__(self, other):
+        return type(self) == type(other)
+
+    def __hash__(self):
+        return hash(type)
+
+
+class Assimilator(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=1, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "a"
+
+
+class CyberneticsCore(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "C"
+
+
+class DarkShrine(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=2)
+
+    @property
+    def symbol(self) -> str:
+        return "D"
+
+
+class Forge(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "f"
+
+
+class FleetBeacon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=3, gas=2)
+
+    @property
+    def symbol(self) -> str:
+        return "b"
+
+
+class Gateway(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "g"
+
+
+class Nexus(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=4, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "n"
+
+
+class PhotonCannon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "c"
+
+
+class Pylon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=1, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "p"
+
+
+class RoboticsBay(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=2)
+
+    @property
+    def symbol(self) -> str:
+        return "B"
+
+
+class RoboticsFacility(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=1)
+
+    @property
+    def symbol(self) -> str:
+        return "F"
+
+
+class StarGate(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=2)
+
+    @property
+    def symbol(self) -> str:
+        return "S"
+
+
+class TemplarArchives(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=2)
+
+    @property
+    def symbol(self) -> str:
+        return "A"
+
+
+class TwilightCouncil(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=2, gas=1)
+
+    @property
+    def symbol(self) -> str:
+        return "T"
+
+
+Buildings: List[Building] = [
+    Assimilator(),
+    CyberneticsCore(),
+    DarkShrine(),
+    FleetBeacon(),
+    Forge(),
+    Gateway(),
+    Nexus(),
+    PhotonCannon(),
+    Pylon(),
+    RoboticsBay(),
+    RoboticsFacility(),
+    StarGate(),
+    TemplarArchives(),
+    TwilightCouncil(),
+]
+
+Targets = [*Resource, *Buildings]
+
+
+def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
+    nearest = np.argmin(
+        np.max(
+            np.abs(
+                np.expand_dims(np.array(current_position), 0)
+                - np.stack(candidate_positions),
+            ),
+            axis=-1,
+        )
+    )
+    return candidate_positions[int(nearest)]
 
 
 @dataclass(frozen=True)
@@ -145,7 +351,7 @@ class Movement(WorkerAction, metaclass=MovementType):
         return cls(*np.clip(np.array(to) - np.array(origin), -1, 1))
 
 
-WorkerActions = [*Building, *Movement]
+WorkerActions = [*Buildings, *Movement]
 
 O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
 
@@ -370,68 +576,16 @@ class Command:
     assignment: Assignment
 
 
-@dataclass(frozen=True)
-class Resources:
-    minerals: int
-    gas: int
-
-    def as_dict(self) -> Dict[Resource, int]:
-        return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
-
-
-assert set(Resources(0, 0).__annotations__.keys()) == {
-    r.lower() for r in Resource.__members__
-}
-
-
 # Check that fields are alphabetical. Necessary because of the way
 # that observation gets vectorized.
 annotations = Obs.__annotations__
 assert tuple(annotations) == tuple(sorted(annotations))
-
-costs = {
-    Building.NEXUS: Resources(minerals=4, gas=0),
-    Building.PYLON: Resources(minerals=1, gas=0),
-    Building.ASSIMILATOR: Resources(minerals=1, gas=0),
-    # Building.FORGE: Resources(minerals=2, gas=0),
-    # Building.GATEWAY: Resources(minerals=2, gas=0),
-    # Building.CYBERNETICS_CORE: Resources(minerals=2, gas=0),
-    # Building.PHOTON_CANNON: Resources(minerals=2, gas=0),
-    Building.TWILIGHT_COUNCIL: Resources(minerals=2, gas=1),
-    Building.STARGATE: Resources(minerals=2, gas=2),
-    Building.ROBOTICS_FACILITY: Resources(minerals=2, gas=1),
-    # Building.TEMPLAR_ARCHIVES: Resources(minerals=2, gas=2),
-    # Building.DARK_SHRINE: Resources(minerals=2, gas=2),
-    # Building.ROBOTICS_BAY: Resources(minerals=2, gas=2),
-    # Building.FLEET_BEACON: Resources(minerals=3, gas=2),
-}
-
-Costs: Dict[Building, typing.Counter[Resource]] = {
-    b: Counter(c.as_dict()) for b, c in costs.items()
-}
-
-# ensure all buildings are in costs
-assert len(Costs) == len(Building)
 
 
 @dataclass(frozen=True)
 class Line:
     required: bool
     building: Building
-
-
-@dataclass(frozen=True)
-class Leaf:
-    building: Building
-
-
-@dataclass(frozen=True)
-class Node:
-    building: Building
-    children: "Tree"
-
-
-Tree = List[Union[Node, Leaf]]
 
 
 @dataclass
@@ -446,32 +600,7 @@ class State:
     time_remaining: int
 
 
-WorldObject = Union[Building, Resource, Worker]
-WorldObjects = list(Building) + list(Resource) + list(Worker)
-
-Symbols: Dict[WorldObject, Union[str, int]] = {
-    Building.PYLON: "p",
-    Building.ASSIMILATOR: "a",
-    Building.NEXUS: "n",
-    # Building.FORGE: "f",
-    # Building.PHOTON_CANNON: "c",
-    # Building.GATEWAY: "g",
-    # Building.CYBERNETICS_CORE: "C",
-    Building.TWILIGHT_COUNCIL: "T",
-    # Building.TEMPLAR_ARCHIVES: "A",
-    # Building.DARK_SHRINE: "D",
-    Building.STARGATE: "S",
-    # Building.FLEET_BEACON: "b",
-    Building.ROBOTICS_FACILITY: "F",
-    # Building.ROBOTICS_BAY: "B",
-    Worker.A: 1,
-    Worker.B: 2,
-    Worker.C: 3,
-    Resource.GAS: fg("green") + "G" + RESET,
-    Resource.MINERALS: fg("blue") + "M" + RESET,
-}
-
-assert set(Symbols) == set(WorldObjects)
+WorldObjects = list(Buildings) + list(Resource) + list(Worker)
 
 
 @dataclass
