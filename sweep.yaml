@@ -75,9 +75,7 @@ parameters:
   num_initial_buildings:
     distribution: categorical
     values:
-      - 1
-      - 2
-      - 3
+      - 0
   num_processes:
     distribution: categorical
     values:
