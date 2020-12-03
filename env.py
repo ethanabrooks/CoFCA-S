@@ -1,3 +1,4 @@
+import itertools
 import pickle
 import typing
 from collections import Counter, deque, OrderedDict
@@ -80,9 +81,11 @@ class Env(gym.Env):
         super().__init__()
         assert self.min_lines >= 1
         assert self.max_lines >= self.min_lines
+        self.max_depth = 0
         self.n_lines_space = Discrete(
             low=self.min_lines, high=min(self.min_lines, self.max_lines)
         )
+        self.curriculum_iterator = self.curriculum_generator()
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
         self.failure_buffer = deque(maxlen=self.failure_buffer_size)
@@ -169,18 +172,16 @@ class Env(gym.Env):
         p.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(
-        self,
+        self, max_depth: int
     ) -> Generator[Tuple[Building, Optional[Building]], None, None]:
         buildings = [b for b in Buildings if not isinstance(b, Assimilator)]
         self.random.shuffle(buildings)
-        head, *tail = buildings
-        n = len(buildings)
-        dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int)
-        dependencies = [buildings[i] for i in dependencies]
+        n = min(max_depth, len(buildings))
+        dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
+        dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
         yield Assimilator(), None
-        yield head, None
-        yield from zip(tail, dependencies)
+        yield from itertools.zip_longest(buildings, dependencies)
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
@@ -245,6 +246,17 @@ class Env(gym.Env):
             create_nodes(building)
         return set(trees.values())
 
+    def curriculum_generator(self):
+        while True:
+            high = min(self.max_lines, self.n_lines_space.high + 1)
+            n_lines_space = Discrete(
+                # min(high - 1, self.n_lines_space.low + 1),
+                low=self.min_lines,
+                high=high,
+            )
+            yield n_lines_space, self.max_depth
+            yield n_lines_space, self.max_depth + 1
+
     @staticmethod
     def done_generator():
         state: State
@@ -308,13 +320,8 @@ class Env(gym.Env):
             action = yield s, r, t, i
 
     def increment_curriculum(self):
-        high = min(self.max_lines, self.n_lines_space.high + 1)
-        self.n_lines_space = Discrete(
-            # min(high - 1, self.n_lines_space.low + 1),
-            low=self.min_lines,
-            high=high,
-        )
         self.curriculum_level += 1
+        self.n_lines_space, self.max_depth = next(self.curriculum_iterator)
 
     def info_generator(self, *lines):
         state: State
@@ -537,7 +544,7 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        dependencies = dict(self.build_dependencies())
+        dependencies = dict(self.build_dependencies(self.max_depth))
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
