@@ -81,7 +81,7 @@ class Env(gym.Env):
         assert self.min_lines >= 1
         assert self.max_lines >= self.min_lines
         self.n_lines_space = Discrete(
-            low=self.min_lines, high=min(self.min_lines + 1, self.max_lines)
+            low=self.min_lines, high=min(self.min_lines, self.max_lines)
         )
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
