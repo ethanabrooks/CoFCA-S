@@ -309,23 +309,21 @@ class Env(gym.Env):
 
     def increment_curriculum(self):
         high = min(self.max_lines, self.n_lines_space.high + 1)
-        self.n_lines_space = Discrete(
-            min(high - 1, self.n_lines_space.low + 1),
-            high,
-        )
+        self.n_lines_space = Discrete(min(high - 1, self.n_lines_space.low + 1), high)
         self.curriculum_level += 1
 
     def info_generator(self, *lines):
         state: State
         done: bool
         state, done = yield
-        info = dict(len_failure_buffer=float(len(self.failure_buffer)))
+        info = {}
 
         while True:
             if done:
                 info.update(
-                    success=float(state.success),
-                    **{
+                    {
+                        f"success": float(state.success),
+                        f"len-{len(lines)} success": float(state.success),
                         "len(instruction)": len(lines),
                         "len(failure_buffer)": len(self.failure_buffer),
                         "curriculum+success": float(
