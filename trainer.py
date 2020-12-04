@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, DefaultDict, Union, Optional
+from typing import Dict, DefaultDict, Union, Optional, Generator
 
 import gym
 import torch
@@ -16,6 +16,7 @@ import wandb
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
+from common.vec_env import VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -42,10 +43,9 @@ class Trainer:
                 Agent.__init__,
                 MLPBase.__init__,
             ],
-            handle_curriculum_args=[cls.handle_curriculum],
             rollouts_args=[RolloutStorage.__init__],
             ppo_args=[PPO.__init__],
-            env_args=[cls.make_env],
+            env_args=[cls.make_env, cls.make_vec_envs],
             run_args=[cls.run],
         )
 
@@ -59,12 +59,8 @@ class Trainer:
         )
 
     @staticmethod
-    def build_infos_aggregator():
+    def build_infos_aggregator() -> InfosAggregator:
         return InfosAggregator()
-
-    @staticmethod
-    def handle_curriculum(infos, envs):
-        pass
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
@@ -75,6 +71,25 @@ class Trainer:
         #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
+
+    @classmethod
+    def make_vec_envs(
+        cls,
+        evaluating: bool,
+        num_processes: int,
+        render: bool,
+        synchronous: bool,
+        **kwargs,
+    ) -> VecPyTorch:
+        def env_thunk(rank):
+            return lambda: cls.make_env(rank=rank, evaluating=evaluating, **kwargs)
+
+        env_fns = [env_thunk(i) for i in range(num_processes)]
+        return VecPyTorch(
+            DummyVecEnv(env_fns, render=render)
+            if len(env_fns) == 1 or synchronous
+            else SubprocVecEnv(env_fns)
+        )
 
     @classmethod
     def main(cls):
@@ -117,7 +132,6 @@ class Trainer:
         env_args: dict,
         eval_interval: Optional[int],
         eval_steps: Optional[int],
-        handle_curriculum_args: dict,
         load_path: Path,
         log_dir: Path,
         log_interval: int,
@@ -141,19 +155,6 @@ class Trainer:
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
         save_path = Path(log_dir, CHECKPOINT_NAME)
-
-        def make_vec_envs(evaluating):
-            def env_thunk(rank):
-                return lambda: cls.make_env(
-                    rank=rank, evaluating=evaluating, **env_args
-                )
-
-            env_fns = [env_thunk(i) for i in range(num_processes)]
-            return VecPyTorch(
-                DummyVecEnv(env_fns, render=render)
-                if len(env_fns) == 1 or synchronous
-                else SubprocVecEnv(env_fns)
-            )
 
         def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
             for _ in range(num_steps):
@@ -196,7 +197,13 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = make_vec_envs(evaluating=False)
+        train_envs = cls.make_vec_envs(
+            evaluating=False,
+            num_processes=num_processes,
+            render=render,
+            synchronous=synchronous,
+            **env_args,
+        )
         try:
             train_envs.to(device)
             agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -247,7 +254,13 @@ class Trainer:
 
                     # self.envs.evaluate()
                     eval_masks = torch.zeros(num_processes, 1, device=device)
-                    eval_envs = make_vec_envs(evaluating=True)
+                    eval_envs = cls.make_vec_envs(
+                        evaluating=True,
+                        num_processes=num_processes,
+                        render=render,
+                        synchronous=synchronous,
+                        **env_args,
+                    )
                     eval_envs.to(device)
                     with agent.recurrent_module.evaluating(eval_envs.observation_space):
                         eval_recurrent_hidden_states = torch.zeros(
@@ -341,7 +354,7 @@ class Trainer:
                     )
 
                 # noinspection PyArgumentList
-                cls.handle_curriculum(train_infos, train_envs, **handle_curriculum_args)
+                train_envs.process_infos(train_infos)
 
                 with torch.no_grad():
                     next_value = agent.get_value(

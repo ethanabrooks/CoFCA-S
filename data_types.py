@@ -12,7 +12,7 @@ import torch
 from colored import fg
 from gym import Space
 
-from utils import RESET
+from utils import RESET, Discrete
 
 Coord = Tuple[int, int]
 
@@ -623,3 +623,23 @@ class RecurrentState(Generic[X]):
 class ParsedInput(Generic[X]):
     obs: X
     actions: X
+
+
+@dataclass
+class CurriculumSetting:
+    max_build_tree_depth: int
+    max_lines: int
+    n_lines_space: Discrete
+    level: int
+
+    def increment_max_lines(self) -> "CurriculumSetting":
+        low = self.n_lines_space.low
+        high = min(self.n_lines_space.high + 1, self.max_lines)
+        n_lines_space = Discrete(low=low, high=high)
+        return replace(self, n_lines_space=n_lines_space)
+
+    def increment_build_tree_depth(self) -> "CurriculumSetting":
+        return replace(self, max_build_tree_depth=self.max_build_tree_depth + 1)
+
+    def increment_level(self) -> "CurriculumSetting":
+        return replace(self, level=self.level + 1)
