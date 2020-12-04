@@ -63,6 +63,7 @@ class Env(gym.Env):
     failure_buffer_load_path: Path
     failure_buffer_size: int
     max_lines: int
+    max_depth: int
     min_lines: int
     num_initial_buildings: int
     rank: int
@@ -81,7 +82,6 @@ class Env(gym.Env):
         super().__init__()
         assert self.min_lines >= 1
         assert self.max_lines >= self.min_lines
-        self.max_depth = 0
         self.n_lines_space = Discrete(
             low=self.min_lines, high=min(self.min_lines, self.max_lines)
         )
@@ -166,6 +166,7 @@ class Env(gym.Env):
         p.add_argument("--failure_buffer_load_path", type=Path)
         p.add_argument("--failure_buffer_size", type=int, default=500)
         p.add_argument("--min_lines", type=int, default=1)
+        p.add_argument("--max_depth", type=int, default=1)
         p.add_argument("--max_lines", type=int, default=10)
         p.add_argument("--num_initial_buildings", type=int, default=0)
         p.add_argument("--time_per_line", type=int, default=4)
