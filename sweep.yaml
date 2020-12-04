@@ -7,10 +7,6 @@ parameters:
   assimilator_prob:
     distribution: categorical
     values:
-      - 0.0
-      - 0.1
-      - 0.2
-      - 0.3
       - 0.4
       - 0.5
       - 0.6
@@ -46,7 +42,6 @@ parameters:
   learning_rate:
     distribution: categorical
     values:
-      - 0.0005
       - 0.001
       - 0.0015
       - 0.002
@@ -99,6 +94,7 @@ parameters:
       - 10
       - 15
       - 20
+      - 25
   tgt_success_rate:
     distribution: categorical
     values:
@@ -109,11 +105,11 @@ parameters:
   time_per_line:
     distribution: categorical
     values:
-      - 4
-      - 5
       - 6
       - 7
       - 8
+      - 9
+      - 10
   train_steps:
     distribution: categorical
     values:
