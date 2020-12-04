@@ -6,10 +6,11 @@ import debug_env as _debug_env
 import env
 import our_agent
 import ours
+import trainer
 from aggregator import InfosAggregator
-from configs import starcraft_default
-from trainer import Trainer
+from common.vec_env import VecEnv
 from wrappers import VecPyTorch
+import numpy as np
 
 
 class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
@@ -35,29 +36,56 @@ class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
         yield "failure_buffer", failure_buffer
         yield from super().items()
 
+    def mean_success(self):
+        return np.mean(self.complete_episodes.get("success", [0]))
 
-class UpperTrainer(Trainer):
+
+class Trainer(trainer.Trainer):
     metric = "reward"
-    default = starcraft_default
 
-    def build_infos_aggregator(self):
-        return InfosAggregatorWithFailureBufferWriter()
+    @classmethod
+    def add_agent_arguments(cls, parser):
+        parser.add_argument("--conv_hidden_size", type=int, default=100)
+        parser.add_argument("--debug", action="store_true")
+        parser.add_argument("--gate_coef", type=float, default=0.01)
+        parser.add_argument("--resources_hidden_size", type=int, default=128)
+        parser.add_argument("--kernel_size", type=int, default=2)
+        parser.add_argument("--lower_embed_size", type=int, default=75)
+        parser.add_argument("--olsk", action="store_true")
+        parser.add_argument("--next_actions_embed_size", type=int, default=25)
+        parser.add_argument("--num_edges", type=int, default=1)
+        parser.add_argument("--no_pointer", action="store_true")
+        parser.add_argument("--no_roll", action="store_true")
+        parser.add_argument("--no_scan", action="store_true")
+        parser.add_argument("--stride", type=int, default=1)
+        parser.add_argument("--task_embed_size", type=int, default=128)
+        parser.add_argument("--transformer", action="store_true")
 
-    def report_generator(self, log_dir):
-        reporter = super().report_generator(log_dir)
-        next(reporter)
+    @classmethod
+    def add_arguments(cls, parser):
+        parser = super().add_arguments(parser)
+        parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
+        parser.main.add_argument("--eval", dest="no_eval", action="store_false")
+        parser.main.add_argument("--min_eval_lines", type=int, default=1)
+        parser.main.add_argument("--max_eval_lines", type=int, default=50)
+        env_parser = parser.main.add_argument_group("env_args")
+        cls.add_env_arguments(env_parser)
+        cls.add_agent_arguments(parser.agent)
+        return parser
 
-        def report(failure_buffer=None, **kwargs):
-            if failure_buffer is not None:
-                with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                    pickle.dump(failure_buffer, f)
-            reporter.send(kwargs)
+    @classmethod
+    def add_env_arguments(cls, parser):
+        env.Env.add_arguments(parser)
 
-        while True:
-            msg = yield
-            report(**msg)
+    @classmethod
+    def args_to_methods(cls):
+        mapping = super().args_to_methods()
+        mapping["env_args"] += [env.Env.__init__]
+        mapping["agent_args"] += [ours.Recurrence.__init__, our_agent.Agent.__init__]
+        return mapping
 
-    def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
+    @staticmethod
+    def build_agent(envs: VecPyTorch, debug=False, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
         return our_agent.Agent(
@@ -66,6 +94,20 @@ class UpperTrainer(Trainer):
             debug=debug,
             **agent_args,
         )
+
+    @staticmethod
+    def build_infos_aggregator():
+        return InfosAggregatorWithFailureBufferWriter()
+
+    # noinspection PyMethodOverriding
+    @staticmethod
+    def handle_curriculum(
+        infos: InfosAggregatorWithFailureBufferWriter,
+        envs: VecEnv,
+        curriculum_threshold: float,
+    ):
+        if infos.mean_success() >= curriculum_threshold:
+            envs.increment_curriculum()
 
     @staticmethod
     def make_env(
@@ -80,15 +122,13 @@ class UpperTrainer(Trainer):
         env_id=None,
         **kwargs
     ):
-        # if evaluating:
-        #     min_lines = min_eval_lines
-        #     max_lines = max_eval_lines
+        if evaluating:
+            min_lines = min_eval_lines
+            max_lines = max_eval_lines
         kwargs.update(
             evaluating=evaluating,
             min_lines=min_lines,
             max_lines=max_lines,
-            min_eval_lines=min_eval_lines,
-            max_eval_lines=max_eval_lines,
             rank=rank,
             random_seed=seed + rank,
         )
@@ -98,49 +138,12 @@ class UpperTrainer(Trainer):
             return env.Env(**kwargs)
 
     @classmethod
-    def args_to_methods(cls):
-        mapping = super().args_to_methods()
-        mapping["env_args"] += [env.Env.__init__]
-        mapping["agent_args"] += [ours.Recurrence.__init__, our_agent.Agent.__init__]
-        return mapping
-
-    @classmethod
-    def add_env_arguments(cls, parser):
-        env.Env.add_arguments(parser)
-
-    @classmethod
-    def add_agent_arguments(cls, parser):
-        parser.add_argument("--debug", action="store_true")
-        parser.add_argument("--no-scan", action="store_true")
-        parser.add_argument("--no-roll", action="store_true")
-        parser.add_argument("--no-pointer", action="store_true")
-        parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--transformer", action="store_true")
-        parser.add_argument("--conv-hidden-size", type=int)
-        parser.add_argument("--task-embed-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
-        parser.add_argument("--resources-hidden-size", type=int)
-        parser.add_argument("--num-edges", type=int)
-        parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--no-op-coef", type=float)
-        parser.add_argument("--kernel-size", type=int)
-        parser.add_argument("--stride", type=int)
-
-    @classmethod
-    def add_arguments(cls, parser):
-        parser = super().add_arguments(parser)
-        parser.main.add_argument("--min-eval-lines", type=int)
-        parser.main.add_argument("--max-eval-lines", type=int)
-        parser.main.add_argument("--no-eval", action="store_true")
-        env_parser = parser.main.add_argument_group("env_args")
-        cls.add_env_arguments(env_parser)
-        cls.add_agent_arguments(parser.agent)
-        return parser
-
-    @classmethod
-    def launch(cls, env_id, **kwargs):
-        super().launch(env_id="experiment", **kwargs)
+    def report(cls, failure_buffer, log_dir: Path, **kwargs):
+        if failure_buffer is not None:
+            with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
+                pickle.dump(failure_buffer, f)
+        super().report(**kwargs, log_dir=log_dir)
 
 
 if __name__ == "__main__":
-    UpperTrainer.main()
+    Trainer.main()

@@ -1,0 +1,124 @@
+program: starcraft.py
+method: bayes
+metric:
+  goal: maximize
+  name: curriculum+success
+parameters:
+  assimilator_prob:
+    distribution: categorical
+    values:
+      - 0.0
+      - 0.1
+      - 0.2
+      - 0.3
+      - 0.4
+      - 0.5
+      - 0.6
+      - 0.7
+  curriculum_threshold:
+    distribution: categorical
+    values:
+      - 0.95
+      - 0.99
+      - 0.995
+  conv_hidden_size:
+    distribution: categorical
+    values:
+      - 50
+      - 75
+      - 100
+      - 150
+      - 200
+  entropy_coef:
+    distribution: categorical
+    values:
+      - 0.015
+      - 0.02
+      - 0.025
+  hidden_size:
+    distribution: categorical
+    values:
+      - 50
+      - 100
+      - 150
+      - 200
+      - 250
+  learning_rate:
+    distribution: categorical
+    values:
+      - 0.0005
+      - 0.001
+      - 0.0015
+      - 0.002
+      - 0.0025
+  lower_embed_size:
+    distribution: categorical
+    values:
+      - 50
+      - 75
+      - 100
+  next_actions_embed_size:
+    distribution: categorical
+    values:
+      - 25
+      - 50
+      - 75
+      - 100
+  num_batch:
+    distribution: categorical
+    values:
+      - 1
+      - 2
+  num_edges:
+    distribution: categorical
+    values:
+      - 2
+      - 3
+      - 4
+  num_initial_buildings:
+    distribution: categorical
+    values:
+      - 0
+  num_processes:
+    distribution: categorical
+    values:
+      - 60
+      - 70
+      - 80
+      - 90
+      - 100
+      - 110
+      - 120
+      - 130
+      - 140
+      - 150
+  ppo_epoch:
+    distribution: categorical
+    values:
+      - 5
+      - 10
+      - 15
+      - 20
+  tgt_success_rate:
+    distribution: categorical
+    values:
+      - 0.75
+      - 0.8
+      - 0.85
+      - 0.9
+  time_per_line:
+    distribution: categorical
+    values:
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+  train_steps:
+    distribution: categorical
+    values:
+      - 35
+      - 40
+early_terminate:
+  type: hyperband
+  min_iter: 100

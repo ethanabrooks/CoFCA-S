@@ -6,15 +6,12 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, Optional, DefaultDict, Union
+from typing import Dict, DefaultDict, Union, Optional
 
 import gym
-import ray
 import torch
 import torch.nn as nn
-from ray import tune
-from ray.tune.suggest.hyperopt import HyperOptSearch
-from tensorboardX import SummaryWriter
+import wandb
 
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
@@ -22,17 +19,20 @@ from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from configs import default
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
+CHECKPOINT_NAME = "checkpoint.pt"
 
 
 class Trainer:
     metric = "reward"
-    default = default
+
+    @classmethod
+    def add_arguments(cls, parser):
+        return arguments.add_arguments(parser)
 
     @classmethod
     def args_to_methods(cls):
@@ -42,48 +42,33 @@ class Trainer:
                 Agent.__init__,
                 MLPBase.__init__,
             ],
+            handle_curriculum_args=[cls.handle_curriculum],
             rollouts_args=[RolloutStorage.__init__],
             ppo_args=[PPO.__init__],
             env_args=[cls.make_env],
             run_args=[cls.run],
         )
 
-    @classmethod
-    def structure_config(
-        cls, **config
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        def parameters(*ms):
-            for method in ms:
-                yield from inspect.signature(method).parameters
-
-        args = defaultdict(dict)
-        args_to_methods = cls.args_to_methods()
-        for k, v in config.items():
-            assigned = False
-            for arg_name, methods in args_to_methods.items():
-                if k in parameters(*methods):
-                    args[arg_name][k] = v
-                    assigned = True
-            assert assigned
-        run_args = args.pop("run_args")
-        args.update(**run_args)
-        return args
+    @staticmethod
+    def build_agent(envs, activation=nn.ReLU(), **agent_args):
+        return Agent(
+            envs.observation_space.shape,
+            envs.action_space,
+            activation=activation,
+            **agent_args,
+        )
 
     @staticmethod
-    def save_checkpoint(tmp_checkpoint_dir, ppo, agent, step):
-        modules = dict(
-            optimizer=ppo.optimizer, agent=agent
-        )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
-        state_dict = {name: module.state_dict() for name, module in modules.items()}
-        save_path = Path(tmp_checkpoint_dir, f"checkpoint.pt")
-        torch.save(dict(step=step, **state_dict), save_path)
-        print(f"Saved parameters to {save_path}")
+    def build_infos_aggregator():
+        return InfosAggregator()
+
+    @staticmethod
+    def handle_curriculum(infos, envs):
+        pass
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
-        state_dict = torch.load(checkpoint_path, map_location=device)
+        state_dict = torch.load(str(checkpoint_path), map_location=device)
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
         # if isinstance(self.envs.venv, VecNormalize):
@@ -91,46 +76,75 @@ class Trainer:
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
+    @classmethod
+    def main(cls):
+        parser = ArgumentParser()
+        cls.add_arguments(parser)
+
+        def run(config, no_wandb, group, **kwargs):
+            if no_wandb:
+                log_dir = Path("/tmp")
+            else:
+                wandb.init(group=group)
+                kwargs.update(wandb.config.as_dict())
+                log_dir = Path(wandb.run.dir)
+            kwargs.update(config, log_dir=log_dir)
+            cls().run(**cls.structure_config(**kwargs))
+
+        run(**vars(parser.parse_args()))
+
+    @staticmethod
+    def make_env(env_id, seed, rank, evaluating, **kwargs):
+        env = gym.make(env_id, **kwargs)
+        env.seed(seed + rank)
+        return env
+
+    @staticmethod
+    def report(frames: int, log_dir: Path, **kwargs):
+        print("Frames:", frames)
+        pprint(kwargs)
+        try:
+            wandb.log(kwargs, step=frames)
+        except wandb.Error:
+            pass
+
+    @classmethod
     def run(
-        self,
+        cls,
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
         env_args: dict,
-        log_dir: Optional[str],
+        eval_interval: Optional[int],
+        eval_steps: Optional[int],
+        handle_curriculum_args: dict,
+        load_path: Path,
+        log_dir: Path,
         log_interval: int,
+        no_eval: bool,
         normalize: float,
         num_frames: int,
         num_processes: int,
         ppo_args: dict,
+        render: bool,
+        render_eval: bool,
         rollouts_args: dict,
         seed: int,
         save_interval: int,
         synchronous: bool,
+        threshold: Optional[float],
         train_steps: int,
-        eval_interval: int = None,
-        eval_steps: int = None,
-        load_path: Path = None,
-        no_eval: bool = False,
-        render: bool = False,
-        render_eval: bool = False,
     ):
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
         torch.set_num_threads(1)
         os.environ["OMP_NUM_THREADS"] = "1"
-
-        if tune.is_session_enabled():
-            with tune.checkpoint_dir(0) as _dir:
-                log_dir = str(Path(_dir).parent)
-
-        reporter = self.report_generator(log_dir)
-        next(reporter)
+        save_path = Path(log_dir, CHECKPOINT_NAME)
 
         def make_vec_envs(evaluating):
             def env_thunk(rank):
-                return lambda: self.make_env(
+                return lambda: cls.make_env(
                     rank=rank, evaluating=evaluating, **env_args
                 )
 
@@ -185,7 +199,7 @@ class Trainer:
         train_envs = make_vec_envs(evaluating=False)
         try:
             train_envs.to(device)
-            agent = self.build_agent(envs=train_envs, **agent_args)
+            agent = cls.build_agent(envs=train_envs, **agent_args)
             rollouts = RolloutStorage(
                 num_steps=train_steps,
                 obs_space=train_envs.observation_space,
@@ -201,15 +215,18 @@ class Trainer:
 
             ppo = PPO(agent=agent, **ppo_args)
             train_report = EpisodeAggregator()
-            train_infos = self.build_infos_aggregator()
+            train_infos = cls.build_infos_aggregator()
             train_results = {}
             if load_path:
-                self.load_checkpoint(load_path, ppo, agent, device)
+                cls.load_checkpoint(load_path, ppo, agent, device)
 
+            print("resetting environment...")
             rollouts.obs[0].copy_(train_envs.reset())
+            print("Reset environment")
             frames_per_update = train_steps * num_processes
             frames = Counter()
             time_spent = Counter()
+            iter_tick = None
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
@@ -219,6 +236,7 @@ class Trainer:
                     or done
                     or (eval_interval and frames["since_eval"] > eval_interval)
                 ):
+                    print("Evaluating...")
                     eval_report = EvalWrapper(EpisodeAggregator())
                     eval_infos = EvalWrapper(InfosAggregator())
                     frames["since_eval"] = 0
@@ -250,39 +268,46 @@ class Trainer:
                                 dones=output.done,
                             )
                             eval_infos.update(*output.infos, dones=output.done)
-                        reporter.send(
-                            dict(
-                                **dict(eval_report.items()),
-                                **dict(eval_infos.items()),
-                                training_iteration=frames["so_far"],
-                            )
+                        cls.report(
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            frames=frames["so_far"],
+                            log_dir=log_dir,
                         )
+                        print("Done evaluating...")
                     eval_envs.close()
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
-                if done or frames["since_log"] > log_interval:
-                    tick = time.time()
+                if done or i == 0 or frames["since_log"] > log_interval:
+                    log_tick = time.time()
                     frames["since_log"] = 0
-                    reporter.send(
-                        dict(
-                            **train_results,
-                            **dict(train_report.items()),
-                            **dict(train_infos.items()),
-                            time_logging=time_spent["logging"],
-                            time_saving=time_spent["saving"],
-                            training_iteration=frames["so_far"],
-                        )
+                    report = dict(
+                        **train_results,
+                        **dict(train_report.items()),
+                        **dict(train_infos.items()),
+                        time_logging=time_spent["logging"],
+                        time_saving=time_spent["saving"],
+                        frames=frames["so_far"],
+                        log_dir=log_dir,
                     )
+                    if iter_tick is not None:
+                        report.update(time_this_iter=time.time() - iter_tick)
+                    iter_tick = time.time()
+                    cls.report(**report)
                     train_report.reset()
                     train_infos.reset()
-                    time_spent["logging"] += time.time() - tick
+                    time_spent["logging"] += time.time() - log_tick
 
                 if done or (save_interval and frames["since_save"] > save_interval):
                     tick = time.time()
                     frames["since_save"] = 0
-                    if log_dir:
-                        self.save_checkpoint(log_dir, ppo=ppo, agent=agent, step=i)
+                    cls.save_checkpoint(
+                        save_path,
+                        ppo=ppo,
+                        agent=agent,
+                        step=i,
+                    )
                     time_spent["saving"] += time.time() - tick
 
                 if done:
@@ -315,6 +340,9 @@ class Trainer:
                         since_eval=num_processes,
                     )
 
+                # noinspection PyArgumentList
+                cls.handle_curriculum(train_infos, train_envs, **handle_curriculum_args)
+
                 with torch.no_grad():
                     next_value = agent.get_value(
                         rollouts.obs[-1],
@@ -330,113 +358,41 @@ class Trainer:
             train_envs.close()
 
     @staticmethod
-    def report_generator(log_dir: Optional[str]):
-
-        if tune.is_session_enabled():
-            report = tune.report
-        else:
-            writer = SummaryWriter(logdir=log_dir) if log_dir else None
-
-            def report(training_iteration, **args):
-                pprint(args)
-                if writer:
-                    for k, v in args.items():
-                        writer.add_scalar(k, v, global_step=training_iteration)
-
-        while True:
-            kwargs = yield
-            report(**kwargs)
-
-    def build_infos_aggregator(self):
-        return InfosAggregator()
-
-    @staticmethod
-    def build_agent(envs, activation=nn.ReLU(), **agent_args):
-        return Agent(
-            envs.observation_space.shape,
-            envs.action_space,
-            activation=activation,
-            **agent_args,
-        )
-
-    @staticmethod
-    def make_env(env_id, seed, rank, evaluating, **kwargs):
-        env = gym.make(env_id, **kwargs)
-        env.seed(seed + rank)
-        return env
+    def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):
+        modules = dict(
+            optimizer=ppo.optimizer, agent=agent
+        )  # type: Dict[str, torch.nn.Module]
+        # if isinstance(self.envs.venv, VecNormalize):
+        #     modules.update(vec_normalize=self.envs.venv)
+        state_dict = {name: module.state_dict() for name, module in modules.items()}
+        torch.save(dict(step=step, **state_dict), save_path)
+        print(f"Saved parameters to {save_path}")
 
     @classmethod
-    def launch(
-        cls,
-        gpus_per_trial: float,
-        cpus_per_trial: float,
-        log_dir: str,
-        num_samples: int,
-        name: str,
-        config: dict,
-        seed: Optional[int],
-        **kwargs,
-    ):
-        if config is None:
-            config = cls.default
-        if seed is not None:
-            config.update(seed=seed)
+    def structure_config(
+        cls, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        if config["render"]:
+            config["num_processes"] = 1
 
-        for k, v in kwargs.items():
-            if k not in config or v is not None:
-                if isinstance(v, bool):  # handle store_{true, false} differently
-                    if v != cls.default[k]:  # flag used
-                        config[k] = v
-                else:
-                    config[k] = v
+        def parameters(*ms):
+            for method in ms:
+                yield from inspect.signature(method).parameters
 
-        config.update(log_dir=log_dir)
-
-        def run(c):
-            c = cls.structure_config(**c)
-            cls().run(**c)
-
-        if num_samples is None:
-            print("Not using tune, because num_samples was not specified")
-            run(config)
-        else:
-            local_mode = num_samples is None
-            ray.init(dashboard_host="127.0.0.1", local_mode=local_mode)
-            resources_per_trial = dict(
-                gpu=gpus_per_trial if torch.cuda.is_available() else 0,
-                cpu=cpus_per_trial,
-            )
-
-            if local_mode:
-                print("Using local mode because num_samples is None")
-                kwargs = dict()
-            else:
-                kwargs = dict(
-                    search_alg=HyperOptSearch(
-                        config, metric=cls.metric, mode="max", random_state_seed=seed
-                    ),
-                    num_samples=num_samples,
-                )
-            if log_dir is not None:
-                kwargs.update(local_dir=log_dir)
-
-            tune.run(
-                run,
-                name=name,
-                config=config,
-                resources_per_trial=resources_per_trial,
-                **kwargs,
-            )
-
-    @classmethod
-    def add_arguments(cls, parser):
-        return arguments.add_arguments(parser)
-
-    @classmethod
-    def main(cls):
-        parser = ArgumentParser()
-        cls.add_arguments(parser)
-        cls.launch(**vars(parser.parse_args()))
+        args = defaultdict(dict)
+        args_to_methods = cls.args_to_methods()
+        for k, v in config.items():
+            if k in ("_wandb", "wandb_version"):
+                continue
+            assigned = False
+            for arg_name, methods in args_to_methods.items():
+                if k in parameters(*methods):
+                    args[arg_name][k] = v
+                    assigned = True
+            assert assigned, k
+        run_args = args.pop("run_args")
+        args.update(**run_args)
+        return args
 
 
 if __name__ == "__main__":

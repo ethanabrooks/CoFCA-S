@@ -434,14 +434,20 @@ def test_smooth():
     ndown = 30
     xs = np.cumsum(np.random.rand(norig) * 10 / norig)
     yclean = np.sin(xs)
-    ys = yclean + .1 * np.random.randn(yclean.size)
-    xup, yup, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown)
-    xdown, ydown, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown)
-    xsame, ysame, _ = symmetric_ema(xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown)
-    plt.plot(xs, ys, label='orig', marker='x')
-    plt.plot(xup, yup, label='up', marker='x')
-    plt.plot(xdown, ydown, label='down', marker='x')
-    plt.plot(xsame, ysame, label='same', marker='x')
-    plt.plot(xs, yclean, label='clean', marker='x')
+    ys = yclean + 0.1 * np.random.randn(yclean.size)
+    xup, yup, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max_resource(), nup, decay_steps=nup / ndown
+    )
+    xdown, ydown, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max_resource(), ndown, decay_steps=ndown / ndown
+    )
+    xsame, ysame, _ = symmetric_ema(
+        xs, ys, xs.min(), xs.max_resource(), norig, decay_steps=norig / ndown
+    )
+    plt.plot(xs, ys, label="orig", marker="x")
+    plt.plot(xup, yup, label="up", marker="x")
+    plt.plot(xdown, ydown, label="down", marker="x")
+    plt.plot(xsame, ysame, label="same", marker="x")
+    plt.plot(xs, yclean, label="clean", marker="x")
     plt.legend()
     plt.show()

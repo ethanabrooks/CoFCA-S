@@ -187,9 +187,6 @@ class VecPyTorch(VecEnvWrapper):
 
     def extract_numpy(self, obs):
         if isinstance(obs, dict):
-            # print("VecPyTorch")
-            # for k, x in obs.items():
-            #     print(k, x.shape)
             return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
         elif not isinstance(obs, (list, tuple)):
             return obs
