@@ -1,0 +1,105 @@
+program: baseline.py
+method: bayes
+metric:
+  goal: maximize
+  name: curriculum+success
+parameters:
+  assimilator_prob:
+    distribution: categorical
+    values:
+      - 0
+      - 0.4
+      - 0.5
+      - 0.6
+      - 0.7
+  conv_hidden_size:
+    distribution: categorical
+    values:
+      - 50
+      - 75
+      - 100
+      - 150
+      - 200
+  entropy_coef:
+    distribution: categorical
+    values:
+      - 0.015
+      - 0.02
+      - 0.025
+  hidden_size:
+    distribution: categorical
+    values:
+      - 50
+      - 100
+      - 150
+      - 200
+      - 250
+  learning_rate:
+    distribution: categorical
+    values:
+      - 0.001
+      - 0.0015
+      - 0.002
+      - 0.0025
+      - 0.003
+  lower_embed_size:
+    distribution: categorical
+    values:
+      - 50
+      - 75
+      - 100
+  next_actions_embed_size:
+    distribution: categorical
+    values:
+      - 25
+      - 50
+      - 75
+      - 100
+  num_batch:
+    distribution: categorical
+    values:
+      - 1
+      - 2
+  num_initial_buildings:
+    distribution: categorical
+    values:
+      - 0
+  num_processes:
+    distribution: categorical
+    values:
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      - 60
+      - 70
+      - 80
+      - 90
+      - 100
+      - 110
+      - 120
+      - 130
+      - 140
+      - 150
+  ppo_epoch:
+    distribution: categorical
+    values:
+      - 5
+      - 10
+      - 15
+      - 20
+      - 25
+  time_per_line:
+    distribution: categorical
+    values:
+      - 10
+      - 20
+  train_steps:
+    distribution: categorical
+    values:
+      - 35
+      - 40
+early_terminate:
+  type: hyperband
+  min_iter: 100
