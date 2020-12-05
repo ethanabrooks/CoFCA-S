@@ -229,7 +229,8 @@ class Env(gym.Env):
             state = yield state.success or not state.time_remaining, lambda: None
 
     def failure_buffer_wrapper(self, iterator):
-        if self.evaluating:
+        size = self.failure_buffer.qsize()
+        if self.evaluating or not size:
             buf = False
         else:
             use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
@@ -240,7 +241,7 @@ class Env(gym.Env):
         if use_failure_buf:
 
             # randomly rotate queue
-            for i in range(self.random.choice(self.failure_buffer.qsize())):
+            for i in range(self.random.choice(size)):
                 try:
                     state = self.failure_buffer.get_nowait()
                     self.failure_buffer.put_nowait(state)
@@ -251,10 +252,10 @@ class Env(gym.Env):
 
             try:
                 state = self.failure_buffer.get_nowait()
-            except Full:
-                pass
+            except (Full, Empty):
+                use_failure_buf = state is not None
 
-        if state is None:
+        if not use_failure_buf:
             state = self.non_failure_random
         self.random.set_state(state)
         initial_random = self.random.get_state()
