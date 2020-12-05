@@ -8,10 +8,7 @@ parameters:
     distribution: categorical
     values:
       - 0
-      - 0.4
       - 0.5
-      - 0.6
-      - 0.7
   conv_hidden_size:
     distribution: categorical
     values:
