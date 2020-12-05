@@ -1,11 +1,12 @@
 import itertools
-import pickle
 import typing
-from collections import Counter, deque, OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
+from multiprocessing.queues import Queue
 from pathlib import Path
 from pprint import pprint
+from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
 
 import gym
@@ -43,15 +44,9 @@ from data_types import (
     Nexus,
     CurriculumSetting,
 )
-from utils import RESET, Discrete
+from utils import RESET
 
 Dependencies = Dict[Building, Building]
-
-
-def delete_nth(d, n):
-    d.rotate(-n)
-    d.popleft()
-    d.rotate(n)
 
 
 # noinspection PyAttributeOutsideInit
@@ -61,8 +56,7 @@ class Env(gym.Env):
     break_on_fail: bool
     destroy_building_prob: float
     eval_steps: int
-    failure_buffer_load_path: Optional[Path]
-    failure_buffer_size: int
+    failure_buffer: Queue
     num_initial_buildings: int
     rank: int
     random_seed: int
@@ -80,14 +74,6 @@ class Env(gym.Env):
         super().__init__()
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
-        self.failure_buffer = deque(maxlen=self.failure_buffer_size)
-        if self.failure_buffer_load_path:
-            with self.failure_buffer_load_path.open("rb") as f:
-                self.failure_buffer.extend(pickle.load(f))
-                print(
-                    f"Loaded failure buffer of length {len(self.failure_buffer)} "
-                    f"from {self.failure_buffer_load_path}"
-                )
         max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
         self.a_size = max_a_action = max(
@@ -155,8 +141,6 @@ class Env(gym.Env):
         parser.add_argument("--curriculum_setting_load_path", type=Path)
         parser.add_argument("--debug_env", action="store_true")
         parser.add_argument("--destroy_building_prob", type=float, default=0)
-        parser.add_argument("--failure_buffer_load_path", type=Path)
-        parser.add_argument("--failure_buffer_size", type=int, default=500)
         parser.add_argument("--num_initial_buildings", type=int, default=0)
         parser.add_argument("--time_per_line", type=int, default=4)
         parser.add_argument("--tgt_success_rate", type=float, default=0.75)
@@ -246,19 +230,34 @@ class Env(gym.Env):
             state = yield state.success or not state.time_remaining, lambda: None
 
     def failure_buffer_wrapper(self, iterator):
-        if self.evaluating or len(self.failure_buffer) == 0:
+        if self.evaluating:
             buf = False
         else:
             use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
             use_failure_prob = max(use_failure_prob, 0)
             buf = self.random.random() < use_failure_prob
         use_failure_buf = buf
+        state = None
         if use_failure_buf:
-            i = self.random.choice(len(self.failure_buffer))
-            self.random.set_state(self.failure_buffer[i])
-            delete_nth(self.failure_buffer, i)
-        else:
-            self.random.set_state(self.non_failure_random)
+
+            # randomly rotate queue
+            for i in range(self.random.choice(self.failure_buffer.qsize())):
+                try:
+                    state = self.failure_buffer.get_nowait()
+                    self.failure_buffer.put_nowait(state)
+                except Full:
+                    pass  # discard, keep going
+                except Empty:
+                    break
+
+            try:
+                state = self.failure_buffer.get_nowait()
+            except Full:
+                pass
+
+        if state is None:
+            state = self.non_failure_random
+        self.random.set_state(state)
         initial_random = self.random.get_state()
         action = None
 
@@ -280,18 +279,21 @@ class Env(gym.Env):
                 i.update(reward_without_failure_buf=r)
             if t:
                 success = i["success"]
+
                 if not use_failure_buf:
                     i.update(success_without_failure_buf=float(success))
                     self.success_avg += self.alpha * (success - self.success_avg)
 
-                i.update(
-                    use_failure_buf=use_failure_buf,
-                )
-                if not self.evaluating:
-                    i.update(failure_buffer=[*self.failure_buffer][:2])
+                put_failure_buf = not self.evaluating and not success
+                if put_failure_buf:
+                    try:
+                        self.failure_buffer.put_nowait(initial_random)
+                    except Full:
+                        pass
 
-                if not success:
-                    self.failure_buffer.append(initial_random)
+                i.update(use_failure_buf=use_failure_buf)
+                if use_failure_buf or put_failure_buf:
+                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -314,7 +316,6 @@ class Env(gym.Env):
                         f"success": float(state.success),
                         f"len-{len(lines)} success": float(state.success),
                         "len(instruction)": len(lines),
-                        "len(failure_buffer)": len(self.failure_buffer),
                         "curriculum+success": float(
                             self.curriculum_setting.level + state.success
                         ),

@@ -1,6 +1,6 @@
 import pickle
-from itertools import islice
 from pathlib import Path
+from multiprocessing import Queue
 from typing import Optional
 
 import numpy as np
@@ -11,37 +11,11 @@ import our_agent
 import ours
 import trainer
 from aggregator import InfosAggregator
+import osx_queue
 from common.vec_env import VecEnv, VecEnvWrapper
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
-
-
-class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
-    def __init__(self):
-        super().__init__()
-        self.failure_buffers = {}
-
-    def update(self, *infos: dict, dones):
-        for i, info in enumerate(infos):
-            try:
-                self.failure_buffers[i] = info.pop("failure_buffer")
-            except KeyError:
-                pass
-
-        super().update(*infos, dones=dones)
-
-    def concat_buffers(self):
-        for buffer in self.failure_buffers.values():
-            yield from buffer
-
-    def items(self):
-        failure_buffer = list(islice(self.concat_buffers(), 50))
-        yield "failure_buffer", failure_buffer
-        yield from super().items()
-
-    def mean_success(self):
-        return np.mean(self.complete_episodes.get("success", [0]))
 
 
 class CurriculumWrapper(VecEnvWrapper):
@@ -116,6 +90,8 @@ class Trainer(trainer.Trainer):
         parser = super().add_arguments(parser)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
+        parser.main.add_argument("--failure_buffer_load_path", type=Path)
+        parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
         parser.main.add_argument("--min_eval_lines", type=int, default=1)
         parser.main.add_argument("--max_eval_lines", type=int, default=50)
         env_parser = parser.main.add_argument_group("env_args")
@@ -146,10 +122,6 @@ class Trainer(trainer.Trainer):
         )
 
     @staticmethod
-    def build_infos_aggregator() -> InfosAggregator:
-        return InfosAggregatorWithFailureBufferWriter()
-
-    @staticmethod
     def make_env(
         rank: int,
         seed: int,
@@ -170,6 +142,8 @@ class Trainer(trainer.Trainer):
         curriculum_setting_load_path: Optional[Path],
         curriculum_threshold: float,
         evaluating: bool,
+        failure_buffer_load_path: Path,
+        failure_buffer_size: int,
         log_dir: Path,
         max_eval_lines: int,
         max_lines: int,
@@ -204,21 +178,29 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
         )
 
-        venv = super().make_vec_envs(evaluating=evaluating, **kwargs)
+        if failure_buffer_load_path:
+            with failure_buffer_load_path.open("rb") as f:
+                failure_buffer = pickle.load(f)
+                assert isinstance(failure_buffer, Queue)
+                print(
+                    f"Loaded failure buffer of length {failure_buffer.qsize()} "
+                    f"from {failure_buffer_load_path}"
+                )
+        else:
+            failure_buffer = Queue(maxsize=failure_buffer_size)
+            try:
+                failure_buffer.qsize()
+            except NotImplementedError:
+                failure_buffer = osx_queue.Queue()
+        venv = super().make_vec_envs(
+            evaluating=evaluating, failure_buffer=failure_buffer, **kwargs
+        )
         return CurriculumWrapper(
             venv=venv,
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
         )
-
-    # noinspection PyMethodOverriding
-    @classmethod
-    def report(cls, failure_buffer, log_dir: Path, **kwargs):
-        if failure_buffer is not None:
-            with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                pickle.dump(failure_buffer, f)
-        super().report(**kwargs, log_dir=log_dir)
 
 
 if __name__ == "__main__":

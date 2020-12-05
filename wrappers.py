@@ -6,6 +6,7 @@ from gym.spaces import Box, Discrete
 import numpy as np
 import torch
 
+from aggregator import InfosAggregator
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
