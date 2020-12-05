@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import os
-import time
 from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
@@ -15,7 +14,13 @@ import wandb
 
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
-from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
+from aggregator import (
+    EpisodeAggregator,
+    InfosAggregator,
+    EvalWrapper,
+    TotalTimeKeeper,
+    AverageTimeKeeper,
+)
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -223,8 +228,9 @@ class Trainer:
             print("Reset environment")
             frames_per_update = train_steps * num_processes
             frames = Counter()
-            time_spent = Counter()
-            iter_tick = None
+            time_spent = TotalTimeKeeper()
+            time_per = AverageTimeKeeper()
+            time_per["iter"].tick()
 
             for i in itertools.count():
                 frames.update(so_far=frames_per_update)
@@ -278,27 +284,25 @@ class Trainer:
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
                 if done or i == 0 or frames["since_log"] > log_interval:
-                    log_tick = time.time()
+                    time_spent["logging"].tick()
                     frames["since_log"] = 0
                     report = dict(
                         **train_results,
                         **dict(train_report.items()),
                         **dict(train_infos.items()),
-                        time_logging=time_spent["logging"],
-                        time_saving=time_spent["saving"],
+                        **dict(time_per.items()),
+                        **dict(time_spent.items()),
                         frames=frames["so_far"],
                         log_dir=log_dir,
                     )
-                    if iter_tick is not None:
-                        report.update(time_this_iter=time.time() - iter_tick)
-                    iter_tick = time.time()
                     cls.report(**report)
                     train_report.reset()
                     train_infos.reset()
-                    time_spent["logging"] += time.time() - log_tick
+                    time_spent["logging"].update()
+                    time_per["iter"].update()
 
                 if done or (save_interval and frames["since_save"] > save_interval):
-                    tick = time.time()
+                    time_spent["saving"].tick()
                     frames["since_save"] = 0
                     cls.save_checkpoint(
                         save_path,
@@ -306,11 +310,13 @@ class Trainer:
                         agent=agent,
                         step=i,
                     )
-                    time_spent["saving"] += time.time() - tick
+                    time_spent["saving"].update()
 
                 if done:
                     break
 
+                time_per["frame"].tick()
+                time_per["update"].tick()
                 for output in run_epoch(
                     obs=rollouts.obs[0],
                     rnn_hxs=rollouts.recurrent_hidden_states[0],
@@ -337,6 +343,7 @@ class Trainer:
                         since_log=num_processes,
                         since_eval=num_processes,
                     )
+                    time_per["frame"].update()
 
                 # noinspection PyArgumentList
                 train_envs.process_infos(train_infos)
@@ -351,6 +358,7 @@ class Trainer:
                 rollouts.compute_returns(next_value.detach())
                 train_results = ppo.update(rollouts)
                 rollouts.after_update()
+                time_per["update"].update()
 
         finally:
             train_envs.close()
