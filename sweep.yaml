@@ -1,4 +1,4 @@
-program: starcraft.py
+program: ours.py
 method: bayes
 metric:
   goal: maximize

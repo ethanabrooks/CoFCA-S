@@ -6,7 +6,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 import agents
-import ours
+import our_recurrence
 from agents import AgentOutputs, NNBase
 from data_types import RawAction
 from distributions import FixedCategorical
@@ -25,7 +25,7 @@ class Agent(agents.Agent, NNBase):
         nn.Module.__init__(self)
         self.gate_coef = gate_coef
         self.entropy_coef = entropy_coef
-        self.recurrent_module = ours.Recurrence(
+        self.recurrent_module = our_recurrence.Recurrence(
             observation_space=observation_space,
             action_space=action_space,
             **network_args,

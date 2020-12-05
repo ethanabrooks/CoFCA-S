@@ -1,4 +1,4 @@
-program: starcraft.py
+program: ours.py
 method: grid
 parameters:
   conv_hidden_size:
