@@ -1,7 +1,8 @@
+import time
 from abc import ABC
-from collections import defaultdict
+from collections import defaultdict, Counter
 from dataclasses import dataclass
-from typing import Collection
+from typing import Collection, Generator, Tuple
 
 import numpy as np
 
@@ -10,8 +11,30 @@ class Aggregator(ABC):
     def update(self, *args, **kwargs):
         raise NotImplementedError
 
-    def items(self):
+    def items(self) -> Generator[Tuple[str, any], None, None]:
         raise NotImplementedError
+
+
+class TimeAggregator(Aggregator):
+    def __init__(self):
+        self.count = 0
+        self.time = 0
+        self.tick = time.time()
+
+    def update(self):
+        self.count += 1
+        self.time = self.time + time.time() - self.tick
+
+    def items(self):
+        yield "time", self.average()
+
+    def average(self):
+        if self.time == self.count == 0:
+            return 0
+        return self.time / self.count
+
+    def reset(self):
+        self.tick = time.time()
 
 
 class EpisodeAggregator(Aggregator):
@@ -32,7 +55,7 @@ class EpisodeAggregator(Aggregator):
                     self.complete_episodes[k].append(sum(incomplete_episodes[i]))
                     incomplete_episodes[i] = []
 
-    def items(self):
+    def items(self) -> Generator[Tuple[str, any], None, None]:
         for k, v in self.complete_episodes.items():
             yield k, np.mean(v)
 
@@ -63,6 +86,6 @@ class EvalWrapper(Aggregator):
     def update(self, *args, **kwargs):
         self.aggregator.update(*args, **kwargs)
 
-    def items(self):
+    def items(self) -> Generator[Tuple[str, any], None, None]:
         for k, v in self.aggregator.items():
             yield "eval_" + k, v
