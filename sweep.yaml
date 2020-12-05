@@ -102,6 +102,7 @@ parameters:
       - 0.8
       - 0.85
       - 0.9
+      - 1
   time_per_line:
     distribution: categorical
     values:
