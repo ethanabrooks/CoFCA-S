@@ -16,7 +16,7 @@ from utils import RESET, Discrete
 
 Coord = Tuple[int, int]
 
-WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 3))
+WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 8))
 
 
 class WorldObject:
