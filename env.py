@@ -138,7 +138,6 @@ class Env(gym.Env):
     def add_arguments(cls, parser):
         parser.add_argument("--assimilator_prob", type=float, default=0.5)
         parser.add_argument("--break_on_fail", action="store_true")
-        parser.add_argument("--curriculum_setting_load_path", type=Path)
         parser.add_argument("--debug_env", action="store_true")
         parser.add_argument("--destroy_building_prob", type=float, default=0)
         parser.add_argument("--num_initial_buildings", type=int, default=0)

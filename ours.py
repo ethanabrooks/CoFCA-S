@@ -63,50 +63,45 @@ class CurriculumWrapper(VecEnvWrapper):
 
 
 class Trainer(trainer.Trainer):
-    metric = "reward"
-
-    @classmethod
-    def add_agent_arguments(cls, parser):
-        parser.add_argument("--conv_hidden_size", type=int, default=100)
-        parser.add_argument("--debug", action="store_true")
-        parser.add_argument("--gate_coef", type=float, default=0.01)
-        parser.add_argument("--resources_hidden_size", type=int, default=128)
-        parser.add_argument("--kernel_size", type=int, default=2)
-        parser.add_argument("--lower_embed_size", type=int, default=75)
-        parser.add_argument("--max_lines", type=int, default=10)
-        parser.add_argument("--min_lines", type=int, default=1)
-        parser.add_argument("--next_actions_embed_size", type=int, default=25)
-        parser.add_argument("--num_edges", type=int, default=1)
-        parser.add_argument("--no_pointer", action="store_true")
-        parser.add_argument("--no_roll", action="store_true")
-        parser.add_argument("--no_scan", action="store_true")
-        parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--stride", type=int, default=1)
-        parser.add_argument("--task_embed_size", type=int, default=128)
-        parser.add_argument("--transformer", action="store_true")
-
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
+        parser.main.add_argument("--curriculum_setting_load_path", type=Path)
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--failure_buffer_load_path", type=Path)
         parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
         parser.main.add_argument("--min_eval_lines", type=int, default=1)
         parser.main.add_argument("--max_eval_lines", type=int, default=50)
         env_parser = parser.main.add_argument_group("env_args")
-        cls.add_env_arguments(env_parser)
-        cls.add_agent_arguments(parser.agent)
+        env.Env.add_arguments(env_parser)
+        parser.agent.add_argument("--conv_hidden_size", type=int, default=100)
+        parser.agent.add_argument("--debug", action="store_true")
+        parser.agent.add_argument("--gate_coef", type=float, default=0.01)
+        parser.agent.add_argument("--resources_hidden_size", type=int, default=128)
+        parser.agent.add_argument("--kernel_size", type=int, default=2)
+        parser.agent.add_argument("--lower_embed_size", type=int, default=75)
+        parser.agent.add_argument("--max_lines", type=int, default=10)
+        parser.agent.add_argument("--min_lines", type=int, default=1)
+        parser.agent.add_argument("--next_actions_embed_size", type=int, default=25)
+        parser.agent.add_argument("--num_edges", type=int, default=1)
+        parser.agent.add_argument("--no_pointer", action="store_true")
+        parser.agent.add_argument("--no_roll", action="store_true")
+        parser.agent.add_argument("--no_scan", action="store_true")
+        parser.agent.add_argument("--olsk", action="store_true")
+        parser.agent.add_argument("--stride", type=int, default=1)
+        parser.agent.add_argument("--task_embed_size", type=int, default=128)
+        parser.agent.add_argument("--transformer", action="store_true")
         return parser
-
-    @classmethod
-    def add_env_arguments(cls, parser):
-        env.Env.add_arguments(parser)
 
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
-        mapping["env_args"] += [env.Env.__init__, CurriculumWrapper.__init__]
+        mapping["env_args"] += [
+            env.Env.__init__,
+            CurriculumWrapper.__init__,
+            trainer.Trainer.make_vec_envs,
+        ]
         mapping["agent_args"] += [
             our_recurrence.Recurrence.__init__,
             our_agent.Agent.__init__,

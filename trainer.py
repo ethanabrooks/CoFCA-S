@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, DefaultDict, Union, Optional, Generator
+from typing import Dict, DefaultDict, Union, Optional
 
 import gym
 import torch
@@ -16,7 +16,6 @@ import wandb
 import arguments
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import EpisodeAggregator, InfosAggregator, EvalWrapper
-from common.vec_env import VecEnv
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
@@ -29,8 +28,6 @@ CHECKPOINT_NAME = "checkpoint.pt"
 
 
 class Trainer:
-    metric = "reward"
-
     @classmethod
     def add_arguments(cls, parser):
         return arguments.add_arguments(parser)
@@ -197,13 +194,7 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = cls.make_vec_envs(
-            evaluating=False,
-            num_processes=num_processes,
-            render=render,
-            synchronous=synchronous,
-            **env_args,
-        )
+        train_envs = cls.make_vec_envs(evaluating=False, **env_args)
         try:
             train_envs.to(device)
             agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -254,13 +245,7 @@ class Trainer:
 
                     # self.envs.evaluate()
                     eval_masks = torch.zeros(num_processes, 1, device=device)
-                    eval_envs = cls.make_vec_envs(
-                        evaluating=True,
-                        num_processes=num_processes,
-                        render=render,
-                        synchronous=synchronous,
-                        **env_args,
-                    )
+                    eval_envs = cls.make_vec_envs(evaluating=True, **env_args)
                     eval_envs.to(device)
                     with agent.recurrent_module.evaluating(eval_envs.observation_space):
                         eval_recurrent_hidden_states = torch.zeros(
