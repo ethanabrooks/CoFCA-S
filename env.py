@@ -241,7 +241,7 @@ class Env(gym.Env):
         if use_failure_buf:
 
             # randomly rotate queue
-            for i in range(self.random.choice(size)):
+            for i in range(self.random.choice(min(10, size))):
                 try:
                     state = self.failure_buffer.get_nowait()
                     self.failure_buffer.put_nowait(state)
