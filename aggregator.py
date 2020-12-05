@@ -29,7 +29,7 @@ class Timer:
 
     def average(self):
         if self.total == self.count == 0:
-            return 0
+            return None
         return self.total / self.count
 
     def tick(self):
@@ -58,7 +58,9 @@ class TotalTimeKeeper(TimeKeeper):
 class AverageTimeKeeper(TimeKeeper):
     def items(self) -> Generator[Tuple[str, any], None, None]:
         for k, v in self.timers.items():
-            yield f"time per {k}", v.average()
+            average = v.average()
+            if average is not None:
+                yield f"time per {k}", average
 
 
 class EpisodeAggregator(Aggregator):
