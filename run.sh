@@ -20,7 +20,7 @@ echo "Creating $nruns sessions..."
 
 for i in $(seq 1 $nruns); do
   gpu=$(($i % $ngpu));
-  echo "Creating session $session$i..."
+  echo "tmux at -t $session$i"
   tmux new-session -d -s "$session$i" "CUDA_VISIBLE_DEVICES=$gpu wandb agent $id"
   #echo docker run \
     #--rm \
