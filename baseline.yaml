@@ -1,4 +1,4 @@
-program: ours.py
+program: baseline.py
 method: bayes
 metric:
   goal: maximize
@@ -7,16 +7,11 @@ parameters:
   assimilator_prob:
     distribution: categorical
     values:
+      - 0
       - 0.4
       - 0.5
       - 0.6
       - 0.7
-  curriculum_threshold:
-    distribution: categorical
-    values:
-      - 0.95
-      - 0.99
-      - 0.995
   conv_hidden_size:
     distribution: categorical
     values:
@@ -46,6 +41,7 @@ parameters:
       - 0.0015
       - 0.002
       - 0.0025
+      - 0.003
   lower_embed_size:
     distribution: categorical
     values:
@@ -64,12 +60,6 @@ parameters:
     values:
       - 1
       - 2
-  num_edges:
-    distribution: categorical
-    values:
-      - 2
-      - 3
-      - 4
   num_initial_buildings:
     distribution: categorical
     values:
@@ -77,6 +67,11 @@ parameters:
   num_processes:
     distribution: categorical
     values:
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
       - 60
       - 70
       - 80
@@ -95,22 +90,11 @@ parameters:
       - 15
       - 20
       - 25
-  tgt_success_rate:
-    distribution: categorical
-    values:
-      - 0.75
-      - 0.8
-      - 0.85
-      - 0.9
-      - 1
   time_per_line:
     distribution: categorical
     values:
-      - 6
-      - 7
-      - 8
-      - 9
       - 10
+      - 20
   train_steps:
     distribution: categorical
     values:

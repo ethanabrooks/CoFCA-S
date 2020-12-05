@@ -1,11 +1,12 @@
 import itertools
-import pickle
 import typing
-from collections import Counter, deque, OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
+from multiprocessing.queues import Queue
 from pathlib import Path
 from pprint import pprint
+from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
 
 import gym
@@ -41,16 +42,11 @@ from data_types import (
     Buildings,
     Assimilator,
     Nexus,
+    CurriculumSetting,
 )
-from utils import RESET, Discrete
+from utils import RESET
 
 Dependencies = Dict[Building, Building]
-
-
-def delete_nth(d, n):
-    d.rotate(-n)
-    d.popleft()
-    d.rotate(n)
 
 
 # noinspection PyAttributeOutsideInit
@@ -60,17 +56,14 @@ class Env(gym.Env):
     break_on_fail: bool
     destroy_building_prob: float
     eval_steps: int
-    failure_buffer_load_path: Path
-    failure_buffer_size: int
-    max_lines: int
-    min_lines: int
+    failure_buffer: Queue
     num_initial_buildings: int
     rank: int
     random_seed: int
     tgt_success_rate: int
     time_per_line: int
     alpha: float = 0.05
-    curriculum_level: int = 0
+    curriculum_setting: CurriculumSetting = None
     evaluating: bool = None
     i: int = 0
     iterator = None
@@ -79,23 +72,9 @@ class Env(gym.Env):
 
     def __post_init__(self):
         super().__init__()
-        assert self.min_lines >= 1
-        assert self.max_lines >= self.min_lines
-        self.max_depth = 0
-        self.n_lines_space = Discrete(
-            low=self.min_lines, high=min(self.min_lines, self.max_lines)
-        )
-        self.curriculum_iterator = self.curriculum_generator()
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
-        self.failure_buffer = deque(maxlen=self.failure_buffer_size)
-        if self.failure_buffer_load_path:
-            with self.failure_buffer_load_path.open("rb") as f:
-                self.failure_buffer.extend(pickle.load(f))
-                print(
-                    f"Loaded failure buffer of length {len(self.failure_buffer)} "
-                    f"from {self.failure_buffer_load_path}"
-                )
+        max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
         self.a_size = max_a_action = max(
             [c.size_a() for c in self.compound_action().classes()]
@@ -104,19 +83,17 @@ class Env(gym.Env):
             np.array(
                 astuple(
                     RawAction(
-                        delta=2 * self.max_lines,
+                        delta=2 * max_lines,
                         dg=2,
                         a=max_a_action,
-                        ptr=self.max_lines,
+                        ptr=max_lines,
                     )
                 )
             )
         )
 
-        lines_space = spaces.MultiDiscrete(
-            np.array([[2, len(Buildings)]] * self.max_lines)
-        )
-        mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
+        lines_space = spaces.MultiDiscrete(np.array([[2, len(Buildings)]] * max_lines))
+        mask_space = spaces.MultiDiscrete(2 * np.ones(max_lines))
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
         self.world_space = spaces.Box(
             low=np.zeros_like(world_shape, dtype=np.float32),
@@ -158,18 +135,14 @@ class Env(gym.Env):
         )
 
     @classmethod
-    def add_arguments(cls, p):
-        p.add_argument("--assimilator_prob", type=float, default=0.5)
-        p.add_argument("--break_on_fail", action="store_true")
-        p.add_argument("--debug_env", action="store_true")
-        p.add_argument("--destroy_building_prob", type=float, default=0)
-        p.add_argument("--failure_buffer_load_path", type=Path)
-        p.add_argument("--failure_buffer_size", type=int, default=500)
-        p.add_argument("--min_lines", type=int, default=1)
-        p.add_argument("--max_lines", type=int, default=10)
-        p.add_argument("--num_initial_buildings", type=int, default=0)
-        p.add_argument("--time_per_line", type=int, default=4)
-        p.add_argument("--tgt_success_rate", type=float, default=0.75)
+    def add_arguments(cls, parser):
+        parser.add_argument("--assimilator_prob", type=float, default=0.5)
+        parser.add_argument("--break_on_fail", action="store_true")
+        parser.add_argument("--debug_env", action="store_true")
+        parser.add_argument("--destroy_building_prob", type=float, default=0)
+        parser.add_argument("--num_initial_buildings", type=int, default=0)
+        parser.add_argument("--time_per_line", type=int, default=4)
+        parser.add_argument("--tgt_success_rate", type=float, default=0.75)
 
     def build_dependencies(
         self, max_depth: int
@@ -220,7 +193,7 @@ class Env(gym.Env):
                 and not isinstance(building, Assimilator),
             )
 
-        n_lines = self.n_lines_space.sample()
+        n_lines = self.curriculum_setting.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
         required = [i.building for i in instructions if i.required]
         assert required.count(Assimilator()) <= 1
@@ -267,19 +240,34 @@ class Env(gym.Env):
             state = yield state.success or not state.time_remaining, lambda: None
 
     def failure_buffer_wrapper(self, iterator):
-        if self.evaluating or len(self.failure_buffer) == 0:
+        if self.evaluating:
             buf = False
         else:
             use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
             use_failure_prob = max(use_failure_prob, 0)
             buf = self.random.random() < use_failure_prob
         use_failure_buf = buf
+        state = None
         if use_failure_buf:
-            i = self.random.choice(len(self.failure_buffer))
-            self.random.set_state(self.failure_buffer[i])
-            delete_nth(self.failure_buffer, i)
-        else:
-            self.random.set_state(self.non_failure_random)
+
+            # randomly rotate queue
+            for i in range(self.random.choice(self.failure_buffer.qsize())):
+                try:
+                    state = self.failure_buffer.get_nowait()
+                    self.failure_buffer.put_nowait(state)
+                except Full:
+                    pass  # discard, keep going
+                except Empty:
+                    break
+
+            try:
+                state = self.failure_buffer.get_nowait()
+            except Full:
+                pass
+
+        if state is None:
+            state = self.non_failure_random
+        self.random.set_state(state)
         initial_random = self.random.get_state()
         action = None
 
@@ -301,30 +289,29 @@ class Env(gym.Env):
                 i.update(reward_without_failure_buf=r)
             if t:
                 success = i["success"]
+
                 if not use_failure_buf:
                     i.update(success_without_failure_buf=float(success))
                     self.success_avg += self.alpha * (success - self.success_avg)
 
-                i.update(
-                    use_failure_buf=use_failure_buf,
-                )
-                if not self.evaluating:
-                    i.update(failure_buffer=[*self.failure_buffer][:2])
+                put_failure_buf = not self.evaluating and not success
+                if put_failure_buf:
+                    try:
+                        self.failure_buffer.put_nowait(initial_random)
+                    except Full:
+                        pass
 
-                if not success:
-                    self.failure_buffer.append(initial_random)
+                i.update(use_failure_buf=use_failure_buf)
+                if use_failure_buf or put_failure_buf:
+                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def increment_curriculum(self):
-        self.curriculum_level += 1
-        self.n_lines_space, self.max_depth = next(self.curriculum_iterator)
-        import ipdb
-
-        ipdb.set_trace()
+    def set_curriculum(self, curriculum_setting: CurriculumSetting):
+        self.curriculum_setting = curriculum_setting
 
     def info_generator(self, *lines):
         state: State
@@ -339,9 +326,8 @@ class Env(gym.Env):
                         f"success": float(state.success),
                         f"len-{len(lines)} success": float(state.success),
                         "len(instruction)": len(lines),
-                        "len(failure_buffer)": len(self.failure_buffer),
                         "curriculum+success": float(
-                            self.curriculum_level + state.success
+                            self.curriculum_setting.level + state.success
                         ),
                     },
                 )
@@ -388,7 +374,10 @@ class Env(gym.Env):
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
-        padded: List[Optional[Line]] = [*lines, *[None] * (self.max_lines - len(lines))]
+        padded: List[Optional[Line]] = [
+            *lines,
+            *[None] * (self.curriculum_setting.max_lines - len(lines)),
+        ]
         mask = np.array([p is not None for p in padded])
 
         def render():
@@ -547,7 +536,9 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        dependencies = dict(self.build_dependencies(self.max_depth))
+        dependencies = dict(
+            self.build_dependencies(self.curriculum_setting.max_build_tree_depth)
+        )
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()

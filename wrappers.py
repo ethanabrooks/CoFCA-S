@@ -6,6 +6,7 @@ from gym.spaces import Box, Discrete
 import numpy as np
 import torch
 
+from aggregator import InfosAggregator
 from common.vec_env import VecEnvWrapper
 from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
 
@@ -220,9 +221,6 @@ class VecPyTorch(VecEnvWrapper):
     def train(self):
         self.venv.train()
 
-    def increment_curriculum(self):
-        self.venv.increment_curriculum()
-
     def preprocess(self, action):
         if self.action_bounds is not None:
             low, high = self.action_bounds
@@ -230,6 +228,9 @@ class VecPyTorch(VecEnvWrapper):
         if isinstance(self.action_space, spaces.Discrete):
             action = action.squeeze(-1)
         return action
+
+    def set_curriculum(self, *args, **kwargs):
+        self.venv.set_curriculum(*args, **kwargs)
 
 
 class VecNormalize(VecNormalize_):

@@ -32,6 +32,8 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 env.evaluate()
             elif cmd == "increment_curriculum":
                 env.increment_curriculum()
+            elif cmd == "set_curriculum":
+                env.set_curriculum(data)
             elif cmd == "train":
                 try:
                     env.train()
@@ -131,6 +133,10 @@ class SubprocVecEnv(VecEnv):
     def increment_curriculum(self):
         for remote in self.remotes:
             remote.send(("increment_curriculum", None))
+
+    def set_curriculum(self, curriculum):
+        for remote in self.remotes:
+            remote.send(("set_curriculum", curriculum))
 
 
 def _flatten_obs(obs):

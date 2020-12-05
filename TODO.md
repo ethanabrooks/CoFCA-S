@@ -1,7 +1,4 @@
-- Identification of open spots in environment
-- Multi-stage action
-- `IntEncoding` / Resource management
-- Next-action encoding
-- Assimilator building restriction
-- Buildings requiring Assimilator
-- control-flow
+- write baseline agent to check performance
+- do profiling
+- refactor `failure_buffer` so that program maintains one singular failure buffer, not different buffers for each environment.
+- reward structure
