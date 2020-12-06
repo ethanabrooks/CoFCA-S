@@ -16,7 +16,7 @@ from utils import RESET, Discrete
 
 Coord = Tuple[int, int]
 
-WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 3))
+WORLD_SIZE = int(os.environ.get("WORLD_SIZE", 5))
 
 
 class WorldObject:
@@ -292,18 +292,18 @@ class TwilightCouncil(Building):
 
 Buildings: List[Building] = [
     Assimilator(),
-    # CyberneticsCore(),
-    # DarkShrine(),
-    # FleetBeacon(),
-    # Forge(),
-    # Gateway(),
+    CyberneticsCore(),
+    DarkShrine(),
+    FleetBeacon(),
+    Forge(),
+    Gateway(),
     Nexus(),
-    # PhotonCannon(),
+    PhotonCannon(),
     Pylon(),
-    # RoboticsBay(),
+    RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    # TemplarArchives(),
+    TemplarArchives(),
     TwilightCouncil(),
 ]
 

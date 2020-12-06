@@ -1,5 +1,5 @@
 import time
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import defaultdict, Counter
 from dataclasses import dataclass
 from typing import Collection, Generator, Tuple
@@ -15,26 +15,52 @@ class Aggregator(ABC):
         raise NotImplementedError
 
 
-class TimeAggregator(Aggregator):
+class Timer:
     def __init__(self):
         self.count = 0
-        self.time = 0
-        self.tick = time.time()
+        self.total = 0
+        self.last_tick = time.time()
 
     def update(self):
         self.count += 1
-        self.time = self.time + time.time() - self.tick
-
-    def items(self):
-        yield "time", self.average()
+        tick = time.time()
+        self.total = self.total + tick - self.last_tick
+        self.last_tick = tick
 
     def average(self):
-        if self.time == self.count == 0:
-            return 0
-        return self.time / self.count
+        if self.total == self.count == 0:
+            return None
+        return self.total / self.count
 
-    def reset(self):
-        self.tick = time.time()
+    def tick(self):
+        self.last_tick = time.time()
+
+
+class TimeKeeper:
+    def __init__(self):
+        self.timers = defaultdict(Timer)
+        self.yield_average = {}
+
+    def __getitem__(self, item):
+        return self.timers[item]
+
+    @abstractmethod
+    def items(self) -> Generator[Tuple[str, any], None, None]:
+        pass
+
+
+class TotalTimeKeeper(TimeKeeper):
+    def items(self) -> Generator[Tuple[str, any], None, None]:
+        for k, v in self.timers.items():
+            yield f"time spent {k}", v.total
+
+
+class AverageTimeKeeper(TimeKeeper):
+    def items(self) -> Generator[Tuple[str, any], None, None]:
+        for k, v in self.timers.items():
+            average = v.average()
+            if average is not None:
+                yield f"time per {k}", average
 
 
 class EpisodeAggregator(Aggregator):

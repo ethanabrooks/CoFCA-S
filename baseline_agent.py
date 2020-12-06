@@ -62,7 +62,7 @@ class Agent(our_recurrence.Recurrence):
         if action is None:
             action = dist.sample()
         else:
-            action = action[:, 0]
+            action = RawAction(*action.unbind(-1)).a.unsqueeze(-1)
 
         action_log_probs = dist.log_probs(action)
         entropy = dist.entropy().mean()

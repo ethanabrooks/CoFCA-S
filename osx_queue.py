@@ -64,11 +64,3 @@ class Queue(multiprocessing.queues.Queue):
     def empty(self):
         """ Reliable implementation of multiprocessing.Queue.empty() """
         return not self.qsize()
-
-    def get_wait(self):
-        self.size.increment(-1)
-        return super().get_nowait()
-
-    def put_nowait(self, *args, **kwargs) -> None:
-        self.size.increment(1)
-        super().put_nowait(*args, **kwargs)
