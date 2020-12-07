@@ -68,6 +68,7 @@ class Agent(nn.Module):
     stride: int
     task_embed_size: int
     transformer: bool
+    inf: float = 1e5
 
     def __hash__(self):
         return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
@@ -206,7 +207,7 @@ class Agent(nn.Module):
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
         B = B.view(N, 2 * self.nl, self.num_edges)
-        B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
+        # B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
         zero_last = (1 - self.last) * B
         B = zero_last + self.last  # this ensures that the last B is 1
         C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
@@ -257,6 +258,13 @@ class Agent(nn.Module):
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
         state = replace(state, obs=state.obs.view(N, *self.obs_spaces.obs.shape))
         lines = state.lines.view(N, *self.obs_spaces.lines.shape).long()
+        line_mask = state.line_mask.view(N, self.nl)
+        line_mask = F.pad(line_mask, [self.nl, 0], value=1)  # pad for backward mask
+        line_mask = torch.stack(
+            [torch.roll(line_mask, shifts=-i, dims=-1) for i in range(self.nl)], dim=0
+        )
+        # mask[:, :, 0] = 0  # prevent self-loops
+        # line_mask = line_mask.view(self.nl, N, 2, self.nl).transpose(2, 3).unsqueeze(-1)
 
         # build memory
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
@@ -282,7 +290,7 @@ class Agent(nn.Module):
 
         value = self.critic(z1)
 
-        a_logits = self.actor(z1) - state.action_mask * 1e10
+        a_logits = self.actor(z1) - state.action_mask * self.inf
         dists = replace(dists, a=Categorical(logits=a_logits))
 
         self.print("a_probs", dists.a.probs)
@@ -302,12 +310,12 @@ class Agent(nn.Module):
         u = self.upsilon(zeta1_input).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+        masked = d_probs * (1 - line_mask[p, R])
 
         self.print("dg prob", dists.dg.probs[:, 1])
 
-        dists = replace(
-            dists, delta=gate(action.dg.unsqueeze(-1), d_probs, ones * self.nl)
-        )
+        delta_probs = gate(action.dg.unsqueeze(-1), masked, ones * self.nl)
+        dists = replace(dists, delta=delta_probs)
         self.print("d_probs", d_probs[:, self.nl :])
 
         if action.delta is None:

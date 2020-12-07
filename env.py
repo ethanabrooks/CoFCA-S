@@ -93,7 +93,7 @@ class Env(gym.Env):
         )
 
         lines_space = spaces.MultiDiscrete(np.array([[2, len(Buildings)]] * max_lines))
-        mask_space = spaces.MultiDiscrete(2 * np.ones(max_lines))
+        line_mask_space = spaces.MultiDiscrete(2 * np.ones(max_lines))
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
         self.world_space = spaces.Box(
             low=np.zeros_like(world_shape, dtype=np.float32),
@@ -126,7 +126,7 @@ class Env(gym.Env):
                     action_mask=spaces.MultiBinary(max_a_action),
                     can_open_gate=spaces.MultiBinary(max_a_action),
                     lines=lines_space,
-                    mask=mask_space,
+                    line_mask=line_mask_space,
                     next_actions=next_actions_space,
                     obs=obs_space,
                     partial_action=partial_action_space,
@@ -367,11 +367,12 @@ class Env(gym.Env):
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
+
         padded: List[Optional[Line]] = [
             *lines,
             *[None] * (self.curriculum_setting.max_lines - len(lines)),
         ]
-        mask = np.array([p is not None for p in padded])
+        line_mask = np.array([p is None for p in padded])
 
         def render():
             def lines_iterator():
@@ -425,8 +426,8 @@ class Env(gym.Env):
                     Obs(
                         obs=array,
                         resources=resources,
+                        line_mask=line_mask,
                         lines=preprocessed,
-                        mask=mask,
                         next_actions=next_actions,
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
