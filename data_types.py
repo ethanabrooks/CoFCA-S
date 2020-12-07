@@ -368,6 +368,7 @@ class Obs(typing.Generic[O]):
     next_actions: O
     obs: O
     partial_action: O
+    ptr: O
     resources: O
 
 

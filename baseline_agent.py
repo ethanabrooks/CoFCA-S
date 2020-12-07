@@ -261,7 +261,7 @@ class Agent(nn.Module):
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
             N, -1, self.task_embed_size
         )
-        p = torch.zeros(N, device=inputs.device).long()  # TODO
+        p = state.ptr.long().flatten()
         R = torch.arange(N, device=p.device)
         ones = self.ones.expand_as(R)
         P = self.build_P(p, M, R)

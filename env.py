@@ -117,6 +117,7 @@ class Env(gym.Env):
                 for a in astuple(c.num_values())
             ]  # [:-1]
         )
+        pointer_space = spaces.Discrete(max_lines)
 
         # noinspection PyTypeChecker
         self.observation_space = spaces.Dict(
@@ -130,6 +131,7 @@ class Env(gym.Env):
                     obs=obs_space,
                     partial_action=partial_action_space,
                     resources=resources_space,
+                    ptr=pointer_space,
                 )
             )
         )
@@ -417,6 +419,7 @@ class Env(gym.Env):
             action_mask = np.array([*state.action.mask(self.a_size)])
             can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
             partial_action = np.array([*state.action.partial_actions()])
+            ptr = np.array([state.pointer])
             obs = OrderedDict(
                 asdict(
                     Obs(
@@ -428,6 +431,7 @@ class Env(gym.Env):
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
+                        ptr=ptr,
                     )
                 )
             )
