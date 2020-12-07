@@ -247,6 +247,7 @@ class Agent(nn.Module):
     ):
         N, dim = inputs.shape
 
+        dists = RawAction(None, None, None, None)
         if action is None:
             action = RawAction(None, None, None, None)
         else:
@@ -282,33 +283,35 @@ class Agent(nn.Module):
         value = self.critic(z1)
 
         a_logits = self.actor(z1) - state.action_mask * 1e10
-        a_dist = Categorical(logits=a_logits)
+        dists = replace(dists, a=Categorical(logits=a_logits))
 
-        self.print("a_probs", a_dist.probs)
+        self.print("a_probs", dists.a.probs)
 
         if action.a is None:
-            a = a_dist.sample()
+            a = dists.a.sample()
             action = replace(action, a=a)
 
         d_logits = self.d_gate(zeta1_input)
         d_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = state.can_open_gate[R, action.a].long().unsqueeze(-1)
-        d_gate = gate(can_open_gate, d_probs, ones * 0)
+        dists = replace(dists, dg=gate(can_open_gate, d_probs, ones * 0))
 
         if action.dg is None:
-            action = replace(action, dg=d_gate.sample())
+            action = replace(action, dg=dists.dg.sample())
 
         u = self.upsilon(zeta1_input).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
 
-        self.print("dg prob", d_gate.probs[:, 1])
+        self.print("dg prob", dists.dg.probs[:, 1])
 
-        d_dist = gate(action.dg.unsqueeze(-1), d_probs, ones * self.nl)
+        dists = replace(
+            dists, delta=gate(action.dg.unsqueeze(-1), d_probs, ones * self.nl)
+        )
         self.print("d_probs", d_probs[:, self.nl :])
 
         if action.delta is None:
-            action = replace(action, delta=d_dist.sample())
+            action = replace(action, delta=dists.delta.sample())
 
         delta = action.delta.clone() - self.nl
         self.print("action.delta, delta", action.delta, delta)
@@ -322,14 +325,16 @@ class Agent(nn.Module):
             delta=torch.zeros_like(action.delta),
             ptr=torch.zeros_like(action.ptr),
         )
-        action_log_probs = a_dist.log_prob(action.a).unsqueeze(-1)  # TODO
-        entropy = a_dist.entropy().mean()
+        action_log_probs = dists.a.log_prob(action.a).unsqueeze(-1)  # TODO
+        entropy = sum(
+            [dist.entropy() for dist in astuple(dists) if dist is not None]
+        ).mean()
         return AgentOutputs(
             value=value,
             action=torch.stack(astuple(action), dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
-            dist=a_dist,
+            dist=None,
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
