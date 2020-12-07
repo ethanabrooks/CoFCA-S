@@ -161,6 +161,13 @@ class Agent(nn.Module):
         )
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
+
+        nl = len(self.obs_spaces.lines.nvec)
+        last = torch.zeros(2 * nl)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
+        self.register_buffer("last", last)
+
         self.state_sizes = RecurrentState(
             a=1,
             a_probs=action_nvec.a,
@@ -172,6 +179,30 @@ class Agent(nn.Module):
             dg_probs=2,
             dg=1,
         )
+
+    def build_P(self, p, M, R):
+        nl = len(self.obs_spaces.lines.nvec)
+        N = p.size(0)
+
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+
+        G, _ = self.task_encoder(rolled[p, R])
+        G = G.view(N, nl, 2, -1)
+        B = self.beta(G).sigmoid()
+        # B = B * mask[p, R]
+        f, b = torch.unbind(B, dim=-2)
+        B = torch.stack([f, b.flip(-2)], dim=-2)
+        B = B.view(N, 2 * nl, self.num_edges)
+        B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
+        zero_last = (1 - self.last) * B
+        B = zero_last + self.last  # this ensures that the last B is 1
+        C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
+        P = B * C
+        P = P.view(N, nl, 2, self.num_edges)
+        f, b = torch.unbind(P, dim=-2)
+        return torch.cat([b.flip(-2), f], dim=-2)
 
     def d_space(self):
         if self.olsk:
@@ -213,11 +244,14 @@ class Agent(nn.Module):
         lines = state.lines.view(N, *self.obs_spaces.lines.shape).long()
 
         # build memory
-        nl = len(self.obs_spaces.lines.nvec)
-        assert nl == 1
         M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
-            N, self.task_embed_size
+            N, -1, self.task_embed_size
         )
+        p = torch.zeros(N, device=inputs.device).long()  # TODO
+        R = torch.arange(N, device=p.device)
+        P = self.build_P(p, M, R)
+        m = M[R, p]
+        self.print("p", p)
 
         h1 = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
@@ -226,7 +260,7 @@ class Agent(nn.Module):
             state.partial_action.long()
         )  # +1 to deal with negatives
         zeta1_input = torch.cat(
-            [M, h1, resources, embedded_lower, next_actions], dim=-1
+            [m, h1, resources, embedded_lower, next_actions], dim=-1
         )
         z1 = F.relu(self.zeta1(zeta1_input))
 
