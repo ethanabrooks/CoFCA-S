@@ -1,0 +1,52 @@
+program: ours.py
+method: grid
+parameters:
+  num_batch:
+    desc:
+    value: 2
+  ppo_epoch:
+    desc:
+    value: 10
+  hidden_size:
+    desc:
+    value: 200
+  train_steps:
+    desc:
+    value: 40
+  entropy_coef:
+    desc:
+    value: 0.02
+  learning_rate:
+    desc:
+    value: 0.0015
+  num_processes:
+    desc:
+    value: 110
+  time_per_line:
+    desc:
+    value: 10
+  assimilator_prob:
+    desc:
+    value: 0.5
+  conv_hidden_size:
+    desc:
+    value: 150
+  lower_embed_size:
+    desc:
+    value: 50
+  num_initial_buildings:
+    desc:
+    value: 0
+  next_actions_embed_size:
+    desc:
+    value: 25
+  seed:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+  group:
+    desc:
+    value: "refactor to non-recurrent"
+
