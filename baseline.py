@@ -42,6 +42,7 @@ class Trainer(ours.Trainer):
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             debug=False,
+            gate_coef=0,
             max_eval_lines=1,
             no_pointer=False,
             no_roll=False,

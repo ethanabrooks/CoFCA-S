@@ -52,6 +52,7 @@ class Agent(nn.Module):
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
+    gate_coef: float
     hidden_size: int
     kernel_size: int
     lower_embed_size: int
@@ -241,7 +242,6 @@ class Agent(nn.Module):
         self.state_sizes = state_sizes
         self.train_lines = train_lines
 
-    # noinspection PyMethodOverriding
     def forward(
         self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
     ):
