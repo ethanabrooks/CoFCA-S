@@ -10,11 +10,22 @@ from gym import spaces
 
 from agents import AgentOutputs
 from data_types import RecurrentState, RawAction
-from distributions import FixedCategorical
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
 from transformer import TransformerModel
 from utils import astuple, init
+
+
+class Categorical(torch.distributions.Categorical):
+    def log_prob(self, value: torch.Tensor):
+        if self._validate_args:
+            self._validate_sample(value)
+        value = value.long().unsqueeze(-1)
+        value, log_pmf = torch.broadcast_tensors(value, self.logits)
+        value = value[..., :1]
+        # gather = log_pmf.gather(-1, value).squeeze(-1)
+        R = torch.arange(value.size(0))
+        return log_pmf[R, value.squeeze(-1)]  # deterministic
 
 
 def optimal_padding(h, kernel, stride):
@@ -32,7 +43,7 @@ def get_obs_sections(obs_spaces):
 
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-    return FixedCategorical(probs=g * new + (1 - g) * old)
+    return Categorical(probs=g * new + (1 - g) * old)
 
 
 @dataclass
@@ -105,6 +116,7 @@ class Agent(nn.Module):
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
+        self.nl = len(self.obs_spaces.lines.nvec)
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_resources = nn.Sequential(
@@ -162,8 +174,7 @@ class Agent(nn.Module):
         self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
         self.critic = init_(nn.Linear(self.hidden_size, 1))
 
-        nl = len(self.obs_spaces.lines.nvec)
-        last = torch.zeros(2 * nl)
+        last = torch.zeros(2 * self.nl)
         last[-1] = 1
         last = last.view(1, -1, 1)
         self.register_buffer("last", last)
@@ -181,26 +192,25 @@ class Agent(nn.Module):
         )
 
     def build_P(self, p, M, R):
-        nl = len(self.obs_spaces.lines.nvec)
         N = p.size(0)
 
         rolled = torch.stack(
-            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+            [torch.roll(M, shifts=-i, dims=1) for i in range(self.nl)], dim=0
         )
 
         G, _ = self.task_encoder(rolled[p, R])
-        G = G.view(N, nl, 2, -1)
+        G = G.view(N, self.nl, 2, -1)
         B = self.beta(G).sigmoid()
         # B = B * mask[p, R]
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
-        B = B.view(N, 2 * nl, self.num_edges)
+        B = B.view(N, 2 * self.nl, self.num_edges)
         B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
         zero_last = (1 - self.last) * B
         B = zero_last + self.last  # this ensures that the last B is 1
         C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
         P = B * C
-        P = P.view(N, nl, 2, self.num_edges)
+        P = P.view(N, self.nl, 2, self.num_edges)
         f, b = torch.unbind(P, dim=-2)
         return torch.cat([b.flip(-2), f], dim=-2)
 
@@ -235,8 +245,12 @@ class Agent(nn.Module):
     def forward(
         self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
     ):
-
         N, dim = inputs.shape
+
+        if action is None:
+            action = RawAction(None, None, None, None)
+        else:
+            action = RawAction(*action.unbind(-1))
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -249,6 +263,7 @@ class Agent(nn.Module):
         )
         p = torch.zeros(N, device=inputs.device).long()  # TODO
         R = torch.arange(N, device=p.device)
+        ones = self.ones.expand_as(R)
         P = self.build_P(p, M, R)
         m = M[R, p]
         self.print("p", p)
@@ -267,27 +282,54 @@ class Agent(nn.Module):
         value = self.critic(z1)
 
         a_logits = self.actor(z1) - state.action_mask * 1e10
-        dist = FixedCategorical(logits=a_logits)
+        a_dist = Categorical(logits=a_logits)
 
-        if action is None:
-            action = dist.sample()
-        else:
-            action = RawAction(*action.unbind(-1)).a.unsqueeze(-1)
+        self.print("a_probs", a_dist.probs)
 
-        action_log_probs = dist.log_probs(action)
-        entropy = dist.entropy().mean()
-        action = RawAction(
-            delta=torch.zeros_like(action),
-            dg=torch.zeros_like(action),
-            ptr=torch.zeros_like(action),
-            a=action,
+        if action.a is None:
+            a = a_dist.sample()
+            action = replace(action, a=a)
+
+        d_logits = self.d_gate(zeta1_input)
+        d_probs = F.softmax(d_logits, dim=-1)
+        can_open_gate = state.can_open_gate[R, action.a].long().unsqueeze(-1)
+        d_gate = gate(can_open_gate, d_probs, ones * 0)
+
+        if action.dg is None:
+            action = replace(action, dg=d_gate.sample())
+
+        u = self.upsilon(zeta1_input).softmax(dim=-1)
+        self.print("u", u)
+        d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+
+        self.print("dg prob", d_gate.probs[:, 1])
+
+        d_dist = gate(action.dg.unsqueeze(-1), d_probs, ones * self.nl)
+        self.print("d_probs", d_probs[:, self.nl :])
+
+        if action.delta is None:
+            action = replace(action, delta=d_dist.sample())
+
+        delta = action.delta.clone() - self.nl
+        self.print("action.delta, delta", action.delta, delta)
+
+        if action.ptr is None:
+            action = replace(action, ptr=p + delta)
+
+        action = replace(
+            action,
+            dg=torch.zeros_like(action.dg),
+            delta=torch.zeros_like(action.delta),
+            ptr=torch.zeros_like(action.ptr),
         )
+        action_log_probs = a_dist.log_prob(action.a).unsqueeze(-1)  # TODO
+        entropy = a_dist.entropy().mean()
         return AgentOutputs(
             value=value,
-            action=torch.cat(astuple(action), dim=-1),
+            action=torch.stack(astuple(action), dim=-1),
             action_log_probs=action_log_probs,
             aux_loss=-self.entropy_coef * entropy,
-            dist=dist,
+            dist=a_dist,
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )

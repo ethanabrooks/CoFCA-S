@@ -103,6 +103,7 @@ class Recurrence(nn.Module):
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
+        self.nl = len(self.obs_spaces.lines.nvec)
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_resources = nn.Sequential(
