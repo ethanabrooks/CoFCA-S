@@ -100,13 +100,11 @@ class Trainer:
 
         def run(config, no_wandb, group, **kwargs):
             if no_wandb:
-                log_dir = Path("/tmp")
+                kwargs.update(config, log_dir=Path("/tmp"))
             else:
                 wandb.init(group=group)
-                kwargs.update(wandb.config.as_dict())
-                log_dir = Path(wandb.run.dir)
-            kwargs.update(config, log_dir=log_dir)
-            cls().run(**cls.structure_config(**kwargs))
+                kwargs.update(wandb.config.as_dict(), log_dir=Path(wandb.run.dir))
+            return cls.run(**cls.structure_config(**kwargs))
 
         run(**vars(parser.parse_args()))
 
@@ -388,7 +386,7 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in config.items():
-            if k in ("_wandb", "wandb_version"):
+            if k in ("_wandb", "wandb_version", "group"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
