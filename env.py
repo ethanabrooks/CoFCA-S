@@ -1,11 +1,12 @@
-import pickle
+import itertools
 import typing
-from collections import Counter, deque, OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
-from functools import reduce
 from itertools import zip_longest
+from multiprocessing.queues import Queue
 from pathlib import Path
 from pprint import pprint
+from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
 
 import gym
@@ -22,54 +23,47 @@ from data_types import (
     Resource,
     Building,
     Coord,
-    Costs,
-    costs,
     WorldObject,
     WorldObjects,
     Movement,
     Worker,
-    Resources,
     State,
     Line,
-    Symbols,
     BuildOrder,
     CompoundAction,
     RawAction,
     Assignment,
-    Action1,
-    Action2,
+    WorkerTargetAction,
     Targets,
-    Action3,
+    IJAction,
     WorkerAction,
     WorkerActions,
     WORLD_SIZE,
+    Buildings,
+    Assimilator,
+    Nexus,
+    CurriculumSetting,
 )
-
 from utils import RESET
 
 Dependencies = Dict[Building, Building]
 
 
-def delete_nth(d, n):
-    d.rotate(-n)
-    d.popleft()
-    d.rotate(n)
-
-
+# noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
+    assimilator_prob: float
     break_on_fail: bool
     destroy_building_prob: float
     eval_steps: int
-    failure_buffer_load_path: Path
-    failure_buffer_size: int
-    max_lines: int
-    min_lines: int
+    failure_buffer: Queue
     num_initial_buildings: int
     rank: int
     random_seed: int
     tgt_success_rate: int
+    time_per_line: int
     alpha: float = 0.05
+    curriculum_setting: CurriculumSetting = None
     evaluating: bool = None
     i: int = 0
     iterator = None
@@ -80,14 +74,7 @@ class Env(gym.Env):
         super().__init__()
         self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
-        self.failure_buffer = deque(maxlen=self.failure_buffer_size)
-        if self.failure_buffer_load_path:
-            with self.failure_buffer_load_path.open("rb") as f:
-                self.failure_buffer.extend(pickle.load(f))
-                print(
-                    f"Loaded failure buffer of length {len(self.failure_buffer)} "
-                    f"from {self.failure_buffer_load_path}"
-                )
+        max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
         self.a_size = max_a_action = max(
             [c.size_a() for c in self.compound_action().classes()]
@@ -96,19 +83,17 @@ class Env(gym.Env):
             np.array(
                 astuple(
                     RawAction(
-                        delta=2 * self.max_lines,
+                        delta=2 * max_lines,
                         dg=2,
                         a=max_a_action,
-                        ptr=self.max_lines,
+                        ptr=max_lines,
                     )
                 )
             )
         )
 
-        lines_space = spaces.MultiDiscrete(
-            np.array([[2, len(Building)]] * self.max_lines)
-        )
-        mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
+        lines_space = spaces.MultiDiscrete(np.array([[2, len(Buildings)]] * max_lines))
+        line_mask_space = spaces.MultiDiscrete(2 * np.ones(max_lines))
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
         self.world_space = spaces.Box(
             low=np.zeros_like(world_shape, dtype=np.float32),
@@ -120,13 +105,10 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        self.max = Resources(*sum(Costs.values(), Counter()).values())
-        self.time_per_line = 2 * max(
-            reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
-        )
-        resources_space = spaces.MultiDiscrete(
-            1 + np.array([self.max.minerals, self.max.gas])
-        )
+        # self.time_per_line = 2 * max(
+        # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
+        # )
+        resources_space = spaces.MultiDiscrete(np.inf * np.ones(2))
         next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
@@ -135,6 +117,7 @@ class Env(gym.Env):
                 for a in astuple(c.num_values())
             ]  # [:-1]
         )
+        pointer_space = spaces.Discrete(max_lines)
 
         # noinspection PyTypeChecker
         self.observation_space = spaces.Dict(
@@ -143,40 +126,37 @@ class Env(gym.Env):
                     action_mask=spaces.MultiBinary(max_a_action),
                     can_open_gate=spaces.MultiBinary(max_a_action),
                     lines=lines_space,
-                    mask=mask_space,
+                    line_mask=line_mask_space,
                     next_actions=next_actions_space,
                     obs=obs_space,
                     partial_action=partial_action_space,
                     resources=resources_space,
+                    ptr=pointer_space,
                 )
             )
         )
 
     @classmethod
-    def add_arguments(cls, p):
-        p.add_argument("--break-on-fail", action="store_true")
-        p.add_argument("--debug-env", action="store_true")
-        p.add_argument("--destroy-building-prob", type=float)
-        p.add_argument("--failure-buffer-load-path", type=Path, default=None)
-        p.add_argument("--failure-buffer-size", type=int)
-        p.add_argument("--min-lines", type=int)
-        p.add_argument("--max-lines", type=int)
-        p.add_argument("--num-initial-buildings", type=int)
-        p.add_argument("--tgt-success-rate", type=float)
+    def add_arguments(cls, parser):
+        parser.add_argument("--assimilator_prob", type=float, default=0.5)
+        parser.add_argument("--break_on_fail", action="store_true")
+        parser.add_argument("--debug_env", action="store_true")
+        parser.add_argument("--destroy_building_prob", type=float, default=0)
+        parser.add_argument("--num_initial_buildings", type=int, default=0)
+        parser.add_argument("--time_per_line", type=int, default=4)
+        parser.add_argument("--tgt_success_rate", type=float, default=0.75)
 
-    def build_dependencies(self):
-        n = len(Building)
-        dependencies = np.round(self.random.random(n) * np.arange(n)).astype(int) - 1
-        buildings = list(Building)
+    def build_dependencies(
+        self, max_depth: int
+    ) -> Generator[Tuple[Building, Optional[Building]], None, None]:
+        buildings = [b for b in Buildings if not isinstance(b, Assimilator)]
         self.random.shuffle(buildings)
+        n = min(max_depth, len(buildings))
+        dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
+        dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
-        def generate_dependencies():
-            for b1, b2 in zip(buildings, dependencies):
-                yield b1, (
-                    None if b1 is Building.ASSIMILATOR or b2 < 0 else buildings[b2]
-                )
-
-        return dict(generate_dependencies())
+        yield Assimilator(), None
+        yield from itertools.zip_longest(buildings, dependencies)
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
@@ -197,28 +177,28 @@ class Env(gym.Env):
                 building = self.random.choice(
                     [
                         *filter(
-                            lambda b: b is not Building.NEXUS
-                            and (include_assimilator or b is not Building.ASSIMILATOR),
-                            Building,
+                            lambda b: (
+                                include_assimilator or not isinstance(b, Assimilator)
+                            ),
+                            Buildings,
                         )
                     ]
                 )
 
                 inst = *first, last = [*instructions_for(building)]
-                assert last is not Building.NEXUS
             for i in first:
                 yield Line(False, i)
             yield Line(True, last)
             yield from random_instructions_under(
                 n=n - len(inst),
                 include_assimilator=include_assimilator
-                and building is not Building.ASSIMILATOR,
+                and not isinstance(building, Assimilator),
             )
 
-        n_lines = self.random.randint(self.min_lines, self.max_lines + 1)
+        n_lines = self.curriculum_setting.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
-        required = [l.building for l in instructions if l.required]
-        assert required.count(Building.ASSIMILATOR) <= 1
+        required = [i.building for i in instructions if i.required]
+        assert required.count(Assimilator()) <= 1
         return instructions
 
     @staticmethod
@@ -235,9 +215,9 @@ class Env(gym.Env):
             else:
                 create_nodes(dependency)
                 trees[bldg] = trees[dependency]
-            trees[bldg].create_node(bldg.name.capitalize(), bldg, parent=dependency)
+            trees[bldg].create_node(str(bldg), bldg, parent=dependency)
 
-        for building in Building:
+        for building in Buildings:
             create_nodes(building)
         return set(trees.values())
 
@@ -251,19 +231,36 @@ class Env(gym.Env):
             state = yield state.success or not state.time_remaining, lambda: None
 
     def failure_buffer_wrapper(self, iterator):
-        if self.evaluating or len(self.failure_buffer) == 0:
+        use_failure_buf = False
+        size = self.failure_buffer.qsize()
+        if self.evaluating or not size:
             buf = False
         else:
             use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
             use_failure_prob = max(use_failure_prob, 0)
             buf = self.random.random() < use_failure_prob
         use_failure_buf = buf
+        state = None
         if use_failure_buf:
-            i = self.random.choice(len(self.failure_buffer))
-            self.random.set_state(self.failure_buffer[i])
-            delete_nth(self.failure_buffer, i)
-        else:
-            self.random.set_state(self.non_failure_random)
+
+            # randomly rotate queue
+            for i in range(self.random.choice(min(10, size))):
+                try:
+                    state = self.failure_buffer.get_nowait()
+                    self.failure_buffer.put_nowait(state)
+                except Full:
+                    pass  # discard, keep going
+                except Empty:
+                    break
+
+            try:
+                state = self.failure_buffer.get_nowait()
+            except (Full, Empty):
+                use_failure_buf = state is not None
+
+        if not use_failure_buf:
+            state = self.non_failure_random
+        self.random.set_state(state)
         initial_random = self.random.get_state()
         action = None
 
@@ -285,39 +282,53 @@ class Env(gym.Env):
                 i.update(reward_without_failure_buf=r)
             if t:
                 success = i["success"]
+
                 if not use_failure_buf:
                     i.update(success_without_failure_buf=float(success))
                     self.success_avg += self.alpha * (success - self.success_avg)
 
-                i.update(
-                    use_failure_buf=use_failure_buf,
-                )
-                if not self.evaluating:
-                    i.update(failure_buffer=[*self.failure_buffer][:2])
+                put_failure_buf = not self.evaluating and not success
+                if put_failure_buf:
+                    try:
+                        self.failure_buffer.put_nowait(initial_random)
+                    except Full:
+                        pass
 
-                if not success:
-                    self.failure_buffer.append(initial_random)
+                i.update(use_failure_buf=use_failure_buf)
+                if use_failure_buf or put_failure_buf:
+                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
+    def set_curriculum(self, curriculum_setting: CurriculumSetting):
+        self.curriculum_setting = curriculum_setting
+
     def info_generator(self, *lines):
         state: State
         done: bool
         state, done = yield
-        info = dict(len_failure_buffer=float(len(self.failure_buffer)))
+        info = {}
 
         while True:
             if done:
                 info.update(
-                    instruction_len=len(lines),
-                    len_failure_buffer=len(self.failure_buffer),
-                    success=float(state.success),
-                    train_time_success=float(state.success and state.time_remaining),
+                    {
+                        f"success": float(state.success),
+                        f"len-{len(lines)} success": float(state.success),
+                        "len(instruction)": len(lines),
+                        "curriculum+success": float(
+                            self.curriculum_setting.level + state.success
+                        ),
+                    },
                 )
                 if self.evaluating:
+                    info.update(
+                        train_time_success=float(state.success and state.time_remaining)
+                    )
+                    assert info["success"] <= info["train_time_success"]
                     bucket = 10 * (len(lines) // 10)
                     for key in [
                         "success",
@@ -344,9 +355,9 @@ class Env(gym.Env):
                 worker = Worker(worker + 1)
                 target = Targets[target]
                 return self.compound_action(
-                    Action1(is_op=True),
-                    Action2(worker, target),
-                    Action3(i, j),
+                    # IsOpAction(is_op=True),
+                    WorkerTargetAction(worker, target),
+                    IJAction(i, j),
                 )
             except (ValueError, TypeError) as e:
                 print(e)
@@ -356,8 +367,12 @@ class Env(gym.Env):
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
-        padded: List[Optional[Line]] = [*lines, *[None] * (self.max_lines - len(lines))]
-        mask = np.array([p is not None for p in padded])
+
+        padded: List[Optional[Line]] = [
+            *lines,
+            *[None] * (self.curriculum_setting.max_lines - len(lines)),
+        ]
+        line_mask = np.array([p is None for p in padded])
 
         def render():
             def lines_iterator():
@@ -379,7 +394,7 @@ class Env(gym.Env):
                         "*" if line.required else " ",
                         Targets.index(line.building),
                         str(line.building),
-                        costs[line.building],
+                        line.building.cost,
                     )
                 )
             print("Obs:")
@@ -405,17 +420,19 @@ class Env(gym.Env):
             action_mask = np.array([*state.action.mask(self.a_size)])
             can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
             partial_action = np.array([*state.action.partial_actions()])
+            ptr = np.array([state.pointer])
             obs = OrderedDict(
                 asdict(
                     Obs(
                         obs=array,
                         resources=resources,
+                        line_mask=line_mask,
                         lines=preprocessed,
-                        mask=mask,
                         next_actions=next_actions,
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
+                        ptr=ptr,
                     )
                 )
             )
@@ -432,7 +449,7 @@ class Env(gym.Env):
 
     def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
-        yield Building.NEXUS, nexus
+        yield Nexus(), nexus
         for w in Worker:
             yield w, nexus
         resource_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
@@ -450,6 +467,8 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
+        if self.random.random() < self.assimilator_prob:
+            yield Assimilator(), gas
         occupied = [nexus, minerals, gas]
         while True:
             initial_pos = self.random.choice(
@@ -462,17 +481,17 @@ class Env(gym.Env):
             )
             if not initial_in_occupied:
                 initial_buildings = self.random.choice(
-                    Building, size=self.num_initial_buildings
+                    Buildings, size=self.num_initial_buildings
                 )
                 for b, p in zip(initial_buildings, initial_pos):
-                    yield b, gas if b is Building.ASSIMILATOR else p
+                    yield b, gas if isinstance(b, Assimilator) else p
                 return
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
         if line is None:
             return [0, 0]
-        return [int(line.required), line.building.value - 1]
+        return [int(line.required), Buildings.index(line.building)]
 
     def render(self, mode="human", pause=True):
         self.render_thunk()
@@ -491,12 +510,12 @@ class Env(gym.Env):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
                 assert len(nonzero) <= grid_size
-                for _, i in zip_longest(range(grid_size), nonzero):
-                    if i is None:
+                for _, k in zip_longest(range(grid_size), nonzero):
+                    if k is None:
                         yield " "
                     else:
-                        world_obj = WorldObjects[i]
-                        yield Symbols[world_obj]
+                        world_obj = WorldObjects[k]
+                        yield world_obj.symbol
                 yield RESET
                 yield "|"
             yield "\n" + "-" * (grid_size + 1) * self.world_size + "\n"
@@ -513,13 +532,15 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        dependencies = self.build_dependencies()
+        dependencies = dict(
+            self.build_dependencies(self.curriculum_setting.max_build_tree_depth)
+        )
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
         info_iterator = self.info_generator(*lines)
-        state_iterator = self.state_generator(*lines)
+        state_iterator = self.state_generator(lines, dependencies)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
@@ -569,11 +590,9 @@ class Env(gym.Env):
     def compound_action(*args, **kwargs) -> CompoundAction:
         return CompoundAction(*args, **kwargs)
 
-    @staticmethod
-    def compound_action(*args, **kwargs) -> CompoundAction:
-        return CompoundAction(*args, **kwargs)
-
-    def state_generator(self, *lines: Line) -> Generator[State, CompoundAction, None]:
+    def state_generator(
+        self, lines: List[Line], dependencies: Dict[Building, Building]
+    ) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
         building_positions: Dict[Coord, Building] = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
@@ -586,12 +605,14 @@ class Env(gym.Env):
         for worker_id in Worker:
             assignments[worker_id] = self.initial_assignment()
 
-        required = Counter(l.building for l in lines if l.required)
+        required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
         time_remaining = (
-            self.eval_steps - 1 if self.evaluating else len(lines) * self.time_per_line
+            self.eval_steps - 1
+            if self.evaluating
+            else (1 + len(lines)) * self.time_per_line
         )
 
         while True:
@@ -599,7 +620,7 @@ class Env(gym.Env):
                 (c, b)
                 for c, b in building_positions.items()
                 if self.random.random() < self.destroy_building_prob
-                and b is not Building.NEXUS
+                and not isinstance(b, Nexus)
             ]
             if destroyed_buildings:
                 destroy_coords, destroyed_buildings = zip(*destroyed_buildings)
@@ -631,14 +652,14 @@ class Env(gym.Env):
             self.render_thunk = render
 
             nexus_positions: List[Coord] = [
-                p for p, b in building_positions.items() if b is Building.NEXUS
+                p for p, b in building_positions.items() if isinstance(b, Nexus)
             ]
             assert nexus_positions
             for worker_id, assignment in assignments.items():
                 next_actions[worker_id] = assignment.action(
                     positions[worker_id],
                     positions,
-                    [p for p, b in building_positions.items() if b is Building.NEXUS],
+                    [p for p, b in building_positions.items() if isinstance(b, Nexus)],
                 )
 
             action: CompoundAction
@@ -665,7 +686,7 @@ class Env(gym.Env):
                         np.array(worker_position) + np.array(astuple(worker_action))
                     )
                     positions[worker_id] = new_position
-                    if building_positions.get(new_position, None) == Building.NEXUS:
+                    if isinstance(building_positions.get(new_position, None), Nexus):
                         for resource in Resource:
                             if self.gathered_resource(
                                 building_positions, positions, resource, worker_position
@@ -673,16 +694,19 @@ class Env(gym.Env):
                                 resources[resource] += 1
                 elif isinstance(worker_action, Building):
                     building = worker_action
-                    insufficient_resources = Costs[building] - resources
+                    insufficient_resources = bool(
+                        building.cost.as_counter() - resources
+                    )
                     if self.building_allowed(
-                        building,
-                        building_positions,
-                        insufficient_resources,
-                        positions,
-                        assignment.location,
+                        building=building,
+                        dependency=dependencies[building],
+                        building_positions=[*building_positions],
+                        insufficient_resources=insufficient_resources,
+                        positions=positions,
+                        assignment_location=assignment.location,
                     ):
                         building_positions[worker_position] = building
-                        resources -= Costs[building]
+                        resources -= building.cost.as_counter()
                 else:
                     raise RuntimeError
 
@@ -691,28 +715,32 @@ class Env(gym.Env):
     ):
         return positions[resource] == worker_position and (
             resource != Resource.GAS
-            or building_positions.get(worker_position, None) == Building.ASSIMILATOR
+            or isinstance(building_positions.get(worker_position, None), Assimilator)
         )
 
     @staticmethod
     def initial_assignment():
         return Resource.MINERALS
 
-    @staticmethod
     def building_allowed(
-        building,
-        building_positions,
-        insufficient_resources,
-        positions,
-        assignment_location,
+        self,
+        building: Building,
+        dependency: Optional[Building],
+        building_positions: List[Coord],
+        insufficient_resources: bool,
+        positions: Dict[WorldObject, Coord],
+        assignment_location: Coord,
     ) -> bool:
-        if insufficient_resources or assignment_location in building_positions:
+        if (
+            insufficient_resources
+            or assignment_location in building_positions
+            or dependency not in [*building_positions, None]
+        ):
             return False
-        if building is Building.ASSIMILATOR:
+        if isinstance(building, Assimilator):
             return assignment_location == positions[Resource.GAS]
         else:
             return assignment_location not in (
-                *building_positions,
                 positions[Resource.GAS],
                 positions[Resource.MINERALS],
             )
@@ -721,9 +749,6 @@ class Env(gym.Env):
         if isinstance(action, np.ndarray):
             action = RawAction(*action)
         return self.iterator.send(action)
-
-    def time_limit(self, lines):
-        return len(lines) * self.time_per_line
 
 
 def main(debug_env: bool, **kwargs):

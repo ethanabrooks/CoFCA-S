@@ -477,13 +477,13 @@ def test_smooth():
     yclean = np.sin(xs)
     ys = yclean + 0.1 * np.random.randn(yclean.size)
     xup, yup, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), nup, decay_steps=nup / ndown
+        xs, ys, xs.min(), xs.max_resource(), nup, decay_steps=nup / ndown
     )
     xdown, ydown, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), ndown, decay_steps=ndown / ndown
+        xs, ys, xs.min(), xs.max_resource(), ndown, decay_steps=ndown / ndown
     )
     xsame, ysame, _ = symmetric_ema(
-        xs, ys, xs.min(), xs.max(), norig, decay_steps=norig / ndown
+        xs, ys, xs.min(), xs.max_resource(), norig, decay_steps=norig / ndown
     )
     plt.plot(xs, ys, label="orig", marker="x")
     plt.plot(xup, yup, label="up", marker="x")

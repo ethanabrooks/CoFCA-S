@@ -1,8 +1,8 @@
 #!/usr/bin/env zsh
 
-config=$(${0:a:h}/search ${@[1, 2]} params.json)
-load=$(${0:a:h}/search ${@[1, 2]} checkpoint.pt)
-failure_buffer_load_path=$(${0:a:h}/search ${@[1, 2]} failure_buffer.pkl)
-cmd="python starcraft.py --config $config --load $load --failure-buffer-load-path $failure_buffer_load_path ${@:3}"
+config=$(${0:a:h}/search $2 config.yaml)
+load=$(${0:a:h}/search $2 checkpoint.pt)
+#failure_buffer_load_path=$(${0:a:h}/search $2 failure_buffer.pkl)
+cmd="python $1 --config $config --load $load --no_wandb ${@:3}"
 echo "$cmd\n"
 eval "$cmd"
