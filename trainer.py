@@ -81,16 +81,31 @@ class Trainer:
         num_processes: int,
         render: bool,
         synchronous: bool,
+        non_pickle_args: dict = None,
         **kwargs,
     ) -> VecPyTorch:
+        if non_pickle_args is None:
+            non_pickle_args = {}
+
+        if num_processes == 1:
+            synchronous = True
+
+        if synchronous:
+            kwargs.update(non_pickle_args)
+
         def env_thunk(rank):
-            return lambda: cls.make_env(rank=rank, evaluating=evaluating, **kwargs)
+            def thunk(**_kwargs):
+                return cls.make_env(
+                    rank=rank, evaluating=evaluating, **_kwargs, **kwargs
+                )
+
+            return thunk
 
         env_fns = [env_thunk(i) for i in range(num_processes)]
         return VecPyTorch(
             DummyVecEnv(env_fns, render=render)
-            if len(env_fns) == 1 or synchronous
-            else SubprocVecEnv(env_fns)
+            if synchronous
+            else SubprocVecEnv(env_fns, **non_pickle_args)
         )
 
     @classmethod

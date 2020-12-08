@@ -191,7 +191,9 @@ class Trainer(trainer.Trainer):
             except NotImplementedError:
                 failure_buffer = osx_queue.Queue()
         venv = super().make_vec_envs(
-            evaluating=evaluating, failure_buffer=failure_buffer, **kwargs
+            evaluating=evaluating,
+            non_pickle_args=dict(failure_buffer=failure_buffer),
+            **kwargs,
         )
         return CurriculumWrapper(
             venv=venv,

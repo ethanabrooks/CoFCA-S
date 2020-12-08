@@ -7,9 +7,9 @@ import numpy as np
 from . import CloudpickleWrapper, VecEnv
 
 
-def worker(remote, parent_remote, env_fn_wrapper):
+def worker(remote, parent_remote, env_fn_wrapper, **kwargs):
     parent_remote.close()
-    env = env_fn_wrapper.x()
+    env = env_fn_wrapper.x(**kwargs)
     try:
         while True:
             cmd, data = remote.recv()
@@ -53,11 +53,12 @@ class SubprocVecEnv(VecEnv):
     Recommended to use when num_envs > 1 and step() can be a bottleneck.
     """
 
-    def __init__(self, env_fns, spaces=None):
+    def __init__(self, env_fns, spaces=None, **kwargs):
         """
         Arguments:
 
         env_fns: iterable of callables -  functions that create environments to run in subprocesses. Need to be cloud-pickleable
+        kwargs: pass arguments that are non-pickle-able and must be passed through Process.
         """
         self.waiting = False
         self.closed = False
@@ -65,7 +66,9 @@ class SubprocVecEnv(VecEnv):
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(nenvs)])
         self.ps = [
             Process(
-                target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn))
+                target=worker,
+                args=(work_remote, remote, CloudpickleWrapper(env_fn)),
+                kwargs=kwargs,
             )
             for (work_remote, remote, env_fn) in zip(
                 self.work_remotes, self.remotes, env_fns
@@ -82,7 +85,7 @@ class SubprocVecEnv(VecEnv):
         self.remotes[0].send(("get_spaces", None))
         observation_space, action_space = self.remotes[0].recv()
         self.viewer = None
-        self.specs = [f().spec for f in env_fns]
+        self.specs = [f(**kwargs).spec for f in env_fns]
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
     def step_async(self, actions):
