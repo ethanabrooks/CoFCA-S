@@ -1,4 +1,5 @@
 import collections
+import multiprocessing
 from multiprocessing import Pipe, Process
 
 import numpy as np
@@ -60,6 +61,7 @@ class SubprocVecEnv(VecEnv):
         env_fns: iterable of callables -  functions that create environments to run in subprocesses. Need to be cloud-pickleable
         kwargs: pass arguments that are non-pickle-able and must be passed through Process.
         """
+
         self.waiting = False
         self.closed = False
         nenvs = len(env_fns)

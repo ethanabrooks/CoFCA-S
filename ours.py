@@ -1,4 +1,6 @@
+import multiprocessing
 import pickle
+import sys
 from pathlib import Path
 from multiprocessing import Queue
 from typing import Optional
@@ -204,4 +206,6 @@ class Trainer(trainer.Trainer):
 
 
 if __name__ == "__main__":
+    if sys.platform == "darwin":
+        multiprocessing.set_start_method("fork")
     Trainer.main()

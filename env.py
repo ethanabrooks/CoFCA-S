@@ -232,35 +232,35 @@ class Env(gym.Env):
 
     def failure_buffer_wrapper(self, iterator):
         use_failure_buf = False
-        # size = self.failure_buffer.qsize()
-        # if self.evaluating or not size:
-        #     buf = False
-        # else:
-        #     use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
-        #     use_failure_prob = max(use_failure_prob, 0)
-        #     buf = self.random.random() < use_failure_prob
-        # use_failure_buf = buf
-        # state = None
-        # if use_failure_buf:
-        #
-        #     # randomly rotate queue
-        #     for i in range(self.random.choice(min(10, size))):
-        #         try:
-        #             state = self.failure_buffer.get_nowait()
-        #             self.failure_buffer.put_nowait(state)
-        #         except Full:
-        #             pass  # discard, keep going
-        #         except Empty:
-        #             break
-        #
-        #     try:
-        #         state = self.failure_buffer.get_nowait()
-        #     except (Full, Empty):
-        #         use_failure_buf = state is not None
+        size = self.failure_buffer.qsize()
+        if self.evaluating or not size:
+            buf = False
+        else:
+            use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
+            use_failure_prob = max(use_failure_prob, 0)
+            buf = self.random.random() < use_failure_prob
+        use_failure_buf = buf
+        state = None
+        if use_failure_buf:
 
-        # if not use_failure_buf:
-        #     state = self.non_failure_random
-        # self.random.set_state(state)
+            # randomly rotate queue
+            for i in range(self.random.choice(min(10, size))):
+                try:
+                    state = self.failure_buffer.get_nowait()
+                    self.failure_buffer.put_nowait(state)
+                except Full:
+                    pass  # discard, keep going
+                except Empty:
+                    break
+
+            try:
+                state = self.failure_buffer.get_nowait()
+            except (Full, Empty):
+                use_failure_buf = state is not None
+
+        if not use_failure_buf:
+            state = self.non_failure_random
+        self.random.set_state(state)
         initial_random = self.random.get_state()
         action = None
 
@@ -288,15 +288,15 @@ class Env(gym.Env):
                     self.success_avg += self.alpha * (success - self.success_avg)
 
                 put_failure_buf = not self.evaluating and not success
-                # if put_failure_buf:
-                #     try:
-                #         self.failure_buffer.put_nowait(initial_random)
-                #     except Full:
-                #         pass
+                if put_failure_buf:
+                    try:
+                        self.failure_buffer.put_nowait(initial_random)
+                    except Full:
+                        pass
 
                 i.update(use_failure_buf=use_failure_buf)
-                # if use_failure_buf or put_failure_buf:
-                #     i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
+                if use_failure_buf or put_failure_buf:
+                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
