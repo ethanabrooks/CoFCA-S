@@ -1,42 +1,46 @@
 program: ours.py
 method: grid
 parameters:
-  conv_hidden_size:
-    desc: null
-    value: 100
-  entropy_coef:
-    desc: null
-    value: 0.02
-  hidden_size:
-    desc: null
-    value: 150
-  learning_rate:
-    desc: null
-    value: 0.0025
-  lower_embed_size:
-    desc: null
-    value: 50
-  next_actions_embed_size:
-    desc: null
-    value: 75
   num_batch:
-    desc: null
+    desc:
     value: 1
-  num_edges:
-    desc: null
-    value: 1
-  num_processes:
-    desc: null
-    value: 150
   ppo_epoch:
-    desc: null
+    desc:
     value: 10
-  tgt_success_rate:
-    desc: null
-    value: 0.85
+  hidden_size:
+    desc:
+    value: 100
   train_steps:
-    desc: null
-    value: 35
+    desc:
+    value: 40
+  entropy_coef:
+    desc:
+    value: 0.015
+  learning_rate:
+    desc:
+    value: 0.0025
+  num_processes:
+    desc:
+    value: 140
+  time_per_line:
+    desc:
+    value: 10
+  assimilator_prob:
+    values: 
+      - 0.7
+      - 0
+  conv_hidden_size:
+    desc:
+    value: 200
+  lower_embed_size:
+    desc:
+    value: 75
+  num_initial_buildings:
+    desc:
+    value: 0
+  next_actions_embed_size:
+    desc:
+    value: 100
   seed:
     values:
       - 0
