@@ -329,7 +329,11 @@ class Agent(nn.Module):
         if action.ptr is None:
             action = replace(action, ptr=p + delta)
 
-        action_log_probs = dists.a.log_prob(action.a).unsqueeze(-1)  # TODO
+        action_log_probs = sum(
+            dist.log_prob(x).unsqueeze(-1)
+            for dist, x in zip(astuple(dists), astuple(action))
+            if dist is not None
+        )
         entropy = sum(
             [dist.entropy() for dist in astuple(dists) if dist is not None]
         ).mean()
