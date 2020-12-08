@@ -18,6 +18,7 @@ class Trainer(ours.Trainer):
         env_parser = parser.main.add_argument_group("env_args")
         env.Env.add_arguments(env_parser)
         parser.agent.add_argument("--conv_hidden_size", type=int, default=100)
+        parser.agent.add_argument("--debug", action="store_true")
         parser.agent.add_argument("--resources_hidden_size", type=int, default=128)
         parser.agent.add_argument("--kernel_size", type=int, default=2)
         parser.agent.add_argument("--lower_embed_size", type=int, default=75)
@@ -41,7 +42,6 @@ class Trainer(ours.Trainer):
         return baseline_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
-            debug=False,
             gate_coef=0,
             max_eval_lines=1,
             no_pointer=False,
