@@ -178,8 +178,7 @@ class Agent(nn.Module):
 
         last = torch.zeros(2 * self.nl)
         last[-1] = 1
-        last = last.view(1, -1, 1)
-        self.register_buffer("last", last)
+        self.last = last.view(1, -1, 1)
 
         self.state_sizes = RecurrentState(
             a=1,
@@ -373,3 +372,7 @@ class Agent(nn.Module):
     @property
     def recurrent_hidden_state_size(self):
         return 1
+
+    def to(self, *args, **kwargs):
+        self.last = self.last.to(*args, **kwargs)
+        return super().to(*args, **kwargs)
