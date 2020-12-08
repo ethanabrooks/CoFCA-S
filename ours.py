@@ -19,6 +19,7 @@ from common.vec_env import VecEnv, VecEnvWrapper
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
+import data_types
 
 
 class CurriculumWrapper(VecEnvWrapper):
@@ -162,8 +163,10 @@ class Trainer(trainer.Trainer):
         max_lines: int,
         min_eval_lines: int,
         min_lines: int,
+        world_size: int,
         **kwargs,
     ):
+        data_types.WORLD_SIZE = world_size
         assert min_lines >= 1
         assert max_lines >= min_lines
         if curriculum_setting_load_path:
@@ -190,6 +193,7 @@ class Trainer(trainer.Trainer):
 
         kwargs.update(
             curriculum_setting=curriculum_setting,
+            world_size=world_size,
         )
 
         if failure_buffer_load_path:

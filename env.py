@@ -17,6 +17,7 @@ from gym.spaces import MultiDiscrete
 from gym.utils import seeding
 from treelib import Tree
 
+import data_types
 import keyboard_control
 from data_types import (
     Obs,
@@ -62,6 +63,7 @@ class Env(gym.Env):
     random_seed: int
     tgt_success_rate: int
     time_per_line: int
+    world_size: int
     alpha: float = 0.05
     curriculum_setting: CurriculumSetting = None
     evaluating: bool = None
@@ -72,7 +74,6 @@ class Env(gym.Env):
 
     def __post_init__(self):
         super().__init__()
-        self.world_size = WORLD_SIZE
         self.random, _ = seeding.np_random(self.random_seed)
         max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
@@ -145,6 +146,7 @@ class Env(gym.Env):
         parser.add_argument("--num_initial_buildings", type=int, default=0)
         parser.add_argument("--time_per_line", type=int, default=4)
         parser.add_argument("--tgt_success_rate", type=float, default=0.75)
+        parser.add_argument("--world_size", type=int, default=3)
 
     def build_dependencies(
         self, max_depth: int
@@ -751,8 +753,9 @@ class Env(gym.Env):
         return self.iterator.send(action)
 
 
-def main(debug_env: bool, **kwargs):
-    Env(rank=0, eval_steps=500, **kwargs).main()
+def main(debug_env: bool, world_size, **kwargs):
+    data_types.WORLD_SIZE = world_size
+    Env(rank=0, eval_steps=500, world_size=world_size, **kwargs).main()
 
 
 if __name__ == "__main__":
