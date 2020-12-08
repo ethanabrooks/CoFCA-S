@@ -29,8 +29,10 @@ class CurriculumWrapper(VecEnvWrapper):
         curriculum_setting: CurriculumSetting,
         curriculum_threshold: float,
         log_dir: Path,
+        max_curriculum_level: int,
     ):
         super().__init__(venv)
+        self.max_curriculum_level = max_curriculum_level
         self.log_dir = log_dir
         self.mean_successes = 0.5
         self.curriculum_threshold = curriculum_threshold
@@ -49,9 +51,11 @@ class CurriculumWrapper(VecEnvWrapper):
     def to(self, device):
         return self.venv.to(device)
 
-    @staticmethod
-    def curriculum_generator(setting: CurriculumSetting):
+    def curriculum_generator(self, setting: CurriculumSetting):
         while True:
+            if setting.level == self.max_curriculum_level:
+                yield setting
+                continue
             if setting.n_lines_space.high < setting.max_lines:
                 setting = setting.increment_max_lines().increment_level()
                 yield setting
@@ -87,8 +91,9 @@ class Trainer(trainer.Trainer):
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--failure_buffer_load_path", type=Path)
         parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
-        parser.main.add_argument("--min_eval_lines", type=int, default=1)
         parser.main.add_argument("--max_eval_lines", type=int, default=50)
+        parser.main.add_argument("--max_curriculum_level", type=int, default=20)
+        parser.main.add_argument("--min_eval_lines", type=int, default=1)
         env_parser = parser.main.add_argument_group("env_args")
         env.Env.add_arguments(env_parser)
         parser.agent.add_argument("--conv_hidden_size", type=int, default=100)
@@ -159,6 +164,7 @@ class Trainer(trainer.Trainer):
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
         log_dir: Path,
+        max_curriculum_level: int,
         max_eval_lines: int,
         max_lines: int,
         min_eval_lines: int,
@@ -220,6 +226,7 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
+            max_curriculum_level=max_curriculum_level,
         )
         for _ in range(curriculum_level - curriculum_setting.level):
             curriculum_setting = next(venv.curriculum_iterator)
