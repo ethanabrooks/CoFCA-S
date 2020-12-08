@@ -60,6 +60,8 @@ class CurriculumWrapper(VecEnvWrapper):
         mean_success = np.mean(infos.complete_episodes.get("success", [0]))
         if mean_success >= self.curriculum_threshold:
             curriculum = next(self.curriculum_iterator)
+            self.venv.close()
+            exit()
             self.venv.set_curriculum(curriculum)
             with Path(self.log_dir, "curriculum_setting.pkl").open("wb") as f:
                 pickle.dump(curriculum, f)
