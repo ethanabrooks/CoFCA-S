@@ -69,6 +69,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
+        parser.main.add_argument("--curriculum_level", type=int, default=0)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--curriculum_setting_load_path", type=Path)
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
@@ -139,6 +140,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def make_vec_envs(
         cls,
+        curriculum_level: int,
         curriculum_setting_load_path: Optional[Path],
         curriculum_threshold: float,
         evaluating: bool,
@@ -174,6 +176,8 @@ class Trainer(trainer.Trainer):
                 n_lines_space=Discrete(min_lines, min_lines),
                 level=0,
             )
+            for _ in range(curriculum_level):
+                curriculum_setting = curriculum_setting.increment_level()
         kwargs.update(
             curriculum_setting=curriculum_setting,
         )
