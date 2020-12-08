@@ -305,6 +305,15 @@ class Agent(nn.Module):
 
         if action.dg is None:
             action = replace(action, dg=dists.dg.sample())
+            # if can_open_gate.item():
+            #    while True:
+            #        try:
+            #            action = replace(
+            #                action, dg=float(input("dg:")) * torch.ones_like(action.dg)
+            #            )
+            #            break
+            #        except ValueError:
+            #            pass
 
         u = self.upsilon(zeta1_input).softmax(dim=-1)
         self.print("u", u)
@@ -323,6 +332,18 @@ class Agent(nn.Module):
 
         if action.delta is None:
             action = replace(action, delta=dists.delta.sample())
+            # if action.dg.item():
+            #    while True:
+            #        try:
+            #            print(self.nl)
+            #            action = replace(
+            #                action,
+            #                delta=float(input("delta:"))
+            #                * torch.ones_like(action.delta),
+            #            )
+            #            break
+            #        except ValueError:
+            #            pass
 
         delta = action.delta.clone() - self.nl
         self.print("action.delta, delta", action.delta, delta)
