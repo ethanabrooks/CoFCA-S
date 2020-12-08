@@ -318,7 +318,9 @@ class Agent(nn.Module):
         dists = replace(
             dists, delta=gate(action.dg.unsqueeze(-1), masked, ones * self.nl)
         )
-        self.print("d_probs", d_probs[:, self.nl :])
+        self.print("delta_probs", d_probs)
+        self.print("masked", Categorical(probs=masked).probs)
+        self.print("dists.delta", dists.delta.probs)
 
         if action.delta is None:
             action = replace(action, delta=dists.delta.sample())
