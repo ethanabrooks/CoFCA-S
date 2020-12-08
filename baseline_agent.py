@@ -207,7 +207,7 @@ class Agent(nn.Module):
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
         B = B.view(N, 2 * self.nl, self.num_edges)
-        B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
+        # B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
         zero_last = (1 - self.last) * B
         B = zero_last + self.last  # this ensures that the last B is 1
         C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
@@ -300,9 +300,9 @@ class Agent(nn.Module):
             action = replace(action, a=a)
 
         d_logits = self.d_gate(zeta1_input)
-        d_probs = F.softmax(d_logits, dim=-1)
+        dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = state.can_open_gate[R, action.a].long().unsqueeze(-1)
-        dists = replace(dists, dg=gate(can_open_gate, d_probs, ones * 0))
+        dists = replace(dists, dg=gate(can_open_gate, dg_probs, ones * 0))
 
         if action.dg is None:
             action = replace(action, dg=dists.dg.sample())
@@ -310,11 +310,13 @@ class Agent(nn.Module):
         u = self.upsilon(zeta1_input).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+        unmask = 1 - line_mask[p, R]
+        masked = d_probs * unmask
 
         self.print("dg prob", dists.dg.probs[:, 1])
 
         dists = replace(
-            dists, delta=gate(action.dg.unsqueeze(-1), d_probs, ones * self.nl)
+            dists, delta=gate(action.dg.unsqueeze(-1), masked, ones * self.nl)
         )
         self.print("d_probs", d_probs[:, self.nl :])
 
