@@ -186,7 +186,7 @@ class VecEnvWrapper(VecEnv):
     def to(self, device):
         pass
 
-    def set_curriculum(self, infos: InfosAggregator):
+    def set_curriculum(self, infos):
         pass
 
     def process_infos(self, infos: InfosAggregator):

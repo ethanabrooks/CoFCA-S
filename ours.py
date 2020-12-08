@@ -31,6 +31,7 @@ class CurriculumWrapper(VecEnvWrapper):
     ):
         super().__init__(venv)
         self.log_dir = log_dir
+        self.mean_successes = 0.5
         self.curriculum_threshold = curriculum_threshold
         self.curriculum_iterator = self.curriculum_generator(curriculum_setting)
         next(self.curriculum_iterator)
@@ -57,12 +58,22 @@ class CurriculumWrapper(VecEnvWrapper):
             yield setting
 
     def process_infos(self, infos: InfosAggregator):
-        mean_success = np.mean(infos.complete_episodes.get("success", [0]))
-        if mean_success >= self.curriculum_threshold:
+        try:
+            self.mean_successes += (
+                0.1 * np.mean(infos.complete_episodes["success"])
+                - 0.9 * self.mean_successes
+            )
+        except KeyError:
+            pass
+        if self.mean_successes >= self.curriculum_threshold:
+            self.mean_successes = 0.5
             curriculum = next(self.curriculum_iterator)
-            self.venv.set_curriculum(curriculum)
+            self.set_curriculum(curriculum)
             with Path(self.log_dir, "curriculum_setting.pkl").open("wb") as f:
                 pickle.dump(curriculum, f)
+
+    def set_curriculum(self, curriculum: CurriculumSetting):
+        self.venv.set_curriculum(curriculum)
 
 
 class Trainer(trainer.Trainer):
