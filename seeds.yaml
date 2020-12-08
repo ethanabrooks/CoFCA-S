@@ -1,4 +1,4 @@
-program: ours.py
+program: baseline.py
 method: grid
 parameters:
   num_batch:
@@ -28,7 +28,6 @@ parameters:
   assimilator_prob:
     values: 
       - 0.7
-      - 0
   conv_hidden_size:
     desc:
     value: 200
@@ -47,3 +46,6 @@ parameters:
       - 1
       - 2
       - 3
+  world_size:
+    desc:
+    value: 3
