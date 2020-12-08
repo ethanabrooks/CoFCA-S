@@ -68,9 +68,12 @@ class CurriculumWrapper(VecEnvWrapper):
         if self.mean_successes >= self.curriculum_threshold:
             self.mean_successes = 0.5
             curriculum = next(self.curriculum_iterator)
-            self.venv.set_curriculum(curriculum)
+            self.set_curriculum(curriculum)
             with Path(self.log_dir, "curriculum_setting.pkl").open("wb") as f:
                 pickle.dump(curriculum, f)
+
+    def set_curriculum(self, curriculum: CurriculumSetting):
+        self.venv.set_curriculum(curriculum)
 
 
 class Trainer(trainer.Trainer):
@@ -184,11 +187,7 @@ class Trainer(trainer.Trainer):
                 n_lines_space=Discrete(min_lines, min_lines),
                 level=0,
             )
-            for _ in range(curriculum_level):
-                curriculum_setting = curriculum_setting.increment_level()
 
-            with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
-                pickle.dump(curriculum_setting, f)
         kwargs.update(
             curriculum_setting=curriculum_setting,
         )
@@ -212,12 +211,19 @@ class Trainer(trainer.Trainer):
             non_pickle_args=dict(failure_buffer=failure_buffer),
             **kwargs,
         )
-        return CurriculumWrapper(
+        venv = CurriculumWrapper(
             venv=venv,
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
         )
+        for _ in range(curriculum_level - curriculum_setting.level):
+            curriculum_setting = next(venv.curriculum_iterator)
+            venv.set_curriculum(curriculum_setting)
+        print(f"starting at curriculum: {curriculum_setting}")
+        with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
+            pickle.dump(curriculum_setting, f)
+        return venv
 
 
 if __name__ == "__main__":
