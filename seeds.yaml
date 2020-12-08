@@ -30,7 +30,7 @@ parameters:
     value: 10
   assimilator_prob:
     values: 
-      - 0.7
+      - 0.0
   conv_hidden_size:
     desc:
     value: 200
@@ -54,4 +54,4 @@ parameters:
     value: 5
   group:
     desc:
-    value: "5x5, 0.7 assimilator_prob"
+    value: "5x5, 0.0 assimilator_prob"
