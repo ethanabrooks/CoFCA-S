@@ -11,28 +11,41 @@ from utils import AddBias, init, init_normc_
 Modify standard PyTorch distributions so they are compatible with this code.
 """
 
-FixedCategorical = torch.distributions.Categorical
 
-old_sample = FixedCategorical.sample
-FixedCategorical.sample = lambda self: old_sample(self).unsqueeze(-1)
+class FixedCategorical(torch.distributions.Categorical):
+    def sample(self, sample_shape=torch.Size()):
+        return super().sample().unsqueeze(-1)
+
+    def log_prob_cat(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+        value = value.long().unsqueeze(-1)
+        value, log_pmf = torch.broadcast_tensors(value, self.logits)
+        value = value[..., :1]
+        # gather = log_pmf.gather(-1, value).squeeze(-1)
+        R = torch.arange(value.size(0))
+        return log_pmf[R, value.squeeze(-1)]  # deterministic
+
+    def log_probs(self, value):
+        return self.log_prob_cat(value.squeeze(-1)).unsqueeze(-1)
+
+    def mode(self):
+        return self.probs.argmax(dim=1, keepdim=True)
+
+
+#
+# old_sample = FixedCategorical.sample
+# FixedCategorical.sample = lambda self: old_sample(self).unsqueeze(-1)
 
 
 # log_prob_cat = FixedCategorical.log_prob
-def log_prob_cat(self, value):
-    if self._validate_args:
-        self._validate_sample(value)
-    value = value.long().unsqueeze(-1)
-    value, log_pmf = torch.broadcast_tensors(value, self.logits)
-    value = value[..., :1]
-    # gather = log_pmf.gather(-1, value).squeeze(-1)
-    R = torch.arange(value.size(0))
-    return log_pmf[R, value.squeeze(-1)]  # deterministic
 
 
-FixedCategorical.log_probs = lambda self, actions: log_prob_cat(
-    self, actions.squeeze(-1)).unsqueeze(-1)
+# FixedCategorical.log_probs = lambda self, actions: log_prob_cat(
+#     self, actions.squeeze(-1)
+# ).unsqueeze(-1)
 
-FixedCategorical.mode = lambda self: self.probs.argmax(dim=1, keepdim=True)
+# FixedCategorical.mode = lambda self: self.probs.argmax(dim=1, keepdim=True)
 
 FixedNormal = torch.distributions.Normal
 log_prob_normal = FixedNormal.log_prob

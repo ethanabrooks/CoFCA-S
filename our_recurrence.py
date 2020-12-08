@@ -103,6 +103,7 @@ class Recurrence(nn.Module):
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
+        self.nl = len(self.obs_spaces.lines.nvec)
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_resources = nn.Sequential(
@@ -213,12 +214,6 @@ class Recurrence(nn.Module):
 
         rnn_hxs = torch.cat(list(pack()), dim=-1)
         return rnn_hxs, rnn_hxs[-1:]
-
-    @staticmethod
-    def get_lines_space(n_eval_lines, train_lines_space):
-        return spaces.MultiDiscrete(
-            np.repeat(train_lines_space.nvec[:1], repeats=n_eval_lines, axis=0)
-        )
 
     # noinspection PyPep8Naming
     def inner_loop(self, raw_inputs, rnn_hxs):

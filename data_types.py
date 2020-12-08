@@ -363,11 +363,12 @@ O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
 class Obs(typing.Generic[O]):
     action_mask: O
     can_open_gate: O
+    line_mask: O
     lines: O
-    mask: O
     next_actions: O
     obs: O
     partial_action: O
+    ptr: O
     resources: O
 
 
