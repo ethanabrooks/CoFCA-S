@@ -40,6 +40,9 @@ parameters:
       - 0.002
       - 0.0025
       - 0.005
+  load_path:
+    desc: null
+    value: 'checkpoint.pt'
   lower_embed_size:
     desc: null
     value: 75
