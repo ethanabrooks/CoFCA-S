@@ -7,7 +7,6 @@ parameters:
   assimilator_prob:
     distribution: categorical
     values:
-      - 0.4
       - 0.5
       - 0.6
       - 0.7
@@ -16,7 +15,6 @@ parameters:
     values:
       - 0.95
       - 0.99
-      - 0.995
   conv_hidden_size:
     distribution: categorical
     values:
@@ -67,9 +65,7 @@ parameters:
   num_edges:
     distribution: categorical
     values:
-      - 2
-      - 3
-      - 4
+      - 1
   num_initial_buildings:
     distribution: categorical
     values:
@@ -106,11 +102,9 @@ parameters:
   time_per_line:
     distribution: categorical
     values:
-      - 6
-      - 7
-      - 8
-      - 9
       - 10
+      - 20
+      - 30
   train_steps:
     distribution: categorical
     values:
