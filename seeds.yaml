@@ -51,7 +51,7 @@ parameters:
       - 3
   world_size:
     desc:
-    value: 4
+    value: 5
   group:
     desc:
-    value: "4x4, 0.7 assimilator_prob"
+    value: "5x5, 0.7 assimilator_prob"
