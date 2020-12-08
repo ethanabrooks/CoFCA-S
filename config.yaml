@@ -37,7 +37,7 @@ num_initial_buildings:
   value: 0
 num_processes:
   desc: null
-  value: 130
+  value: 30
 ppo_epoch:
   desc: null
   value: 5
