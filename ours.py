@@ -80,6 +80,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def add_arguments(cls, parser):
         parser = super().add_arguments(parser)
+        parser.main.add_argument("--curriculum_level", type=int, default=0)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--curriculum_setting_load_path", type=Path)
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
@@ -150,6 +151,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def make_vec_envs(
         cls,
+        curriculum_level: int,
         curriculum_setting_load_path: Optional[Path],
         curriculum_threshold: float,
         evaluating: bool,
@@ -185,6 +187,7 @@ class Trainer(trainer.Trainer):
                 n_lines_space=Discrete(min_lines, min_lines),
                 level=0,
             )
+
         kwargs.update(
             curriculum_setting=curriculum_setting,
         )
@@ -208,12 +211,19 @@ class Trainer(trainer.Trainer):
             non_pickle_args=dict(failure_buffer=failure_buffer),
             **kwargs,
         )
-        return CurriculumWrapper(
+        venv = CurriculumWrapper(
             venv=venv,
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
         )
+        for _ in range(curriculum_level - curriculum_setting.level):
+            curriculum_setting = next(venv.curriculum_iterator)
+            venv.set_curriculum(curriculum_setting)
+        print(f"starting at curriculum: {curriculum_setting}")
+        with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
+            pickle.dump(curriculum_setting, f)
+        return venv
 
 
 if __name__ == "__main__":
