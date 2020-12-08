@@ -1,4 +1,4 @@
-program: baseline.py
+program: ours.py
 method: grid
 parameters:
   num_batch:
@@ -19,6 +19,9 @@ parameters:
   learning_rate:
     desc:
     value: 0.0025
+  max_curriculum_level:
+    desc:
+    value: 0
   num_processes:
     desc:
     value: 140
@@ -49,3 +52,6 @@ parameters:
   world_size:
     desc:
     value: 3
+  group:
+    desc:
+    value: "3x3, 0.7 assimilator_prob"
