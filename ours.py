@@ -186,6 +186,9 @@ class Trainer(trainer.Trainer):
             )
             for _ in range(curriculum_level):
                 curriculum_setting = curriculum_setting.increment_level()
+
+            with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
+                pickle.dump(curriculum_setting, f)
         kwargs.update(
             curriculum_setting=curriculum_setting,
         )
