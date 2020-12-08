@@ -5,6 +5,7 @@ from typing import Optional
 
 import numpy as np
 
+import baseline_agent
 import debug_env as _debug_env
 import env
 import our_agent
@@ -109,13 +110,12 @@ class Trainer(trainer.Trainer):
         return mapping
 
     @staticmethod
-    def build_agent(envs: VecPyTorch, debug=False, **agent_args):
+    def build_agent(envs: VecPyTorch, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return our_agent.Agent(
+        return baseline_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
-            debug=debug,
             **agent_args,
         )
 
