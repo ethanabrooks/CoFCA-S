@@ -329,12 +329,6 @@ class Agent(nn.Module):
         if action.ptr is None:
             action = replace(action, ptr=p + delta)
 
-        action = replace(
-            action,
-            dg=torch.zeros_like(action.dg),
-            delta=torch.zeros_like(action.delta),
-            ptr=torch.zeros_like(action.ptr),
-        )
         action_log_probs = dists.a.log_prob(action.a).unsqueeze(-1)  # TODO
         entropy = sum(
             [dist.entropy() for dist in astuple(dists) if dist is not None]
