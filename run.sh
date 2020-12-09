@@ -16,7 +16,7 @@ do
     esac
 done
 
-wandb_output=$(script -q /dev/null -- wandb sweep --name "$name" "$config" 2> >(tee >(cat 1>&2)))
+wandb_output=$(wandb sweep --name "$name" "$config" 2> >(tee >(cat 1>&2)))
 dir=$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)
 id=$(echo $wandb_output | tail -n1 | awk 'END {print $NF}')
 
