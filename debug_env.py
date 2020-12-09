@@ -177,7 +177,11 @@ class Env(env.Env):
             # noinspection PyTypeChecker
             action = yield state, render
             assignment = action.assignment()
-            dependency = dependencies[assignment.building]
+            dependency = (
+                dependencies[assignment.building]
+                if isinstance(assignment, BuildOrder)
+                else None
+            )
             if isinstance(assignment, BuildOrder) and bool(complete[dependency]):
                 complete.update([assignment.building])
             ptr = action.ptr
