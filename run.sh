@@ -6,15 +6,21 @@ nruns=$(($ngpu * $runs_per_gpu))
 session='session'
 
 
-while getopts n:s:i: flag
+while getopts c:n:r:s: flag
 do
     case "${flag}" in
-      n) nruns=${OPTARG};;
+      c) config=${OPTARG};;
+      n) name=${OPTARG};;
+      r) nruns=${OPTARG};;
       s) session=${OPTARG};;
-      i) id=${OPTARG};;
-      *) echo "args are -n and -i" && exit;;
+      *) echo "usage: run.sh -c <config> -n <name> -r <nruns> -s <session>" && exit;;
     esac
 done
+
+wandb_output=$(wandb sweep --name "$n" "$config")
+url=$(${0:a:h}/bin/get_sweep_url.sh $wandb_output)
+id=$(${0:a:h}/bin/get_agent_id.sh $wandb_output)
+echo "wandb: View sweep at: $url"
 
 echo "Creating $nruns sessions..."
 
