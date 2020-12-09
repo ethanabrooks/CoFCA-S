@@ -1,6 +1,6 @@
 from queue import Queue
 
-import baseline_agent
+import our_agent
 import env
 import ours
 import trainer
@@ -30,7 +30,7 @@ class Trainer(ours.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
-        mapping["agent_args"] += [baseline_agent.Agent.__init__]
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         mapping["env_args"] = [env.Env.__init__, cls.make_vec_envs, cls.make_env]
         mapping["run_args"] = [trainer.Trainer.run]
         return mapping
@@ -39,7 +39,7 @@ class Trainer(ours.Trainer):
     def build_agent(envs: VecPyTorch, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return baseline_agent.Agent(
+        return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             gate_coef=0,

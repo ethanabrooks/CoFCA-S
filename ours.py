@@ -1,25 +1,23 @@
 import multiprocessing
 import pickle
 import sys
-from pathlib import Path
 from multiprocessing import Queue
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
-import baseline_agent
+import data_types
 import debug_env as _debug_env
 import env
+import osx_queue
 import our_agent
-import our_recurrence
 import trainer
 from aggregator import InfosAggregator
-import osx_queue
 from common.vec_env import VecEnv, VecEnvWrapper
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
-import data_types
 
 
 class CurriculumWrapper(VecEnvWrapper):
@@ -123,17 +121,14 @@ class Trainer(trainer.Trainer):
             CurriculumWrapper.__init__,
             trainer.Trainer.make_vec_envs,
         ]
-        mapping["agent_args"] += [
-            our_recurrence.Recurrence.__init__,
-            our_agent.Agent.__init__,
-        ]
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         return mapping
 
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return baseline_agent.Agent(
+        return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
