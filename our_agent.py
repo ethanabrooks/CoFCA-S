@@ -275,14 +275,12 @@ class Agent(nn.Module):
         embedded_lower = self.embed_lower(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        zeta_output = torch.cat(
-            [m, h1, resources, embedded_lower, next_actions], dim=-1
-        )
-        z1 = F.relu(self.zeta(zeta_output))
+        zeta_input = torch.cat([m, h1, resources, embedded_lower, next_actions], dim=-1)
+        z = F.relu(self.zeta(zeta_input))
 
-        value = self.critic(z1)
+        value = self.critic(z)
 
-        a_logits = self.actor(z1) - state.action_mask * self.inf
+        a_logits = self.actor(z) - state.action_mask * self.inf
         dists = replace(dists, a=Categorical(logits=a_logits))
 
         self.print("a_probs", dists.a.probs)
@@ -291,13 +289,14 @@ class Agent(nn.Module):
             a = dists.a.sample()
             action = replace(action, a=a)
 
-        d_logits = self.d_gate(zeta_output)
-        dg_probs = F.softmax(d_logits, dim=-1)
-        can_open_gate = state.can_open_gate[R, action.a].long().unsqueeze(-1)
-        dists = replace(dists, dg=gate(can_open_gate, dg_probs, ones * 0))
-
+        dg, dg_dist = self.get_dg(
+            can_open_gate=state.can_open_gate[R, action.a],
+            ones=ones,
+            zeta_input=zeta_input,
+        )
+        dists = replace(dists, dg=dg_dist)
         if action.dg is None:
-            action = replace(action, dg=dists.dg.sample())
+            action = replace(action, dg=dg)
             # if can_open_gate.item():
             #    while True:
             #        try:
@@ -308,7 +307,7 @@ class Agent(nn.Module):
             #        except ValueError:
             #            pass
 
-        u = self.upsilon(zeta_output).softmax(dim=-1)
+        u = self.upsilon(zeta_input).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         unmask = 1 - line_mask[p, R]
