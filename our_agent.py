@@ -288,16 +288,15 @@ class Agent(nn.Module):
         if action.a is None:
             a = dists.a.sample()
             action = replace(action, a=a)
-            # if action.a.item():
-            #     while True:
-            #         try:
-            #             action = replace(
-            #                 action,
-            #                 a=float(input("a:")) * torch.ones_like(R),
-            #             )
-            #             break
-            #         except ValueError:
-            #             pass
+            # while True:
+            #     try:
+            #         action = replace(
+            #             action,
+            #             a=float(input("a:")) * torch.ones_like(R),
+            #         )
+            #         break
+            #     except ValueError:
+            #         pass
 
         can_open_gate = state.can_open_gate[R, action.a.long()]
         dg, dg_dist = self.get_dg(

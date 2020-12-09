@@ -141,6 +141,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def initial_curriculum(cls, min_lines, max_lines, debug_env):
         if debug_env:
+            print("Using debug_env.")
             return CurriculumSetting(
                 max_build_tree_depth=1000,
                 max_lines=max_lines,
