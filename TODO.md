@@ -1,4 +1,4 @@
-- write baseline agent to check performance
+- use cpu-pinning for benchmarking
+- add equivalent of `docker log -f` to `run.sh`
 - do profiling
-- refactor `failure_buffer` so that program maintains one singular failure buffer, not different buffers for each environment.
 - reward structure

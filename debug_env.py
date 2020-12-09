@@ -1,8 +1,12 @@
-from dataclasses import dataclass
+import typing
+from collections import Counter
+from dataclasses import astuple, dataclass
 from typing import Generator
+from typing import Union, Dict, Tuple, List
+
+import numpy as np
 
 import env
-import keyboard_control
 from data_types import (
     ActionType,
     X,
@@ -15,6 +19,15 @@ from data_types import (
     Resource,
     Coord,
     Building,
+)
+from data_types import (
+    WorldObject,
+    Movement,
+    State,
+    Line,
+    BuildOrder,
+    WorkerAction,
+    Nexus,
 )
 
 
@@ -81,22 +94,15 @@ class DebugAction2(DebugAction):
 @dataclass(frozen=True)
 class DebugCompoundAction(CompoundAction):
     action1: DebugAction1 = None
-    action2: DebugAction2 = None
     ptr: int = 0
     active: ActionType = DebugAction1
 
     @classmethod
     def classes(cls):
         yield DebugAction1
-        yield DebugAction2
 
     def actions(self):
         yield self.action1
-        yield self.action2
-
-    def coord(self) -> Coord:
-        assert isinstance(self.action2, DebugAction2)
-        return self.action2.i, self.action2.j
 
     def worker(self) -> Worker:
         assert isinstance(self.action1.worker, Worker)
@@ -105,61 +111,123 @@ class DebugCompoundAction(CompoundAction):
     def assignment(self) -> Assignment:
         if isinstance(self.action1.target, Building):
             assert isinstance(self.action2, DebugAction2)
-        return self.action1.target.assignment(
-            None if self.action2 is None else self.coord()
-        )
+        return self.action1.target.assignment(None)
 
 
+@dataclass
 class Env(env.Env):
-    @staticmethod
-    def building_allowed(
-        building,
-        building_positions,
-        insufficient_resources,
-        positions,
-        assignment_location,
-    ) -> bool:
-        if insufficient_resources or assignment_location in building_positions:
-            return False
-        # if building is Building.ASSIMILATOR:
-        #     return assignment_location == positions[Resource.GAS]
-        # else:
-        return assignment_location not in (
-            *building_positions,
-            positions[Resource.GAS],
-            positions[Resource.MINERALS],
+    def state_generator(
+        self, lines: List[Line], dependencies: Dict[Building, Building]
+    ) -> Generator[State, CompoundAction, None]:
+        positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
+        building_positions: Dict[Coord, Building] = dict(
+            [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
+        positions: Dict[Union[Resource, Worker], Coord] = dict(
+            [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
+        )
+        assignments: Dict[Worker, Assignment] = {}
+        next_actions: Dict[Worker, WorkerAction] = {}
+        for worker_id in Worker:
+            assignments[worker_id] = self.initial_assignment()
 
-    @staticmethod
-    def compound_action(*args, **kwargs) -> DebugCompoundAction:
-        return DebugCompoundAction(*args, **kwargs)
+        required = Counter(li.building for li in lines if li.required)
+        resources: typing.Counter[Resource] = Counter()
+        ptr: int = 0
+        action = self.compound_action()
+        time_remaining = (
+            self.eval_steps - 1
+            if self.evaluating
+            else (1 + len(lines)) * self.time_per_line
+        )
+        complete: typing.Counter[Building] = Counter()
 
-    def gathered_resource(
-        self, building_positions, positions, resource, worker_position
-    ):
-        return positions[resource] == worker_position
+        while True:
+            success = not required - complete
 
-    @staticmethod
-    def initial_assignment():
-        return Resource.GAS
+            state = State(
+                building_positions=building_positions,
+                next_action=next_actions,
+                positions=positions,
+                resources=resources,
+                success=success,
+                pointer=ptr,
+                action=action,
+                time_remaining=time_remaining,
+            )
 
-    def main(self):
-        def action_fn(string: str):
-            try:
-                ints = [*map(int, string.split())]
-                try:
-                    b, i, j = ints
-                    action1 = DebugAction1(target=Targets[b], worker=Worker.A)
-                    action2 = DebugAction2(i=i, j=j)
-                except ValueError:
-                    (r,) = ints
-                    action1 = DebugAction1(target=Targets[r], worker=Worker.B)
-                    action2 = None
-                return self.compound_action(action1, action2)
-            except (ValueError, TypeError) as e:
-                print(e)
+            def render():
+                print("Time remaining:", time_remaining)
+                print("Complete:", complete)
 
-        keyboard_control.run(self, action_fn)
+            self.render_thunk = render
+
+            nexus_positions: List[Coord] = [
+                p for p, b in building_positions.items() if isinstance(b, Nexus)
+            ]
+            assert nexus_positions
+            for worker_id, assignment in assignments.items():
+                next_actions[worker_id] = assignment.action(
+                    positions[worker_id],
+                    positions,
+                    [p for p, b in building_positions.items() if isinstance(b, Nexus)],
+                )
+
+            action: CompoundAction
+            # noinspection PyTypeChecker
+            action = yield state, render
+            assignment = action.assignment()
+            dependency = (
+                dependencies[assignment.building]
+                if isinstance(assignment, BuildOrder)
+                else None
+            )
+            if isinstance(assignment, BuildOrder) and bool(complete[dependency]):
+                complete.update([assignment.building])
+            ptr = action.ptr
+            time_remaining -= 1
+            assignments[action.worker()] = action.assignment()
+
+            worker_id: Worker
+            assignment: Assignment
+            for worker_id, assignment in sorted(
+                assignments.items(), key=lambda w: isinstance(w[1], BuildOrder)
+            ):  # collect resources first.
+                worker_position = positions[worker_id]
+                worker_action = assignment.action(
+                    current_position=worker_position,
+                    positions=positions,
+                    nexus_positions=nexus_positions,
+                )
+
+                if isinstance(worker_action, Movement):
+                    new_position = tuple(
+                        np.array(worker_position) + np.array(astuple(worker_action))
+                    )
+                    positions[worker_id] = new_position
+                    if isinstance(building_positions.get(new_position, None), Nexus):
+                        for resource in Resource:
+                            if self.gathered_resource(
+                                building_positions, positions, resource, worker_position
+                            ):
+                                resources[resource] += 1
+                elif isinstance(worker_action, Building):
+                    building = worker_action
+                    insufficient_resources = bool(
+                        building.cost.as_counter() - resources
+                    )
+                    if self.building_allowed(
+                        building=building,
+                        dependency=dependencies[building],
+                        building_positions=[*building_positions],
+                        insufficient_resources=insufficient_resources,
+                        positions=positions,
+                        assignment_location=assignment.location,
+                    ):
+                        building_positions[worker_position] = building
+                        resources -= building.cost.as_counter()
+                else:
+                    raise RuntimeError
 
 
 def main(debug_env: bool, **kwargs):

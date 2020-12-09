@@ -5,16 +5,20 @@ ngpu=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 nruns=$(($ngpu * $runs_per_gpu))
 session='session'
 
-
-while getopts n:s:i: flag
+while getopts c:n:r:s: flag
 do
     case "${flag}" in
-      n) nruns=${OPTARG};;
+      c) config=${OPTARG};;
+      n) name=${OPTARG};;
+      r) nruns=${OPTARG};;
       s) session=${OPTARG};;
-      i) id=${OPTARG};;
-      *) echo "args are -n and -i" && exit;;
+      *) echo "usage: run.sh -c <config> -n <name> -r <nruns> -s <session>" && exit;;
     esac
 done
+
+wandb_output=$(wandb sweep --name "$name" "$config" 2> >(tee >(cat 1>&2)))
+dir=$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)
+id=$(echo $wandb_output | tail -n1 | awk 'END {print $NF}')
 
 echo "Creating $nruns sessions..."
 
