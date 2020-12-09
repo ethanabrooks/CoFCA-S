@@ -5,7 +5,6 @@ ngpu=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
 nruns=$(($ngpu * $runs_per_gpu))
 session='session'
 
-
 while getopts c:n:r:s: flag
 do
     case "${flag}" in
@@ -17,10 +16,9 @@ do
     esac
 done
 
-wandb_output=$(wandb sweep --name "$n" "$config")
-url=$(${0:a:h}/bin/get_sweep_url.sh $wandb_output)
-id=$(${0:a:h}/bin/get_agent_id.sh $wandb_output)
-echo "wandb: View sweep at: $url"
+wandb_output=$(wandb sweep --name "$name" "$config" 2> >(tee >(cat 1>&2)))
+dir=$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)
+id=$(echo $wandb_output | tail -n1 | awk 'END {print $NF}')
 
 echo "Creating $nruns sessions..."
 
