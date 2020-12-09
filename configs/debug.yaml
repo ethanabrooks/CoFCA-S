@@ -23,8 +23,6 @@ parameters:
       - 100
       - 150
       - 200
-  debug_agent:
-    value: True
   entropy_coef:
     distribution: categorical
     values:
@@ -52,6 +50,8 @@ parameters:
       - 50
       - 75
       - 100
+  max_curriculum_level:
+    value: 0
   next_actions_embed_size:
     distribution: categorical
     values:

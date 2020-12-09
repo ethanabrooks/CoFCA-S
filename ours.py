@@ -148,7 +148,7 @@ class Trainer(trainer.Trainer):
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        if debug_env:
+        if True:
             return _debug_env.Env(**kwargs)
         else:
             return env.Env(**kwargs)
