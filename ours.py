@@ -138,6 +138,22 @@ class Trainer(trainer.Trainer):
             **agent_args,
         )
 
+    @classmethod
+    def initial_curriculum(cls, min_lines, max_lines, debug_env):
+        if debug_env:
+            return CurriculumSetting(
+                max_build_tree_depth=1000,
+                max_lines=max_lines,
+                n_lines_space=Discrete(min_lines, max_lines),
+                level=0,
+            )
+        return CurriculumSetting(
+            max_build_tree_depth=1,
+            max_lines=max_lines,
+            n_lines_space=Discrete(min_lines, min_lines),
+            level=0,
+        )
+
     @staticmethod
     def make_env(
         rank: int,
@@ -186,16 +202,12 @@ class Trainer(trainer.Trainer):
             curriculum_setting = CurriculumSetting(
                 max_build_tree_depth=100,
                 max_lines=max_eval_lines,
-                n_lines_space=Discrete(min_eval_lines, min_eval_lines),
+                n_lines_space=Discrete(min_eval_lines, max_eval_lines),
                 level=0,
             )
+
         else:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=1,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, min_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_lines, max_lines, debug_env)
 
         kwargs.update(
             curriculum_setting=curriculum_setting,
@@ -227,7 +239,7 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
-            max_curriculum_level=max_curriculum_level,
+            max_curriculum_level=0 if debug_env else max_curriculum_level,
         )
         for _ in range(curriculum_level - curriculum_setting.level):
             curriculum_setting = next(venv.curriculum_iterator)
