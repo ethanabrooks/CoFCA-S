@@ -139,6 +139,15 @@ class Trainer(trainer.Trainer):
         )
 
     @classmethod
+    def initial_curriculum(cls, min_lines, max_lines):
+        return CurriculumSetting(
+            max_build_tree_depth=1,
+            max_lines=max_lines,
+            n_lines_space=Discrete(min_lines, min_lines),
+            level=0,
+        )
+
+    @classmethod
     def main(cls):
         if sys.platform == "darwin":
             multiprocessing.set_start_method("fork")
@@ -188,19 +197,9 @@ class Trainer(trainer.Trainer):
                     f"from {curriculum_setting_load_path}"
                 )
         elif evaluating:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=100,
-                max_lines=max_eval_lines,
-                n_lines_space=Discrete(min_eval_lines, min_eval_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_eval_lines, max_eval_lines)
         else:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=1,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, max_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_lines, max_lines)
 
         kwargs.update(
             curriculum_setting=curriculum_setting,
