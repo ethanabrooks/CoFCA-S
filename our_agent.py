@@ -71,7 +71,7 @@ class Agent(nn.Module):
     inf: float = 1e5
 
     def __hash__(self):
-        return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
+        return self.hash()
 
     def __post_init__(self):
         super().__init__()
@@ -95,25 +95,9 @@ class Agent(nn.Module):
             self.obs_spaces.next_actions.nvec[0],
             embedding_dim=self.next_actions_embed_size,
         )
-        self.task_encoder = (
-            TransformerModel(
-                ntoken=self.num_edges * self.d_space(),
-                ninp=self.task_embed_size,
-                nhid=self.task_embed_size,
-            )
-            if self.transformer
-            else nn.GRU(
-                self.task_embed_size,
-                self.task_embed_size,
-                bidirectional=True,
-                batch_first=True,
-            )
-        )
+        self.task_encoder = self.build_task_encoder()
 
-        init_ = lambda m: init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )  # TODO: try init
-        self.actor = init_(nn.Linear(self.hidden_size, action_nvec.a))
+        self.actor = self.init_(nn.Linear(self.hidden_size, action_nvec.a))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         d, h, w = self.obs_spaces.obs.shape
@@ -124,39 +108,15 @@ class Agent(nn.Module):
         self.embed_resources = nn.Sequential(
             IntEncoding(self.resources_hidden_size),
             nn.Flatten(),
-            init_(
+            self.init_(
                 nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
             ),
             nn.ReLU(),
         )
-        m_size = (
-            2 * self.task_embed_size + self.hidden_size
-            if self.no_pointer
-            else self.task_embed_size
-        )
-        zeta1_input_size = (
-            m_size
-            + self.conv_hidden_size
-            + self.resources_hidden_size
-            + self.lower_embed_size
-            + self.next_actions_embed_size * len(self.obs_spaces.next_actions.nvec)
-        )
-        self.zeta1 = init_(nn.Linear(zeta1_input_size, self.hidden_size))
-        if self.olsk:
-            assert self.num_edges == 3
-            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
-            self.beta = init_(nn.Linear(self.hidden_size, self.num_edges))
-        elif self.no_pointer:
-            self.upsilon = nn.GRUCell(zeta1_input_size, self.hidden_size)
-            self.beta = init_(nn.Linear(self.hidden_size, self.d_space()))
-        else:
-            self.upsilon = init_(nn.Linear(zeta1_input_size, self.num_edges))
-            in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
-            out_size = (
-                self.num_edges * self.d_space() if self.no_scan else self.num_edges
-            )
-            self.beta = nn.Sequential(init_(nn.Linear(in_size, out_size)))
-        self.d_gate = init_(nn.Linear(zeta1_input_size, 2))
+        self.zeta = self.init_(nn.Linear(self.zeta_input_size, self.hidden_size))
+        self.upsilon = self.build_upsilon()
+        self.beta = self.build_beta()
+        self.d_gate = self.build_d_gate()
 
         conv_out = conv_output_dimension(h, self.padding, self.kernel_size, self.stride)
         self.conv = nn.Sequential(
@@ -169,12 +129,11 @@ class Agent(nn.Module):
             ),
             nn.ReLU(),
             nn.Flatten(),
-            init_(
+            self.init_(
                 nn.Linear(conv_out ** 2 * self.conv_hidden_size, self.conv_hidden_size)
             ),
         )
-        self.conv_bias = nn.Parameter(torch.zeros(self.conv_hidden_size))
-        self.critic = init_(nn.Linear(self.hidden_size, 1))
+        self.critic = self.init_(nn.Linear(self.hidden_size, 1))
 
         last = torch.zeros(2 * self.nl)
         last[-1] = 1
@@ -190,6 +149,37 @@ class Agent(nn.Module):
             v=1,
             dg_probs=2,
             dg=1,
+        )
+
+    def build_d_gate(self):
+        return self.init_(nn.Linear(self.zeta_input_size, 2))
+
+    def build_beta(self):
+        in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
+        out_size = self.num_edges * self.d_space() if self.no_scan else self.num_edges
+        return nn.Sequential(self.init_(nn.Linear(in_size, out_size)))
+
+    @property
+    def zeta_input_size(self):
+        m_size = (
+            2 * self.task_embed_size + self.hidden_size
+            if self.no_pointer
+            else self.task_embed_size
+        )
+        return (
+            m_size
+            + self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.lower_embed_size
+            + self.next_actions_embed_size * len(self.obs_spaces.next_actions.nvec)
+        )
+
+    def build_task_encoder(self):
+        return nn.GRU(
+            self.task_embed_size,
+            self.task_embed_size,
+            bidirectional=True,
+            batch_first=True,
         )
 
     def build_P(self, p, M, R):
@@ -214,6 +204,9 @@ class Agent(nn.Module):
         P = P.view(N, self.nl, 2, self.num_edges)
         f, b = torch.unbind(P, dim=-2)
         return torch.cat([b.flip(-2), f], dim=-2)
+
+    def build_upsilon(self):
+        return self.init_(nn.Linear(self.zeta_input_size, self.num_edges))
 
     def d_space(self):
         if self.olsk:
@@ -282,10 +275,10 @@ class Agent(nn.Module):
         embedded_lower = self.embed_lower(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        zeta1_input = torch.cat(
+        zeta_output = torch.cat(
             [m, h1, resources, embedded_lower, next_actions], dim=-1
         )
-        z1 = F.relu(self.zeta1(zeta1_input))
+        z1 = F.relu(self.zeta(zeta_output))
 
         value = self.critic(z1)
 
@@ -298,7 +291,7 @@ class Agent(nn.Module):
             a = dists.a.sample()
             action = replace(action, a=a)
 
-        d_logits = self.d_gate(zeta1_input)
+        d_logits = self.d_gate(zeta_output)
         dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = state.can_open_gate[R, action.a].long().unsqueeze(-1)
         dists = replace(dists, dg=gate(can_open_gate, dg_probs, ones * 0))
@@ -315,7 +308,7 @@ class Agent(nn.Module):
             #        except ValueError:
             #            pass
 
-        u = self.upsilon(zeta1_input).softmax(dim=-1)
+        u = self.upsilon(zeta_output).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         unmask = 1 - line_mask[p, R]
@@ -369,8 +362,38 @@ class Agent(nn.Module):
             log=dict(entropy=entropy),
         )
 
+    def get_delta(self, P, dg, line_mask, ones, zeta_input):
+        u = self.upsilon(zeta_input).softmax(dim=-1)  # TODO: try z
+        self.print("u", u)
+        d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+        unmask = 1 - line_mask
+        masked = d_probs * unmask
+        self.print("masked", Categorical(probs=masked).probs)
+        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        self.print("dists.delta", delta_dist.probs)
+        delta = delta_dist.sample()
+        return delta, delta_dist
+
+    def get_dg(self, can_open_gate, ones, zeta_input):
+        d_logits = self.d_gate(zeta_input)  # TODO: try z
+        dg_probs = F.softmax(d_logits, dim=-1)
+        can_open_gate = can_open_gate.long().unsqueeze(-1)
+        dg_dist = gate(can_open_gate, dg_probs, ones * 0)
+        self.print("dg prob", dg_dist.probs[:, 1])
+        dg = dg_dist.sample()
+        return dg, dg_dist
+
     def get_value(self, inputs, rnn_hxs, masks):
         return self.forward(inputs, rnn_hxs, masks).value
+
+    def hash(self):
+        return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
+
+    @staticmethod
+    def init_(m):
+        return init(
+            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
+        )  # TODO: try init
 
     @property
     def is_recurrent(self):
