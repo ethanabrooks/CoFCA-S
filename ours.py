@@ -191,7 +191,7 @@ class Trainer(trainer.Trainer):
             )
         else:
             curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=1,
+                max_build_tree_depth=100,
                 max_lines=max_lines,
                 n_lines_space=Discrete(min_lines, min_lines),
                 level=0,
