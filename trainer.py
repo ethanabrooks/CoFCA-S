@@ -67,10 +67,6 @@ class Trainer:
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
         state_dict = torch.load(str(checkpoint_path), map_location=device)
-        try:
-            del state_dict["agent"]["last"]
-        except KeyError:
-            pass
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
         # if isinstance(self.envs.venv, VecNormalize):

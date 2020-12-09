@@ -224,10 +224,6 @@ class Env(env.Env):
                 else:
                     raise RuntimeError
 
-    @staticmethod
-    def compound_action(*args, **kwargs) -> DebugCompoundAction:
-        return DebugCompoundAction(*args, **kwargs)
-
 
 def main(debug_env: bool, **kwargs):
     Env(rank=0, eval_steps=500, **kwargs).main()
