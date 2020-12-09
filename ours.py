@@ -134,6 +134,12 @@ class Trainer(trainer.Trainer):
             **agent_args,
         )
 
+    @classmethod
+    def main(cls):
+        if sys.platform == "darwin":
+            multiprocessing.set_start_method("fork")
+        super().main()
+
     @staticmethod
     def make_env(
         rank: int,
@@ -233,6 +239,4 @@ class Trainer(trainer.Trainer):
 
 
 if __name__ == "__main__":
-    if sys.platform == "darwin":
-        multiprocessing.set_start_method("fork")
     Trainer.main()
