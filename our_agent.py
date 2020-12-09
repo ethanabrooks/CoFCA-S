@@ -307,23 +307,17 @@ class Agent(nn.Module):
             #        except ValueError:
             #            pass
 
-        u = self.upsilon(zeta_input).softmax(dim=-1)
-        self.print("u", u)
-        d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
-        unmask = 1 - line_mask[p, R]
-        masked = d_probs * unmask
-
-        self.print("dg prob", dists.dg.probs[:, 1])
-
-        dists = replace(
-            dists, delta=gate(action.dg.unsqueeze(-1), masked, ones * self.nl)
+        delta, delta_dist = self.get_delta(
+            P=P,
+            dg=action.dg,
+            line_mask=line_mask[p, R],
+            ones=ones,
+            zeta_input=zeta_input,
         )
-        self.print("delta_probs", d_probs)
-        self.print("masked", Categorical(probs=masked).probs)
-        self.print("dists.delta", dists.delta.probs)
+        dists = replace(dists, delta=delta_dist)
 
         if action.delta is None:
-            action = replace(action, delta=dists.delta.sample())
+            action = replace(action, delta=delta)
             # if action.dg.item():
             #    while True:
             #        try:
