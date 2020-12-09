@@ -24,11 +24,11 @@ class Trainer(ours.Trainer):
         )
 
     @classmethod
-    def initial_curriculum(cls, min_lines, max_lines):
+    def initial_curriculum(cls, min_lines, max_lines, debug_env):
         return CurriculumSetting(
             max_build_tree_depth=100,
             max_lines=max_lines,
-            n_lines_space=Discrete(min_lines, max_lines),
+            n_lines_space=Discrete(1, 1),
             level=0,
         )
 
