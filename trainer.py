@@ -113,11 +113,14 @@ class Trainer:
         parser = ArgumentParser()
         cls.add_arguments(parser)
 
-        def run(config, no_wandb, group, **kwargs):
+        def run(config, name, no_wandb, group, **kwargs):
             if no_wandb:
                 kwargs.update(config, log_dir=Path("/tmp"))
             else:
-                wandb.init(group=group)
+                if group is None:
+                    wandb.init(name=name)
+                else:
+                    wandb.init(group=group, name=name)
                 kwargs.update(wandb.config.as_dict(), log_dir=Path(wandb.run.dir))
             return cls.run(**cls.structure_config(**kwargs))
 
