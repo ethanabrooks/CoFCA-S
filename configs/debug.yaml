@@ -53,7 +53,7 @@ parameters:
   max_curriculum_level:
     value: 0
   max_lines:
-    value: 2
+    value: 10
   next_actions_embed_size:
     distribution: categorical
     values:
