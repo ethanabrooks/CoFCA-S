@@ -3,15 +3,13 @@ import pickle
 import sys
 from pathlib import Path
 from multiprocessing import Queue
-from typing import Optional
+from typing import Optional, DefaultDict, Dict, Union
 
 import numpy as np
 
-import baseline_agent
 import debug_env as _debug_env
 import env
 import our_agent
-import our_recurrence
 import trainer
 from aggregator import InfosAggregator
 import osx_queue
@@ -88,6 +86,10 @@ class Trainer(trainer.Trainer):
         parser.main.add_argument("--curriculum_level", type=int, default=0)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--curriculum_setting_load_path", type=Path)
+        parser.main.add_argument("--debug_env", action="store_true")
+        parser.main.add_argument(
+            "--debug_env_opt", type=bool, default=False, help="necessary for configs"
+        )
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--failure_buffer_load_path", type=Path)
         parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
@@ -124,7 +126,6 @@ class Trainer(trainer.Trainer):
             trainer.Trainer.make_vec_envs,
         ]
         mapping["agent_args"] += [
-            our_recurrence.Recurrence.__init__,
             our_agent.Agent.__init__,
         ]
         return mapping
@@ -133,10 +134,19 @@ class Trainer(trainer.Trainer):
     def build_agent(envs: VecPyTorch, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return baseline_agent.Agent(
+        return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
+        )
+
+    @classmethod
+    def initial_curriculum(cls, min_lines, max_lines):
+        return CurriculumSetting(
+            max_build_tree_depth=1,
+            max_lines=max_lines,
+            n_lines_space=Discrete(min_lines, min_lines),
+            level=0,
         )
 
     @staticmethod
@@ -148,7 +158,7 @@ class Trainer(trainer.Trainer):
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        if True:
+        if debug_env:
             return _debug_env.Env(**kwargs)
         else:
             return env.Env(**kwargs)
@@ -183,19 +193,9 @@ class Trainer(trainer.Trainer):
                     f"from {curriculum_setting_load_path}"
                 )
         elif evaluating:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=100,
-                max_lines=max_eval_lines,
-                n_lines_space=Discrete(min_eval_lines, min_eval_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_eval_lines, max_eval_lines)
         else:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=100,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, min_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_lines, max_lines)
 
         kwargs.update(
             curriculum_setting=curriculum_setting,
@@ -235,6 +235,12 @@ class Trainer(trainer.Trainer):
         with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
             pickle.dump(curriculum_setting, f)
         return venv
+
+    @classmethod
+    def structure_config(
+        cls, debug_env_opt, debug_env, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        return super().structure_config(debug_env=debug_env or debug_env_opt, **config)
 
 
 if __name__ == "__main__":
