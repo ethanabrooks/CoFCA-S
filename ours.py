@@ -3,15 +3,13 @@ import pickle
 import sys
 from pathlib import Path
 from multiprocessing import Queue
-from typing import Optional
+from typing import Optional, DefaultDict, Dict, Union
 
 import numpy as np
 
-import baseline_agent
 import debug_env as _debug_env
 import env
 import our_agent
-import our_recurrence
 import trainer
 from aggregator import InfosAggregator
 import osx_queue
@@ -88,6 +86,10 @@ class Trainer(trainer.Trainer):
         parser.main.add_argument("--curriculum_level", type=int, default=0)
         parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
         parser.main.add_argument("--curriculum_setting_load_path", type=Path)
+        parser.main.add_argument("--debug_env", action="store_true")
+        parser.main.add_argument(
+            "--debug_env_opt", type=bool, default=False, help="necessary for configs"
+        )
         parser.main.add_argument("--eval", dest="no_eval", action="store_false")
         parser.main.add_argument("--failure_buffer_load_path", type=Path)
         parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
@@ -123,21 +125,40 @@ class Trainer(trainer.Trainer):
             CurriculumWrapper.__init__,
             trainer.Trainer.make_vec_envs,
         ]
-        mapping["agent_args"] += [
-            our_recurrence.Recurrence.__init__,
-            our_agent.Agent.__init__,
-        ]
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         return mapping
 
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
         del agent_args["recurrent"]
         del agent_args["num_layers"]
-        return baseline_agent.Agent(
+        return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
         )
+
+    @classmethod
+    def initial_curriculum(cls, min_lines, max_lines, debug_env):
+        if debug_env:
+            return CurriculumSetting(
+                max_build_tree_depth=1000,
+                max_lines=max_lines,
+                n_lines_space=Discrete(min_lines, max_lines),
+                level=0,
+            )
+        return CurriculumSetting(
+            max_build_tree_depth=1,
+            max_lines=max_lines,
+            n_lines_space=Discrete(min_lines, min_lines),
+            level=0,
+        )
+
+    @classmethod
+    def main(cls):
+        if sys.platform == "darwin":
+            multiprocessing.set_start_method("fork")
+        super().main()
 
     @staticmethod
     def make_env(
@@ -148,7 +169,7 @@ class Trainer(trainer.Trainer):
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        if True:
+        if debug_env:
             return _debug_env.Env(**kwargs)
         else:
             return env.Env(**kwargs)
@@ -160,6 +181,7 @@ class Trainer(trainer.Trainer):
         curriculum_level: int,
         curriculum_setting_load_path: Optional[Path],
         curriculum_threshold: float,
+        debug_env: bool,
         evaluating: bool,
         failure_buffer_load_path: Path,
         failure_buffer_size: int,
@@ -186,16 +208,12 @@ class Trainer(trainer.Trainer):
             curriculum_setting = CurriculumSetting(
                 max_build_tree_depth=100,
                 max_lines=max_eval_lines,
-                n_lines_space=Discrete(min_eval_lines, min_eval_lines),
+                n_lines_space=Discrete(min_eval_lines, max_eval_lines),
                 level=0,
             )
+
         else:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=1,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, max_lines),
-                level=0,
-            )
+            curriculum_setting = cls.initial_curriculum(min_lines, max_lines, debug_env)
 
         kwargs.update(
             curriculum_setting=curriculum_setting,
@@ -219,6 +237,7 @@ class Trainer(trainer.Trainer):
         venv = super().make_vec_envs(
             evaluating=evaluating,
             non_pickle_args=dict(failure_buffer=failure_buffer),
+            debug_env=debug_env,
             **kwargs,
         )
         venv = CurriculumWrapper(
@@ -226,7 +245,7 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
-            max_curriculum_level=max_curriculum_level,
+            max_curriculum_level=0 if debug_env else max_curriculum_level,
         )
         for _ in range(curriculum_level - curriculum_setting.level):
             curriculum_setting = next(venv.curriculum_iterator)
@@ -236,8 +255,12 @@ class Trainer(trainer.Trainer):
             pickle.dump(curriculum_setting, f)
         return venv
 
+    @classmethod
+    def structure_config(
+        cls, debug_env_opt, debug_env, **config
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        return super().structure_config(debug_env=debug_env or debug_env_opt, **config)
+
 
 if __name__ == "__main__":
-    if sys.platform == "darwin":
-        multiprocessing.set_start_method("fork")
     Trainer.main()

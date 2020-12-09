@@ -74,6 +74,7 @@ class Env(gym.Env):
 
     def __post_init__(self):
         super().__init__()
+        data_types.WORLD_SIZE = self.world_size
         self.random, _ = seeding.np_random(self.random_seed)
         max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
@@ -141,7 +142,6 @@ class Env(gym.Env):
     def add_arguments(cls, parser):
         parser.add_argument("--assimilator_prob", type=float, default=0.5)
         parser.add_argument("--break_on_fail", action="store_true")
-        parser.add_argument("--debug_env", action="store_true")
         parser.add_argument("--destroy_building_prob", type=float, default=0)
         parser.add_argument("--num_initial_buildings", type=int, default=0)
         parser.add_argument("--time_per_line", type=int, default=4)
