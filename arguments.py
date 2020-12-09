@@ -57,6 +57,7 @@ def add_arguments(parser):
         help="log interval, one log per n updates",
         default=int(2e4),
     )
+    parser.add_argument("--name")
     parser.add_argument(
         "--no_cuda", dest="cuda", action="store_false", help="enables CUDA training"
     )
