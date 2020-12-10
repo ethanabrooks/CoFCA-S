@@ -223,7 +223,7 @@ class Env(env.Env):
                     if self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
-                        building_positions=[*building_positions],
+                        building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
                         assignment_location=assignment.location,

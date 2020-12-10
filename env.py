@@ -702,7 +702,7 @@ class Env(gym.Env):
                     if self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
-                        building_positions=[*building_positions],
+                        building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
                         assignment_location=assignment.location,
@@ -728,7 +728,7 @@ class Env(gym.Env):
         self,
         building: Building,
         dependency: Optional[Building],
-        building_positions: List[Coord],
+        building_positions: Dict[Coord, Building],
         insufficient_resources: bool,
         positions: Dict[WorldObject, Coord],
         assignment_location: Coord,
@@ -736,7 +736,7 @@ class Env(gym.Env):
         if (
             insufficient_resources
             or assignment_location in building_positions
-            or dependency not in [*building_positions, None]
+            or dependency not in [*building_positions.values(), None]
         ):
             return False
         if isinstance(building, Assimilator):
