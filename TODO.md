@@ -1,1 +1,4 @@
-- resources
+- use cpu-pinning for benchmarking
+- add equivalent of `docker log -f` to `run.sh`
+- do profiling
+- reward structure

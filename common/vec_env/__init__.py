@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from gym import Space
 
+from aggregator import InfosAggregator
 from common.tile_images import tile_images
 
 
@@ -137,6 +138,13 @@ class VecEnv(ABC):
     def to(self, device):
         pass
 
+    @abstractmethod
+    def set_curriculum(self, curriculum):
+        pass
+
+    def preprocess(self, action):
+        pass
+
 
 class VecEnvWrapper(VecEnv):
     """
@@ -175,7 +183,13 @@ class VecEnvWrapper(VecEnv):
     def get_images(self):
         return self.venv.get_images()
 
-    def to(self):
+    def to(self, device):
+        pass
+
+    def set_curriculum(self, infos):
+        pass
+
+    def process_infos(self, infos: InfosAggregator):
         pass
 
 

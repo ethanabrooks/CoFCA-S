@@ -1,138 +1,144 @@
-from typing import List, Generator, Tuple, Optional
+import typing
+from collections import Counter
+from dataclasses import astuple, dataclass
+from typing import Generator
+from typing import Union, Dict, Tuple, List
 
-from dataclasses import astuple
-from gym import spaces
 import numpy as np
 
-from lines import If, While, Subtask
-from utils import hierarchical_parse_args, RESET
-
 import env
-import keyboard_control
-from env import ObjectMap, Coord, Line, State, Obs
+from data_types import (
+    ActionType,
+    X,
+    Worker,
+    Assignment,
+    CompoundAction,
+    Action,
+    Targets,
+    WORLD_SIZE,
+    Resource,
+    Coord,
+    Building,
+)
+from data_types import (
+    WorldObject,
+    Movement,
+    State,
+    Line,
+    BuildOrder,
+    WorkerAction,
+    Nexus,
+)
 
 
-class Env(env.Env):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.observation_space.spaces.update(
-            inventory=spaces.MultiBinary(1),
-            obs=spaces.Box(low=0, high=1, shape=(1, 1, 1), dtype=np.float32),
-        )
+@dataclass(frozen=True)
+class DebugAction(Action):
+    def next(self) -> ActionType:
+        if self.reset():
+            return DebugAction1
+        return self.next_if_not_reset()
 
-    def state_generator(
-        self, objects: ObjectMap, agent_pos: Coord, lines: List[Line], **kwargs
-    ) -> Generator[State, Tuple[int, int], None]:
 
-        line_iterator = self.line_generator(lines)
-        condition_bit = self.random.choice(2)
-        subtask_iterator = self.subtask_generator(
-            line_iterator, lines, condition_bit=condition_bit
-        )
-        prev, ptr = 0, next(subtask_iterator)
-        term = False
+@dataclass(frozen=True)
+class DebugAction1(DebugAction):
+    target: X
+    worker: X
 
-        while True:
-            state = State(
-                obs=[condition_bit],
-                prev=prev,
-                ptr=ptr,
-                term=term,
-                subtask_complete=True,
-                time_remaining=0,
-                counts=condition_bit,
-                inventory=None,
-            )
-            verb, noun, lower_level_index = yield state
-            verb = self.behaviors[int(verb)]
-            noun = self.items[int(noun)]
-            term = (verb, noun) != lines[ptr].id
-            if not term:
-                condition_bit = self.random.choice(2)
-                prev, ptr = ptr, subtask_iterator.send(
-                    dict(condition_bit=condition_bit)
-                )
+    def to_ints(self) -> Generator[int, None, None]:
+        yield Targets.index(self.target)
+        yield self.worker.value - 1
 
-    def inventory_representation(self, state):
-        return np.array([0])
+    @classmethod
+    def num_values(cls) -> "DebugAction1":
+        return cls(target=len(Targets), worker=len(Worker))
 
-    def evaluate_line(self, line, loops, condition_bit, **kwargs) -> bool:
-        return bool(condition_bit)
+    def reset(self):
+        return isinstance(self.target, Resource)
 
-    def populate_world(self, lines) -> Optional[Tuple[Coord, ObjectMap]]:
-        return (0, 0), {}
+    def next_if_not_reset(self) -> ActionType:
+        return DebugAction2
 
-    def feasible(self, objects, lines) -> bool:
+    @classmethod
+    def parse(cls, a) -> "Action":
+        parsed = super().parse(a)
+        assert isinstance(parsed, DebugAction1)
+        return cls(target=Targets[parsed.target], worker=Worker(parsed.worker + 1))
+
+
+@dataclass(frozen=True)
+class DebugAction2(DebugAction):
+    i: X
+    j: X
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield self.i
+        yield self.j
+
+    @classmethod
+    def num_values(cls) -> "DebugAction2":
+        return cls(i=WORLD_SIZE, j=WORLD_SIZE)
+
+    def reset(self):
         return True
 
-    def render_world(
+    def next_if_not_reset(self) -> ActionType:
+        raise NotImplementedError
+
+    @classmethod
+    def parse(cls, a) -> "Action":
+        parsed = super().parse(a)
+        assert isinstance(parsed, DebugAction2)
+        return cls(i=parsed.i, j=parsed.j)
+
+
+@dataclass(frozen=True)
+class DebugCompoundAction(CompoundAction):
+    action1: DebugAction1 = None
+    ptr: int = 0
+    active: ActionType = DebugAction1
+
+    @classmethod
+    def classes(cls):
+        yield DebugAction1
+
+    def actions(self):
+        yield self.action1
+
+    def worker(self) -> Worker:
+        assert isinstance(self.action1.worker, Worker)
+        return self.action1.worker
+
+    def assignment(self) -> Assignment:
+        if isinstance(self.action1.target, Building):
+            assert isinstance(self.action2, DebugAction2)
+        return self.action1.target.assignment(None)
+
+
+@dataclass
+class Env(env.Env):
+    def building_allowed(
         self,
-        state,
-        action,
-        reward,
-    ):
-        # if action is not None and action < len(self.subtasks):
-        # print("Selected:", self.subtasks[action], action)
-        print("Action:", action)
-        print("Reward", reward)
-
-    def render_instruction(
-        self,
-        term,
-        success,
-        lines,
-        state,
-        agent_ptr,
-    ):
-
-        if term:
-            print(env.GREEN if success else env.RED)
-        indent = 0
-        for i, line in enumerate(lines):
-            if i == state.ptr and i == agent_ptr:
-                pre = "+ "
-            elif i == agent_ptr:
-                pre = "- "
-            elif i == state.ptr:
-                pre = "| "
-            else:
-                pre = "  "
-            indent += line.depth_change[0]
-            if type(line) in (If, While):
-                evaluation = state.counts
-                line_str = f"{line} {evaluation}"
-            else:
-                if isinstance(line, Subtask):
-                    verb, noun = line.id
-                    line_str = f"{verb} ({self.behaviors.index(verb)}) {noun} ({self.items.index(noun)})"
-                else:
-                    line_str = str(line)
-            print("{:2}{}{}{}".format(i, pre, " " * indent, line_str))
-            indent += line.depth_change[1]
-        print("Condition bit:", state.counts)
-        print(RESET)
+        building: Building,
+        dependency: typing.Optional[Building],
+        building_positions: List[Coord],
+        insufficient_resources: bool,
+        positions: Dict[WorldObject, Coord],
+        assignment_location: Coord,
+    ) -> bool:
+        return assignment_location not in building_positions and dependency in [
+            *building_positions,
+            None,
+        ]
 
 
-def main(env: Env):
-    def action_fn(string):
-        try:
-            action = int(string)
-            if action > env.num_subtasks:
-                raise ValueError
-        except ValueError:
-            return None
-
-        return np.array(astuple(Action(upper=action, delta=0, dg=0, ptr=0)))
-
-    keyboard_control.run(env, action_fn=action_fn)
+def main(debug_env: bool, **kwargs):
+    Env(rank=0, eval_steps=500, **kwargs).main()
 
 
 if __name__ == "__main__":
     import argparse
 
     PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--min-eval-lines", type=int, required=True)
-    PARSER.add_argument("--max-eval-lines", type=int, required=True)
-    env.add_arguments(PARSER)
-    PARSER.add_argument("--seed", default=0, type=int)
-    main(Env(rank=0, lower_level=None, **hierarchical_parse_args(PARSER)))
+    Env.add_arguments(PARSER)
+    PARSER.add_argument("--random-seed", default=0, type=int)
+    main(**vars(PARSER.parse_args()))

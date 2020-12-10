@@ -110,6 +110,10 @@ class DummyVecEnv(VecEnv):
         for env in self.envs:
             env.increment_curriculum()
 
+    def set_curriculum(self, curriculum):
+        for env in self.envs:
+            env.set_curriculum(curriculum)
+
     def train(self):
         for env in self.envs:
             try:
