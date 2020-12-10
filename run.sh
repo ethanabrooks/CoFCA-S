@@ -1,0 +1,36 @@
+#! /usr/bin/env bash
+
+runs_per_gpu=4
+ngpu=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+nruns=$(($ngpu * $runs_per_gpu))
+session='session'
+
+while getopts c:n:r:s: flag
+do
+    case "${flag}" in
+      c) config=${OPTARG};;
+      n) name=${OPTARG};;
+      r) nruns=${OPTARG};;
+      s) session=${OPTARG};;
+      *) echo "usage: run.sh -c <config> -n <name> -r <nruns> -s <session>" && exit;;
+    esac
+done
+
+wandb_output=$(wandb sweep --name "$name" "$config" 2> >(tee >(cat 1>&2)))
+dir=$(cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd)
+id=$(echo $wandb_output | tail -n1 | awk 'END {print $NF}')
+
+echo "Creating $nruns sessions..."
+
+for i in $(seq 1 $nruns); do
+  gpu=$(($i % $ngpu));
+  echo "tmux at -t $session$i"
+  tmux new-session -d -s "$session$i" "CUDA_VISIBLE_DEVICES=$gpu wandb agent $id"
+  #echo docker run \
+    #--rm \
+    #--detach \
+    #--gpus $gpu \
+    #--volume $(pwd):/ppo \
+    #--env WANDB_API_KEY=$key \
+    #ethanabrooks/ppo $id
+done
