@@ -116,25 +116,14 @@ class DebugCompoundAction(CompoundAction):
 
 @dataclass
 class Env(env.Env):
-    @staticmethod
-    def coords(positions, building_positions):
-        yield from positions.items()
-        for p, bs in building_positions.items():
-            for b in bs:
-                yield b, p
-
-    def get_buildings(self, building_positions):
-        return [b for bs in building_positions.values() for b in bs]
-
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
     ) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
-        building_positions: Dict[Coord, typing.Set[Building]] = defaultdict(set)
         initial_buildings = dict(
-            ((i, j), {b}) for b, (i, j) in positions if isinstance(b, Building)
+            ((i, j), b) for b, (i, j) in positions if isinstance(b, Building)
         )
-        building_positions.update(copy.deepcopy(initial_buildings))
+        building_positions: Dict[Coord, Building] = copy.deepcopy(initial_buildings)
         positions: Dict[Union[Resource, Worker], Coord] = dict(
             [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
         )
@@ -155,7 +144,6 @@ class Env(env.Env):
         complete: typing.Counter[Building] = Counter()
 
         while True:
-            success_based_on_complete = not required - complete
             buildings = Counter(self.get_buildings(building_positions)) - Counter(
                 self.get_buildings(initial_buildings)
             )
@@ -253,7 +241,7 @@ class Env(env.Env):
                     )
                     # print(fg("red"), building, allowed, RESET)
                     if allowed:
-                        building_positions[worker_position].add(building)
+                        building_positions[assignment.location] = building
                         resources -= building.cost.as_counter()
                         # print(fg("red"), building_positions[worker_position], RESET)
                 else:
@@ -269,14 +257,16 @@ class Env(env.Env):
         self,
         building: Building,
         dependency: Optional[Building],
-        building_positions: Dict[Coord, typing.Set[Building]],
+        building_positions: Dict[Coord, Building],
         insufficient_resources: bool,
         positions: Dict[WorldObject, Coord],
         assignment_location: Coord,
     ) -> bool:
-        built = [b for bs in building_positions.values() for b in bs]
+        built = self.get_buildings(building_positions)
         # print(fg("green"), building, dependency, built, RESET)
-        return dependency in built + [None]
+        return dependency in built + [None] and assignment_location not in [
+            *building_positions
+        ]
 
 
 def main(debug_env: bool, **kwargs):
