@@ -1,10 +1,61 @@
-import json
+from collections import namedtuple
+from pathlib import Path
+
+import yaml
 from collections import namedtuple
 from pathlib import Path
 
 import yaml
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
+
+
+from dataclasses import dataclass
+from typing import Optional, Any
+
+from omegaconf import MISSING
+
+
+@dataclass
+class Eval:
+    eval_interval: Optional[int] = MISSING
+    eval_steps: Optional[int] = MISSING
+
+
+@dataclass
+class NoEval(Eval):
+    eval_interval: Optional[int] = None
+    eval_steps: Optional[int] = None
+
+
+@dataclass
+class YesEval(Eval):
+    eval_interval: Optional[int] = int(1e6)
+    eval_steps: Optional[int] = 500
+
+
+# defaults = [{"eval": "no_eval"}]
+
+
+@dataclass
+class Defaults:
+    cuda_deterministic: bool = True
+    env: str = "CartPole-v0"
+    eval: Any = MISSING
+    group: Optional[str] = None
+    load_path: Optional[str] = None
+    log_interval: int = int(2e4)
+    no_cuda: bool = False
+    no_wandb: bool = False
+    normalize: bool = False
+    num_batch: int = 1
+    num_frames: int = int(1e8)
+    num_processes: int = 100
+    render: bool = False
+    render_eval: bool = False
+    seed: int = 0
+    synchronous: bool = False
+    threshold: Optional[float] = None
 
 
 def load_config(yml_or_path: str):
