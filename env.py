@@ -4,7 +4,6 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from multiprocessing.queues import Queue
-from pathlib import Path
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
@@ -39,7 +38,6 @@ from data_types import (
     IJAction,
     WorkerAction,
     WorkerActions,
-    WORLD_SIZE,
     Buildings,
     Assimilator,
     Nexus,
@@ -366,6 +364,15 @@ class Env(gym.Env):
 
         keyboard_control.run(self, action_fn)
 
+    def get_buildings(self, building_positions):
+        return [*building_positions.values()]
+
+    @staticmethod
+    def coords(positions, building_positions):
+        yield from positions.items()
+        for p, b in building_positions.items():
+            yield b, p
+
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
@@ -378,7 +385,7 @@ class Env(gym.Env):
 
         def render():
             def lines_iterator():
-                buildings = [*state.building_positions.values()]
+                buildings = self.get_buildings(state.building_positions)
                 for l in lines:
                     built = l.building in buildings
                     yield Line(
@@ -405,14 +412,9 @@ class Env(gym.Env):
 
         preprocessed = np.array([*map(self.preprocess_line, padded)])
 
-        def coords():
-            yield from state.positions.items()
-            for p, b in state.building_positions.items():
-                yield b, p
-
         while True:
             world = np.zeros((len(WorldObjects), *self.world_shape))
-            for o, p in coords():
+            for o, p in self.coords(state.positions, state.building_positions):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
@@ -702,7 +704,7 @@ class Env(gym.Env):
                     if self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
-                        building_positions=[*building_positions],
+                        building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
                         assignment_location=assignment.location,
@@ -728,7 +730,7 @@ class Env(gym.Env):
         self,
         building: Building,
         dependency: Optional[Building],
-        building_positions: List[Coord],
+        building_positions: Dict[Coord, Building],
         insufficient_resources: bool,
         positions: Dict[WorldObject, Coord],
         assignment_location: Coord,
@@ -736,7 +738,7 @@ class Env(gym.Env):
         if (
             insufficient_resources
             or assignment_location in building_positions
-            or dependency not in [*building_positions, None]
+            or dependency not in [*building_positions.values(), None]
         ):
             return False
         if isinstance(building, Assimilator):

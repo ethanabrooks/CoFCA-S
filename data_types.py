@@ -329,9 +329,7 @@ class BuildOrder(Assignment):
     location: Tuple[int, int] = None
 
     def action(self, current_position: Coord, *args, **kwargs) -> "WorkerAction":
-        if current_position == self.location:
-            return self.building
-        return Movement.from_(current_position, to=self.location)
+        return self.building
 
 
 Assignment = Union[BuildOrder, Resource]
