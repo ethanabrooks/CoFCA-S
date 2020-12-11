@@ -337,8 +337,9 @@ Assignment = Union[BuildOrder, Resource]
 
 class MovementType(type):
     def __iter__(self):
-        for i in range(-1, 2):
-            for j in range(-1, 2):
+        max_steps = 2  # TODO
+        for i in range(-max_steps, max_steps):
+            for j in range(-max_steps, max_steps):
                 yield Movement(i, j)
 
 
@@ -349,7 +350,7 @@ class Movement(WorkerAction, metaclass=MovementType):
 
     @classmethod
     def from_(cls, origin, to):
-        return cls(*np.clip(np.array(to) - np.array(origin), -1, 1))
+        return cls(*np.array(to) - np.array(origin))
 
 
 WorkerActions = [*Buildings, *Movement]
