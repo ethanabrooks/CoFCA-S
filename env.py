@@ -525,9 +525,13 @@ class Env(gym.Env):
 
     @staticmethod
     def reward_generator():
-        reward = -0.1
+        state: State
+        state = yield
+
         while True:
-            yield reward, lambda: print("Reward:", reward)
+            reward = float(state.success)
+            # noinspection PyTypeChecker
+            state = yield reward, lambda: print("Reward:", reward)
 
     def seed(self, seed=None):
         assert self.random_seed == seed
