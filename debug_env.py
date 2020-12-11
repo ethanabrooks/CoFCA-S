@@ -3,6 +3,7 @@ import typing
 from collections import Counter, defaultdict
 from dataclasses import astuple, dataclass
 from typing import Union, Dict, Generator, Tuple, List, Optional
+from pprint import pprint
 
 import numpy as np
 
@@ -148,7 +149,6 @@ class Env(env.Env):
                 self.get_buildings(initial_buildings)
             )
             success = not required - buildings
-            # assert success == success_based_on_complete
 
             state = State(
                 building_positions=building_positions,
@@ -164,6 +164,7 @@ class Env(env.Env):
             def render():
                 print("Time remaining:", time_remaining)
                 print("Complete:", complete)
+                pprint(assignments)
 
             self.render_thunk = render
 
@@ -189,14 +190,6 @@ class Env(env.Env):
                 and dependency is None
                 or bool(complete[dependency])
             ):
-                # print(
-                #     fg("yellow"),
-                #     assignment.building,
-                #     dependency,
-                #     complete[dependency],
-                #     building_positions,
-                #     RESET,
-                # )
                 complete.update([assignment.building])
             ptr = action.ptr
             time_remaining -= 1
@@ -213,7 +206,6 @@ class Env(env.Env):
                     positions=positions,
                     nexus_positions=[worker_position],
                 )
-                # print(fg("red"), worker_id, assignment, worker_action, RESET)
 
                 if isinstance(worker_action, Movement):
                     new_position = tuple(
@@ -231,6 +223,7 @@ class Env(env.Env):
                     insufficient_resources = bool(
                         building.cost.as_counter() - resources
                     )
+                    assert positions[worker_id] == assignment.location
                     allowed = self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
@@ -239,19 +232,11 @@ class Env(env.Env):
                         positions=positions,
                         assignment_location=assignment.location,
                     )
-                    # print(fg("red"), building, allowed, RESET)
                     if allowed:
                         building_positions[assignment.location] = building
                         resources -= building.cost.as_counter()
-                        # print(fg("red"), building_positions[worker_position], RESET)
                 else:
                     raise RuntimeError
-            # for building in complete:
-            #     assert any(
-            #         type(building) == type(b)
-            #         for bs in building_positions.values()
-            #         for b in bs
-            #     ), f"{fg('red')} {building} {building_positions.values()} {RESET}"
 
     def building_allowed(
         self,

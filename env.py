@@ -558,9 +558,6 @@ class Env(gym.Env):
         state, render_state = next(state_iterator)
 
         def render():
-            for tree in self.build_trees(dependencies):
-                tree.show()
-
             if t:
                 print(fg("green") if i["success"] else fg("red"))
             render_r()
