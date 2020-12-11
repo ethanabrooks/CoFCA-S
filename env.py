@@ -317,25 +317,26 @@ class Env(gym.Env):
                 info.update(
                     {
                         f"success": float(state.success),
-                        f"len-{len(lines)} success": float(state.success),
-                        "len(instruction)": len(lines),
+                        f"success on length-{len(lines)} instructions": float(
+                            state.success
+                        ),
+                        "instruction-length": len(lines),
                         "curriculum+success": float(
                             self.curriculum_setting.level + state.success
                         ),
                     },
                 )
+                if any(l.building.cost.gas > 0 for l in lines):
+                    info.update({"success on gas buildings": state.success})
                 if self.evaluating:
-                    info.update(
-                        train_time_success=float(state.success and state.time_remaining)
-                    )
                     assert info["success"] <= info["train_time_success"]
                     bucket = 10 * (len(lines) // 10)
                     for key in [
                         "success",
-                        "train_time_success",
                         "normalized_elapsed_time",
                     ]:
                         info[f"{key}{bucket}"] = info[key]
+            # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
 
@@ -526,9 +527,13 @@ class Env(gym.Env):
 
     @staticmethod
     def reward_generator():
-        reward = -0.1
+        state: State
+        state = yield
+
         while True:
-            yield reward, lambda: print("Reward:", reward)
+            reward = float(state.success)
+            # noinspection PyTypeChecker
+            state = yield reward, lambda: print("Reward:", reward)
 
     def seed(self, seed=None):
         assert self.random_seed == seed
