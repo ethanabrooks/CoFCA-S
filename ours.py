@@ -44,7 +44,6 @@ class OurConfig(BaseConfig, env.EnvConfig):
     max_curriculum_level: int = 10
     max_lines: int = 10
     min_lines: int = 1
-    next_actions_embed_size: int = 25
     num_edges: int = 1
     no_pointer: bool = False
     no_roll: bool = False

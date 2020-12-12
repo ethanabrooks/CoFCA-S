@@ -282,12 +282,12 @@ class Env(gym.Env):
             render_thunk = self.render_thunk
             self.render_thunk = render
             if not use_failure_buf:
-                i.update(reward_without_failure_buf=r)
+                i.update({"reward (no failure buffer)": r})
             if t:
                 success = i["success"]
 
                 if not use_failure_buf:
-                    i.update(success_without_failure_buf=float(success))
+                    i.update({"success (no failure buffer)": float(success)})
                     self.success_avg += self.alpha * (success - self.success_avg)
 
                 put_failure_buf = not self.evaluating and not success
@@ -297,9 +297,9 @@ class Env(gym.Env):
                     except Full:
                         pass
 
-                i.update(use_failure_buf=use_failure_buf)
+                i.update({"used failure buffer": use_failure_buf})
                 if use_failure_buf or put_failure_buf:
-                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
+                    i.update({"failure buffer size": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -314,33 +314,29 @@ class Env(gym.Env):
         done: bool
         state, done = yield
         info = {}
+        elapsed_time = 0
 
         while True:
             if done:
                 info.update(
                     {
                         f"success": float(state.success),
-                        f"len-{len(lines)} success": float(state.success),
-                        "len(instruction)": len(lines),
-                        "curriculum+success": float(
+                        f"success on length-{len(lines)} instructions": float(
+                            state.success
+                        ),
+                        "instruction length": len(lines),
+                        "curriculum + success": float(
                             self.curriculum_setting.level + state.success
                         ),
+                        "time per line": elapsed_time / len(lines),
                     },
                 )
-                if self.evaluating:
-                    info.update(
-                        train_time_success=float(state.success and state.time_remaining)
-                    )
-                    assert info["success"] <= info["train_time_success"]
-                    bucket = 10 * (len(lines) // 10)
-                    for key in [
-                        "success",
-                        "train_time_success",
-                        "normalized_elapsed_time",
-                    ]:
-                        info[f"{key}{bucket}"] = info[key]
+                if any(l.building.cost.gas > 0 for l in lines):
+                    info.update({"success on gas buildings": state.success})
+            # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
+            elapsed_time += 1
 
     def main(self):
         def action_fn(string: str):
@@ -525,9 +521,13 @@ class Env(gym.Env):
 
     @staticmethod
     def reward_generator():
-        reward = -0.1
+        state: State
+        state = yield
+
         while True:
-            yield reward, lambda: print("Reward:", reward)
+            reward = float(state.success)
+            # noinspection PyTypeChecker
+            state = yield reward, lambda: print("Reward:", reward)
 
     def seed(self, seed=None):
         assert self.random_seed == seed
@@ -703,7 +703,7 @@ class Env(gym.Env):
                     if self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
-                        building_positions=[*building_positions],
+                        building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
                         assignment_location=assignment.location,
@@ -729,7 +729,7 @@ class Env(gym.Env):
         self,
         building: Building,
         dependency: Optional[Building],
-        building_positions: List[Coord],
+        building_positions: Dict[Coord, Building],
         insufficient_resources: bool,
         positions: Dict[WorldObject, Coord],
         assignment_location: Coord,
@@ -737,7 +737,7 @@ class Env(gym.Env):
         if (
             insufficient_resources
             or assignment_location in building_positions
-            or dependency not in [*building_positions, None]
+            or dependency not in [*building_positions.values(), None]
         ):
             return False
         if isinstance(building, Assimilator):

@@ -135,5 +135,8 @@ def my_app(cfg: Config) -> None:
 
 
 if __name__ == "__main__":
-    my_app()
-#
+    multiprocessing.set_start_method("fork")
+    q = Queue()
+    p = multiprocessing.Process(target=foo, args=(q,))
+    p.start()
+    p.join()
