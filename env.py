@@ -313,6 +313,7 @@ class Env(gym.Env):
         done: bool
         state, done = yield
         info = {}
+        elapsed_time = 0
 
         while True:
             if done:
@@ -326,21 +327,15 @@ class Env(gym.Env):
                         "curriculum + success": float(
                             self.curriculum_setting.level + state.success
                         ),
+                        "time per line": elapsed_time / len(lines),
                     },
                 )
                 if any(l.building.cost.gas > 0 for l in lines):
                     info.update({"success on gas buildings": state.success})
-                if self.evaluating:
-                    assert info["success"] <= info["train_time_success"]
-                    bucket = 10 * (len(lines) // 10)
-                    for key in [
-                        "success",
-                        "normalized_elapsed_time",
-                    ]:
-                        info[f"{key}{bucket}"] = info[key]
             # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
+            elapsed_time += 1
 
     def main(self):
         def action_fn(string: str):
