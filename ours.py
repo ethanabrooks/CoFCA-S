@@ -1,23 +1,58 @@
 import multiprocessing
 import pickle
 import sys
-from pathlib import Path
+from dataclasses import dataclass
 from multiprocessing import Queue
+from pathlib import Path
 from typing import Optional, DefaultDict, Dict, Union
 
+import hydra
 import numpy as np
+from hydra.core.config_store import ConfigStore
+from omegaconf import OmegaConf, DictConfig
 
+import data_types
 import debug_env as _debug_env
 import env
+import osx_queue
 import our_agent
 import trainer
 from aggregator import InfosAggregator
-import osx_queue
+from arguments import BaseConfig
 from common.vec_env import VecEnv, VecEnvWrapper
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
-import data_types
+
+
+@dataclass
+class OurConfig(BaseConfig, env.EnvConfig):
+    curriculum_level: int = 0
+    curriculum_setting_load_path: Optional[str] = None
+    curriculum_threshold: float = 0.9
+    debug_env: bool = False
+    failure_buffer_load_path: Optional[str] = None
+    failure_buffer_size: int = 10000
+    max_eval_lines: int = 50
+    min_eval_lines: int = 1
+    conv_hidden_size: int = 100
+    debug: bool = False
+    gate_coef: float = 0.01
+    resources_hidden_size: int = 128
+    kernel_size: int = 2
+    lower_embed_size: int = 75
+    max_curriculum_level: int = 10
+    max_lines: int = 10
+    min_lines: int = 1
+    next_actions_embed_size: int = 25
+    num_edges: int = 1
+    no_pointer: bool = False
+    no_roll: bool = False
+    no_scan: bool = False
+    olsk: bool = False
+    stride: int = 1
+    task_embed_size: int = 128
+    transformer: bool = False
 
 
 class CurriculumWrapper(VecEnvWrapper):
@@ -81,43 +116,6 @@ class CurriculumWrapper(VecEnvWrapper):
 
 class Trainer(trainer.Trainer):
     @classmethod
-    def add_arguments(cls, parser):
-        parser = super().add_arguments(parser)
-        parser.main.add_argument("--curriculum_level", type=int, default=0)
-        parser.main.add_argument("--curriculum_threshold", type=float, default=0.9)
-        parser.main.add_argument("--curriculum_setting_load_path", type=Path)
-        parser.main.add_argument("--debug_env", action="store_true")
-        parser.main.add_argument(
-            "--debug_env_opt", type=bool, default=False, help="necessary for configs"
-        )
-        parser.main.add_argument("--eval", dest="no_eval", action="store_false")
-        parser.main.add_argument("--failure_buffer_load_path", type=Path)
-        parser.main.add_argument("--failure_buffer_size", type=int, default=10000)
-        parser.main.add_argument("--max_eval_lines", type=int, default=50)
-        parser.main.add_argument("--max_curriculum_level", type=int, default=20)
-        parser.main.add_argument("--min_eval_lines", type=int, default=1)
-        env_parser = parser.main.add_argument_group("env_args")
-        env.Env.add_arguments(env_parser)
-        parser.agent.add_argument("--conv_hidden_size", type=int, default=100)
-        parser.agent.add_argument("--debug", action="store_true")
-        parser.agent.add_argument("--gate_coef", type=float, default=0.01)
-        parser.agent.add_argument("--resources_hidden_size", type=int, default=128)
-        parser.agent.add_argument("--kernel_size", type=int, default=2)
-        parser.agent.add_argument("--lower_embed_size", type=int, default=75)
-        parser.agent.add_argument("--max_lines", type=int, default=10)
-        parser.agent.add_argument("--min_lines", type=int, default=1)
-        parser.agent.add_argument("--next_actions_embed_size", type=int, default=25)
-        parser.agent.add_argument("--num_edges", type=int, default=1)
-        parser.agent.add_argument("--no_pointer", action="store_true")
-        parser.agent.add_argument("--no_roll", action="store_true")
-        parser.agent.add_argument("--no_scan", action="store_true")
-        parser.agent.add_argument("--olsk", action="store_true")
-        parser.agent.add_argument("--stride", type=int, default=1)
-        parser.agent.add_argument("--task_embed_size", type=int, default=128)
-        parser.agent.add_argument("--transformer", action="store_true")
-        return parser
-
-    @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
         mapping["env_args"] += [
@@ -130,8 +128,6 @@ class Trainer(trainer.Trainer):
 
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
-        del agent_args["recurrent"]
-        del agent_args["num_layers"]
         return our_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
@@ -159,7 +155,13 @@ class Trainer(trainer.Trainer):
     def main(cls):
         if sys.platform == "darwin":
             multiprocessing.set_start_method("fork")
-        super().main()
+
+        @hydra.main(config_name="config")
+        def app(cfg: DictConfig) -> None:
+            print(OmegaConf.to_yaml(cfg))
+            return cls.run(**cls.structure_config(**cfg))
+
+        app()
 
     @staticmethod
     def make_env(
@@ -256,12 +258,9 @@ class Trainer(trainer.Trainer):
             pickle.dump(curriculum_setting, f)
         return venv
 
-    @classmethod
-    def structure_config(
-        cls, debug_env_opt, debug_env, **config
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        return super().structure_config(debug_env=debug_env or debug_env_opt, **config)
-
 
 if __name__ == "__main__":
+    cs = ConfigStore.instance()
+    cs.store(name="config", node=OurConfig)
+
     Trainer.main()
