@@ -223,6 +223,7 @@ class Env(env.Env):
                     insufficient_resources = bool(
                         building.cost.as_counter() - resources
                     )
+                    assert positions[worker_id] == assignment.location
                     allowed = self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
