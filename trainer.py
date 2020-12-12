@@ -216,168 +216,165 @@ class Trainer:
         print("Using device", device)
 
         train_envs = cls.make_vec_envs(evaluating=False, **env_args)
-        try:
-            train_envs.to(device)
-            agent = cls.build_agent(envs=train_envs, **agent_args)
-            rollouts = RolloutStorage(
-                num_steps=train_steps,
-                obs_space=train_envs.observation_space,
-                action_space=train_envs.action_space,
-                recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
-                **rollouts_args,
-            )
+        print("Created train_envs")
+        train_envs.to(device)
+        agent = cls.build_agent(envs=train_envs, **agent_args)
+        rollouts = RolloutStorage(
+            num_steps=train_steps,
+            obs_space=train_envs.observation_space,
+            action_space=train_envs.action_space,
+            recurrent_hidden_state_size=agent.recurrent_hidden_state_size,
+            **rollouts_args,
+        )
 
-            # copy to device
-            if cuda:
-                agent.to(device)
-                rollouts.to(device)
+        # copy to device
+        if cuda:
+            agent.to(device)
+            rollouts.to(device)
 
-            ppo = PPO(agent=agent, **ppo_args)
-            train_report = EpisodeAggregator()
-            train_infos = cls.build_infos_aggregator()
-            train_results = {}
-            if load_path:
-                cls.load_checkpoint(load_path, ppo, agent, device)
+        ppo = PPO(agent=agent, **ppo_args)
+        train_report = EpisodeAggregator()
+        train_infos = cls.build_infos_aggregator()
+        train_results = {}
+        if load_path:
+            cls.load_checkpoint(load_path, ppo, agent, device)
 
-            print("resetting environment...")
-            rollouts.obs[0].copy_(train_envs.reset())
-            print("Reset environment")
-            frames_per_update = train_steps * num_processes
-            frames = Counter()
-            time_spent = TotalTimeKeeper()
-            time_per = AverageTimeKeeper()
-            time_per["iter"].tick()
+        print("resetting environment...")
+        rollouts.obs[0].copy_(train_envs.reset())
+        print("Reset environment")
+        frames_per_update = train_steps * num_processes
+        frames = Counter()
+        time_spent = TotalTimeKeeper()
+        time_per = AverageTimeKeeper()
+        time_per["iter"].tick()
 
-            for i in itertools.count():
-                frames.update(so_far=frames_per_update)
-                done = frames["so_far"] >= num_frames
-                if not no_eval and (
-                    i == 0
-                    or done
-                    or (eval_interval and frames["since_eval"] > eval_interval)
-                ):
-                    print("Evaluating...")
-                    eval_report = EvalWrapper(EpisodeAggregator())
-                    eval_infos = EvalWrapper(InfosAggregator())
-                    frames["since_eval"] = 0
-                    # vec_norm = get_vec_normalize(eval_envs)
-                    # if vec_norm is not None:
-                    #     vec_norm.eval()
-                    #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
+        for i in itertools.count():
+            frames.update(so_far=frames_per_update)
+            done = frames["so_far"] >= num_frames
+            if not no_eval and (
+                i == 0
+                or done
+                or (eval_interval and frames["since_eval"] > eval_interval)
+            ):
+                print("Evaluating...")
+                eval_report = EvalWrapper(EpisodeAggregator())
+                eval_infos = EvalWrapper(InfosAggregator())
+                frames["since_eval"] = 0
+                # vec_norm = get_vec_normalize(eval_envs)
+                # if vec_norm is not None:
+                #     vec_norm.eval()
+                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
-                    # self.envs.evaluate()
-                    eval_masks = torch.zeros(num_processes, 1, device=device)
-                    eval_envs = cls.make_vec_envs(evaluating=True, **env_args)
-                    eval_envs.to(device)
-                    with agent.recurrent_module.evaluating(eval_envs.observation_space):
-                        eval_recurrent_hidden_states = torch.zeros(
-                            num_processes,
-                            agent.recurrent_hidden_state_size,
-                            device=device,
+                # self.envs.evaluate()
+                eval_masks = torch.zeros(num_processes, 1, device=device)
+                eval_envs = cls.make_vec_envs(evaluating=True, **env_args)
+                eval_envs.to(device)
+                with agent.recurrent_module.evaluating(eval_envs.observation_space):
+                    eval_recurrent_hidden_states = torch.zeros(
+                        num_processes,
+                        agent.recurrent_hidden_state_size,
+                        device=device,
+                    )
+
+                    for output in run_epoch(
+                        obs=eval_envs.reset(),
+                        rnn_hxs=eval_recurrent_hidden_states,
+                        masks=eval_masks,
+                        envs=eval_envs,
+                        num_steps=eval_steps,
+                    ):
+                        eval_report.update(
+                            reward=output.reward.cpu().numpy(),
+                            dones=output.done,
                         )
-
-                        for output in run_epoch(
-                            obs=eval_envs.reset(),
-                            rnn_hxs=eval_recurrent_hidden_states,
-                            masks=eval_masks,
-                            envs=eval_envs,
-                            num_steps=eval_steps,
-                        ):
-                            eval_report.update(
-                                reward=output.reward.cpu().numpy(),
-                                dones=output.done,
-                            )
-                            eval_infos.update(*output.infos, dones=output.done)
-                        cls.report(
-                            **dict(eval_report.items()),
-                            **dict(eval_infos.items()),
-                            frames=frames["so_far"],
-                            log_dir=log_dir,
-                        )
-                        print("Done evaluating...")
-                    eval_envs.close()
-                    rollouts.obs[0].copy_(train_envs.reset())
-                    rollouts.masks[0] = 1
-                    rollouts.recurrent_hidden_states[0] = 0
-                if done or i == 0 or frames["since_log"] > log_interval:
-                    time_spent["logging"].tick()
-                    frames["since_log"] = 0
-                    report = dict(
-                        **train_results,
-                        **dict(train_report.items()),
-                        **dict(train_infos.items()),
-                        **dict(time_per.items()),
-                        **dict(time_spent.items()),
+                        eval_infos.update(*output.infos, dones=output.done)
+                    cls.report(
+                        **dict(eval_report.items()),
+                        **dict(eval_infos.items()),
                         frames=frames["so_far"],
                         log_dir=log_dir,
                     )
-                    cls.report(**report)
-                    train_report.reset()
-                    train_infos.reset()
-                    time_spent["logging"].update()
-                    time_per["iter"].update()
+                    print("Done evaluating...")
+                eval_envs.close()
+                rollouts.obs[0].copy_(train_envs.reset())
+                rollouts.masks[0] = 1
+                rollouts.recurrent_hidden_states[0] = 0
+            if done or i == 0 or frames["since_log"] > log_interval:
+                time_spent["logging"].tick()
+                frames["since_log"] = 0
+                report = dict(
+                    **train_results,
+                    **dict(train_report.items()),
+                    **dict(train_infos.items()),
+                    **dict(time_per.items()),
+                    **dict(time_spent.items()),
+                    frames=frames["so_far"],
+                    log_dir=log_dir,
+                )
+                cls.report(**report)
+                train_report.reset()
+                train_infos.reset()
+                time_spent["logging"].update()
+                time_per["iter"].update()
 
-                if done or (save_interval and frames["since_save"] > save_interval):
-                    time_spent["saving"].tick()
-                    frames["since_save"] = 0
-                    cls.save_checkpoint(
-                        save_path,
-                        ppo=ppo,
-                        agent=agent,
-                        step=i,
-                    )
-                    time_spent["saving"].update()
+            if done or (save_interval and frames["since_save"] > save_interval):
+                time_spent["saving"].tick()
+                frames["since_save"] = 0
+                cls.save_checkpoint(
+                    save_path,
+                    ppo=ppo,
+                    agent=agent,
+                    step=i,
+                )
+                time_spent["saving"].update()
 
-                if done:
-                    break
+            if done:
+                break
 
-                time_per["frame"].tick()
-                time_per["update"].tick()
-                for output in run_epoch(
-                    obs=rollouts.obs[0],
-                    rnn_hxs=rollouts.recurrent_hidden_states[0],
-                    masks=rollouts.masks[0],
-                    envs=train_envs,
-                    num_steps=train_steps,
-                ):
-                    train_report.update(
-                        reward=output.reward.cpu().numpy(),
-                        dones=output.done,
-                    )
-                    train_infos.update(*output.infos, dones=output.done)
-                    rollouts.insert(
-                        obs=output.obs,
-                        recurrent_hidden_states=output.act.rnn_hxs,
-                        actions=output.act.action,
-                        action_log_probs=output.act.action_log_probs,
-                        values=output.act.value,
-                        rewards=output.reward,
-                        masks=output.masks,
-                    )
-                    frames.update(
-                        since_save=num_processes,
-                        since_log=num_processes,
-                        since_eval=num_processes,
-                    )
-                    time_per["frame"].update()
+            time_per["frame"].tick()
+            time_per["update"].tick()
+            for output in run_epoch(
+                obs=rollouts.obs[0],
+                rnn_hxs=rollouts.recurrent_hidden_states[0],
+                masks=rollouts.masks[0],
+                envs=train_envs,
+                num_steps=train_steps,
+            ):
+                train_report.update(
+                    reward=output.reward.cpu().numpy(),
+                    dones=output.done,
+                )
+                train_infos.update(*output.infos, dones=output.done)
+                rollouts.insert(
+                    obs=output.obs,
+                    recurrent_hidden_states=output.act.rnn_hxs,
+                    actions=output.act.action,
+                    action_log_probs=output.act.action_log_probs,
+                    values=output.act.value,
+                    rewards=output.reward,
+                    masks=output.masks,
+                )
+                frames.update(
+                    since_save=num_processes,
+                    since_log=num_processes,
+                    since_eval=num_processes,
+                )
+                time_per["frame"].update()
 
-                # noinspection PyArgumentList
-                train_envs.process_infos(train_infos)
+            # noinspection PyArgumentList
+            train_envs.process_infos(train_infos)
 
-                with torch.no_grad():
-                    next_value = agent.get_value(
-                        rollouts.obs[-1],
-                        rollouts.recurrent_hidden_states[-1],
-                        rollouts.masks[-1],
-                    )
+            with torch.no_grad():
+                next_value = agent.get_value(
+                    rollouts.obs[-1],
+                    rollouts.recurrent_hidden_states[-1],
+                    rollouts.masks[-1],
+                )
 
-                rollouts.compute_returns(next_value.detach())
-                train_results = ppo.update(rollouts)
-                rollouts.after_update()
-                time_per["update"].update()
-
-        finally:
-            train_envs.close()
+            rollouts.compute_returns(next_value.detach())
+            train_results = ppo.update(rollouts)
+            rollouts.after_update()
+            time_per["update"].update()
 
     @staticmethod
     def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):

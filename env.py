@@ -279,12 +279,12 @@ class Env(gym.Env):
             render_thunk = self.render_thunk
             self.render_thunk = render
             if not use_failure_buf:
-                i.update(reward_without_failure_buf=r)
+                i.update({"reward (no failure buffer)": r})
             if t:
                 success = i["success"]
 
                 if not use_failure_buf:
-                    i.update(success_without_failure_buf=float(success))
+                    i.update({"success (no failure buffer)": float(success)})
                     self.success_avg += self.alpha * (success - self.success_avg)
 
                 put_failure_buf = not self.evaluating and not success
@@ -294,9 +294,9 @@ class Env(gym.Env):
                     except Full:
                         pass
 
-                i.update(use_failure_buf=use_failure_buf)
+                i.update({"used failure buffer": use_failure_buf})
                 if use_failure_buf or put_failure_buf:
-                    i.update({"len(failure_buffer)": self.failure_buffer.qsize()})
+                    i.update({"failure buffer size": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -311,6 +311,7 @@ class Env(gym.Env):
         done: bool
         state, done = yield
         info = {}
+        elapsed_time = 0
 
         while True:
             if done:
@@ -320,25 +321,19 @@ class Env(gym.Env):
                         f"success on length-{len(lines)} instructions": float(
                             state.success
                         ),
-                        "instruction-length": len(lines),
-                        "curriculum+success": float(
+                        "instruction length": len(lines),
+                        "curriculum + success": float(
                             self.curriculum_setting.level + state.success
                         ),
+                        "time per line": elapsed_time / len(lines),
                     },
                 )
                 if any(l.building.cost.gas > 0 for l in lines):
                     info.update({"success on gas buildings": state.success})
-                if self.evaluating:
-                    assert info["success"] <= info["train_time_success"]
-                    bucket = 10 * (len(lines) // 10)
-                    for key in [
-                        "success",
-                        "normalized_elapsed_time",
-                    ]:
-                        info[f"{key}{bucket}"] = info[key]
             # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
+            elapsed_time += 1
 
     def main(self):
         def action_fn(string: str):
