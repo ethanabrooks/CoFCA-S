@@ -106,7 +106,6 @@ class Trainer(trainer.Trainer):
         parser.agent.add_argument("--lower_embed_size", type=int, default=75)
         parser.agent.add_argument("--max_lines", type=int, default=10)
         parser.agent.add_argument("--min_lines", type=int, default=1)
-        parser.agent.add_argument("--next_actions_embed_size", type=int, default=25)
         parser.agent.add_argument("--num_edges", type=int, default=1)
         parser.agent.add_argument("--no_pointer", action="store_true")
         parser.agent.add_argument("--no_roll", action="store_true")

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from gym import spaces
 
-from agents import AgentOutputs
+from agents import AgentOutputs, NNBase
 from data_types import RecurrentState, RawAction
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
@@ -47,7 +47,7 @@ def gate(g, new, old):
 
 
 @dataclass
-class Agent(nn.Module):
+class Agent(NNBase):
     entropy_coef: float
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
@@ -57,7 +57,6 @@ class Agent(nn.Module):
     kernel_size: int
     lower_embed_size: int
     max_eval_lines: int
-    next_actions_embed_size: int
     no_pointer: bool
     no_roll: bool
     no_scan: bool
@@ -74,7 +73,7 @@ class Agent(nn.Module):
         return self.hash()
 
     def __post_init__(self):
-        super().__init__()
+        nn.Module.__init__(self)
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_size = self.action_space.nvec.size
 
@@ -87,15 +86,19 @@ class Agent(nn.Module):
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
+        self.gru = nn.GRU(self.lower_embed_size, self.lower_embed_size)
+        for name, param in self.gru.named_parameters():
+            print("zeroed out", name)
+            if "bias" in name:
+                nn.init.constant_(param, 0)
+            elif "weight" in name:
+                nn.init.orthogonal_(param)
+
+        self.task_encoder = self.build_task_encoder()
         self.embed_lower = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
         )
-        self.embed_next_action = nn.Embedding(
-            self.obs_spaces.next_actions.nvec[0],
-            embedding_dim=self.next_actions_embed_size,
-        )
-        self.task_encoder = self.build_task_encoder()
 
         self.actor = self.init_(nn.Linear(self.hidden_size, action_nvec.a))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
@@ -170,8 +173,7 @@ class Agent(nn.Module):
             m_size
             + self.conv_hidden_size
             + self.resources_hidden_size
-            + self.lower_embed_size
-            + self.next_actions_embed_size * len(self.obs_spaces.next_actions.nvec)
+            + 2 * self.lower_embed_size
         )
 
     def build_task_encoder(self):
@@ -271,11 +273,11 @@ class Agent(nn.Module):
 
         h1 = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
-        next_actions = self.embed_next_action(state.next_actions.long()).view(N, -1)
         embedded_lower = self.embed_lower(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        zeta_input = torch.cat([m, h1, resources, embedded_lower, next_actions], dim=-1)
+        embed_a, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
+        zeta_input = torch.cat([m, h1, resources, embedded_lower, embed_a], dim=-1)
         z = F.relu(self.zeta(zeta_input))
 
         value = self.critic(z)
@@ -288,15 +290,16 @@ class Agent(nn.Module):
         if action.a is None:
             a = dists.a.sample()
             action = replace(action, a=a)
-            # while True:
-            #     try:
-            #         action = replace(
-            #             action,
-            #             a=float(input("a:")) * torch.ones_like(R),
-            #         )
-            #         break
-            #     except ValueError:
-            #         pass
+
+        # while True:
+        #     try:
+        #         action = replace(
+        #             action,
+        #             a=float(input("a:")) * torch.ones_like(R),
+        #         )
+        #         break
+        #     except ValueError:
+        #         pass
 
         can_open_gate = state.can_open_gate[R, action.a.long()]
         dg, dg_dist = self.get_dg(
@@ -398,7 +401,7 @@ class Agent(nn.Module):
 
     @property
     def is_recurrent(self):
-        return False
+        return True
 
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = astuple(self.state_sizes)
@@ -416,7 +419,7 @@ class Agent(nn.Module):
 
     @property
     def recurrent_hidden_state_size(self):
-        return 1
+        return self.lower_embed_size
 
     def to(self, *args, **kwargs):
         self.last = self.last.to(*args, **kwargs)

@@ -2,8 +2,8 @@ from collections import namedtuple
 from contextlib import contextmanager
 
 import torch
-import torch.nn as nn
 from gym.spaces import Box, Discrete
+from torch import nn as nn
 
 from distributions import Categorical, DiagGaussian
 from layers import Flatten
@@ -111,10 +111,8 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(
-                recurrent_input_size, hidden_size
-            )
-            for name, param in self.recurrent_module.named_parameters():
+            self.gru = nn.GRU(recurrent_input_size, hidden_size)
+            for name, param in self.gru.named_parameters():
                 print("zeroed out", name)
                 if "bias" in name:
                     nn.init.constant_(param, 0)
@@ -124,9 +122,6 @@ class NNBase(nn.Module):
     @contextmanager
     def evaluating(self, *args, **kwargs):
         yield
-
-    def build_recurrent_module(self, input_size, hidden_size):
-        return nn.GRU(input_size, hidden_size)
 
     @property
     def is_recurrent(self):
@@ -144,7 +139,7 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks):
         if x.size(0) == hxs.size(0):
-            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -180,7 +175,7 @@ class NNBase(nn.Module):
                 start_idx = has_zeros[i]
                 end_idx = has_zeros[i + 1]
 
-                rnn_scores, hxs = self.recurrent_module(
+                rnn_scores, hxs = self.gru(
                     x[start_idx:end_idx], hxs * masks[start_idx].view(1, -1, 1)
                 )
 
