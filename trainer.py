@@ -1,18 +1,19 @@
 import inspect
 import itertools
 import os
-from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
 from typing import Dict, DefaultDict, Union, Optional
 
 import gym
+import hydra
 import torch
 import torch.nn as nn
-import wandb
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig
 
-import arguments
+import wandb
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
     EpisodeAggregator,
@@ -24,6 +25,7 @@ from aggregator import (
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
+from config import Config, NoEval
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -33,10 +35,6 @@ CHECKPOINT_NAME = "checkpoint.pt"
 
 
 class Trainer:
-    @classmethod
-    def add_arguments(cls, parser):
-        return arguments.add_arguments(parser)
-
     @classmethod
     def args_to_methods(cls):
         return dict(
@@ -81,6 +79,7 @@ class Trainer:
         num_processes: int,
         render: bool,
         synchronous: bool,
+        log_dir=None,
         non_pickle_args: dict = None,
         **kwargs,
     ) -> VecPyTorch:
@@ -110,25 +109,15 @@ class Trainer:
 
     @classmethod
     def main(cls):
-        parser = ArgumentParser()
-        cls.add_arguments(parser)
+        @hydra.main(config_name="config")
+        def app(cfg: DictConfig) -> None:
+            return cls.run(**cls.structure_config(**cfg))
 
-        def run(config, name, no_wandb, group, **kwargs):
-            if no_wandb:
-                kwargs.update(config, log_dir=Path("/tmp"))
-            else:
-                if group is None:
-                    wandb.init(name=name)
-                else:
-                    wandb.init(group=group, name=name)
-                kwargs.update(wandb.config.as_dict(), log_dir=Path(wandb.run.dir))
-            return cls.run(**cls.structure_config(**kwargs))
-
-        run(**vars(parser.parse_args()))
+        app()
 
     @staticmethod
-    def make_env(env_id, seed, rank, evaluating, **kwargs):
-        env = gym.make(env_id, **kwargs)
+    def make_env(env, seed, rank, evaluating, **kwargs):
+        env = gym.make(env, **kwargs)
         env.seed(seed + rank)
         return env
 
@@ -150,10 +139,12 @@ class Trainer:
         env_args: dict,
         eval_interval: Optional[int],
         eval_steps: Optional[int],
+        group: str,
         load_path: Path,
-        log_dir: Path,
         log_interval: int,
-        no_eval: bool,
+        name: str,
+        perform_eval: bool,
+        use_wandb: bool,
         normalize: float,
         num_frames: int,
         num_processes: int,
@@ -163,10 +154,14 @@ class Trainer:
         rollouts_args: dict,
         seed: int,
         save_interval: int,
-        synchronous: bool,
-        threshold: Optional[float],
         train_steps: int,
     ):
+
+        if use_wandb:
+            wandb.init(group=group, name=name)
+            log_dir = Path(wandb.run.dir)
+        else:
+            log_dir = Path("/tmp")
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -215,7 +210,7 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = cls.make_vec_envs(evaluating=False, **env_args)
+        train_envs = cls.make_vec_envs(evaluating=False, log_dir=log_dir, **env_args)
         print("Created train_envs")
         train_envs.to(device)
         agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -251,7 +246,7 @@ class Trainer:
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
             done = frames["so_far"] >= num_frames
-            if not no_eval and (
+            if perform_eval and (
                 i == 0
                 or done
                 or (eval_interval and frames["since_eval"] > eval_interval)
@@ -267,9 +262,11 @@ class Trainer:
 
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = cls.make_vec_envs(evaluating=True, **env_args)
+                eval_envs = cls.make_vec_envs(
+                    evaluating=True, log_dir=log_dir, **env_args
+                )
                 eval_envs.to(device)
-                with agent.recurrent_module.evaluating(eval_envs.observation_space):
+                with agent.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes,
                         agent.recurrent_hidden_state_size,
@@ -391,6 +388,8 @@ class Trainer:
     def structure_config(
         cls, **config
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        config.update(config.pop("eval"))
+
         if config["render"]:
             config["num_processes"] = 1
 
@@ -401,7 +400,7 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in config.items():
-            if k in ("_wandb", "wandb_version", "group"):
+            if k in ("_wandb", "wandb_version"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
