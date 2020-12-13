@@ -136,18 +136,10 @@ class Trainer(trainer.Trainer):
 
     @classmethod
     def initial_curriculum(cls, min_lines, max_lines, debug_env):
-        if debug_env:
-            print("Using debug_env.")
-            return CurriculumSetting(
-                max_build_tree_depth=1000,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, max_lines),
-                level=0,
-            )
         return CurriculumSetting(
-            max_build_tree_depth=1,
+            max_build_tree_depth=1000,
             max_lines=max_lines,
-            n_lines_space=Discrete(min_lines, min_lines),
+            n_lines_space=Discrete(min_lines, max_lines),
             level=0,
         )
 
@@ -236,7 +228,7 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
-            max_curriculum_level=0 if debug_env else max_curriculum_level,
+            max_curriculum_level=0,
         )
         for _ in range(curriculum_level - curriculum_setting.level):
             curriculum_setting = next(venv.curriculum_iterator)
