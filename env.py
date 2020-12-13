@@ -48,6 +48,17 @@ from utils import RESET
 Dependencies = Dict[Building, Building]
 
 
+@dataclass
+class EnvConfig:
+    assimilator_prob: float = 0.5
+    break_on_fail: bool = False
+    destroy_building_prob: float = 0
+    num_initial_buildings: int = 0
+    time_per_line: int = 4
+    tgt_success_rate: float = 0.75
+    world_size: int = 3
+
+
 # noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
@@ -135,16 +146,6 @@ class Env(gym.Env):
                 )
             )
         )
-
-    @classmethod
-    def add_arguments(cls, parser):
-        parser.add_argument("--assimilator_prob", type=float, default=0.5)
-        parser.add_argument("--break_on_fail", action="store_true")
-        parser.add_argument("--destroy_building_prob", type=float, default=0)
-        parser.add_argument("--num_initial_buildings", type=int, default=0)
-        parser.add_argument("--time_per_line", type=int, default=4)
-        parser.add_argument("--tgt_success_rate", type=float, default=0.75)
-        parser.add_argument("--world_size", type=int, default=3)
 
     def build_dependencies(
         self, max_depth: int

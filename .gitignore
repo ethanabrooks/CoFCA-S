@@ -118,5 +118,5 @@ run.zsh
 condaenv.o6eafk7y.requirements.txt
 wandb/
 .vscode
-configs/*
+outputs
 sweep.yaml
