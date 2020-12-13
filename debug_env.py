@@ -247,6 +247,8 @@ class Env(env.Env):
         positions: Dict[WorldObject, Coord],
         assignment_location: Coord,
     ) -> bool:
+        if insufficient_resources:
+            return False
         built = self.get_buildings(building_positions)
         # print(fg("green"), building, dependency, built, RESET)
         return dependency in built + [None] and assignment_location not in [
