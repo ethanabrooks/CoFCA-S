@@ -1,13 +1,21 @@
 from collections import namedtuple
 
 from hydra.core.config_store import ConfigStore
-from omegaconf import MISSING
+from omegaconf import MISSING, DictConfig
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
 from dataclasses import dataclass, field
 from typing import Optional, Any, List
+
+
+def flatten(cfg: DictConfig):
+    for k, v in cfg.items():
+        if isinstance(v, DictConfig):
+            yield from flatten(v)
+        else:
+            yield k, v
 
 
 @dataclass
@@ -31,6 +39,7 @@ class YesEval(Eval):
 @dataclass
 class BaseConfig:
     clip_param: float = 0.2
+    config: Optional[str] = None
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
     eval: Any = MISSING

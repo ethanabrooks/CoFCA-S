@@ -10,6 +10,7 @@ import gym
 import hydra
 import torch
 import torch.nn as nn
+import yaml
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
@@ -25,7 +26,7 @@ from aggregator import (
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from config import Config, NoEval
+from config import Config, NoEval, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -111,7 +112,7 @@ class Trainer:
     def main(cls):
         @hydra.main(config_name="config")
         def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(**cfg))
+            return cls.run(**cls.structure_config(cfg))
 
         app()
 
@@ -386,12 +387,15 @@ class Trainer:
 
     @classmethod
     def structure_config(
-        cls, **config
+        cls, cfg: DictConfig
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        config.update(config.pop("eval"))
+        cfg = DictConfig(dict(flatten(cfg)))
+        if cfg.config is not None:
+            with open(cfg.config) as f:
+                cfg.update(yaml.load(f))
 
-        if config["render"]:
-            config["num_processes"] = 1
+        if cfg.render:
+            cfg.num_processes = 1
 
         def parameters(*ms):
             for method in ms:
@@ -399,8 +403,8 @@ class Trainer:
 
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
-        for k, v in config.items():
-            if k in ("_wandb", "wandb_version"):
+        for k, v in cfg.items():
+            if k in ("_wandb", "wandb_version", "config"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():

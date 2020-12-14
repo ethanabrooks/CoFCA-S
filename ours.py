@@ -149,7 +149,7 @@ class Trainer(trainer.Trainer):
 
         @hydra.main(config_name="config")
         def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(**cfg))
+            return cls.run(**cls.structure_config(cfg))
 
         app()
 
