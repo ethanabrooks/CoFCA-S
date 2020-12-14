@@ -4,7 +4,6 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from multiprocessing.queues import Queue
-from pathlib import Path
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
@@ -39,7 +38,6 @@ from data_types import (
     IJAction,
     WorkerAction,
     WorkerActions,
-    WORLD_SIZE,
     Buildings,
     Assimilator,
     Nexus,
@@ -363,6 +361,15 @@ class Env(gym.Env):
 
         keyboard_control.run(self, action_fn)
 
+    def get_buildings(self, building_positions):
+        return [*building_positions.values()]
+
+    @staticmethod
+    def coords(positions, building_positions):
+        yield from positions.items()
+        for p, b in building_positions.items():
+            yield b, p
+
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
@@ -375,7 +382,7 @@ class Env(gym.Env):
 
         def render():
             def lines_iterator():
-                buildings = [*state.building_positions.values()]
+                buildings = self.get_buildings(state.building_positions)
                 for l in lines:
                     built = l.building in buildings
                     yield Line(
@@ -402,14 +409,9 @@ class Env(gym.Env):
 
         preprocessed = np.array([*map(self.preprocess_line, padded)])
 
-        def coords():
-            yield from state.positions.items()
-            for p, b in state.building_positions.items():
-                yield b, p
-
         while True:
             world = np.zeros((len(WorldObjects), *self.world_shape))
-            for o, p in coords():
+            for o, p in self.coords(state.positions, state.building_positions):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
@@ -552,9 +554,6 @@ class Env(gym.Env):
         state, render_state = next(state_iterator)
 
         def render():
-            for tree in self.build_trees(dependencies):
-                tree.show()
-
             if t:
                 print(fg("green") if i["success"] else fg("red"))
             render_r()
@@ -716,10 +715,11 @@ class Env(gym.Env):
     def gathered_resource(
         self, building_positions, positions, resource, worker_position
     ):
-        return positions[resource] == worker_position and (
-            resource != Resource.GAS
-            or isinstance(building_positions.get(worker_position, None), Assimilator)
-        )
+        return positions[resource] == worker_position
+        #        and (
+        #     resource != Resource.GAS
+        #     or isinstance(building_positions.get(worker_position, None), Assimilator)
+        # )
 
     @staticmethod
     def initial_assignment():
@@ -740,13 +740,13 @@ class Env(gym.Env):
             or dependency not in [*building_positions.values(), None]
         ):
             return False
-        if isinstance(building, Assimilator):
-            return assignment_location == positions[Resource.GAS]
-        else:
-            return assignment_location not in (
-                positions[Resource.GAS],
-                positions[Resource.MINERALS],
-            )
+        # if isinstance(building, Assimilator):
+        #     return assignment_location == positions[Resource.GAS]
+        # else:
+        return assignment_location not in (
+            positions[Resource.GAS],
+            positions[Resource.MINERALS],
+        )
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):

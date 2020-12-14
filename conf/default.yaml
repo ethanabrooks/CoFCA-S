@@ -1,8 +1,0 @@
-cuda_deterministic: True
-env: "CartPole-v0"
-group: null
-load_path: null
-log_interval: 2e4
-
-defaults:
- - eval: none

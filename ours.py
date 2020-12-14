@@ -4,12 +4,12 @@ import sys
 from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
-from typing import Optional, DefaultDict, Dict, Union
+from typing import Optional
 
 import hydra
 import numpy as np
 from hydra.core.config_store import ConfigStore
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 
 import data_types
 import debug_env as _debug_env
@@ -18,8 +18,8 @@ import osx_queue
 import our_agent
 import trainer
 from aggregator import InfosAggregator
-from arguments import BaseConfig
 from common.vec_env import VecEnv, VecEnvWrapper
+from config import BaseConfig, NoEval
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
@@ -135,18 +135,10 @@ class Trainer(trainer.Trainer):
 
     @classmethod
     def initial_curriculum(cls, min_lines, max_lines, debug_env):
-        if debug_env:
-            print("Using debug_env.")
-            return CurriculumSetting(
-                max_build_tree_depth=1000,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, max_lines),
-                level=0,
-            )
         return CurriculumSetting(
-            max_build_tree_depth=1,
+            max_build_tree_depth=1000,
             max_lines=max_lines,
-            n_lines_space=Discrete(min_lines, min_lines),
+            n_lines_space=Discrete(min_lines, max_lines),
             level=0,
         )
 
@@ -157,8 +149,7 @@ class Trainer(trainer.Trainer):
 
         @hydra.main(config_name="config")
         def app(cfg: DictConfig) -> None:
-            print(OmegaConf.to_yaml(cfg))
-            return cls.run(**cls.structure_config(**cfg))
+            return cls.run(**cls.structure_config(cfg))
 
         app()
 
@@ -247,7 +238,7 @@ class Trainer(trainer.Trainer):
             curriculum_setting=curriculum_setting,
             curriculum_threshold=curriculum_threshold,
             log_dir=log_dir,
-            max_curriculum_level=0 if debug_env else max_curriculum_level,
+            max_curriculum_level=0,
         )
         for _ in range(curriculum_level - curriculum_setting.level):
             curriculum_setting = next(venv.curriculum_iterator)

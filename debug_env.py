@@ -1,8 +1,9 @@
+import copy
 import typing
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import astuple, dataclass
-from typing import Generator
-from typing import Union, Dict, Tuple, List
+from typing import Union, Dict, Generator, Tuple, List, Optional
+from pprint import pprint
 
 import numpy as np
 
@@ -10,23 +11,23 @@ import env
 from data_types import (
     ActionType,
     X,
-    Worker,
-    Assignment,
-    CompoundAction,
     Action,
-    Targets,
-    WORLD_SIZE,
-    Resource,
-    Coord,
-    Building,
 )
 from data_types import (
+    Resource,
+    Building,
+    Coord,
     WorldObject,
     Movement,
+    Worker,
     State,
     Line,
     BuildOrder,
+    CompoundAction,
+    Assignment,
+    Targets,
     WorkerAction,
+    WORLD_SIZE,
     Nexus,
 )
 
@@ -120,9 +121,10 @@ class Env(env.Env):
         self, lines: List[Line], dependencies: Dict[Building, Building]
     ) -> Generator[State, CompoundAction, None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
-        building_positions: Dict[Coord, Building] = dict(
-            [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
+        initial_buildings = dict(
+            ((i, j), b) for b, (i, j) in positions if isinstance(b, Building)
         )
+        building_positions: Dict[Coord, Building] = copy.deepcopy(initial_buildings)
         positions: Dict[Union[Resource, Worker], Coord] = dict(
             [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
         )
@@ -143,7 +145,10 @@ class Env(env.Env):
         complete: typing.Counter[Building] = Counter()
 
         while True:
-            success = not required - complete
+            buildings = Counter(self.get_buildings(building_positions)) - Counter(
+                self.get_buildings(initial_buildings)
+            )
+            success = not required - buildings
 
             state = State(
                 building_positions=building_positions,
@@ -159,18 +164,16 @@ class Env(env.Env):
             def render():
                 print("Time remaining:", time_remaining)
                 print("Complete:", complete)
+                pprint(assignments)
 
             self.render_thunk = render
 
-            nexus_positions: List[Coord] = [
-                p for p, b in building_positions.items() if isinstance(b, Nexus)
-            ]
-            assert nexus_positions
             for worker_id, assignment in assignments.items():
                 next_actions[worker_id] = assignment.action(
                     positions[worker_id],
                     positions,
-                    [p for p, b in building_positions.items() if isinstance(b, Nexus)],
+                    # [p for p, b in building_positions.items() if isinstance(b, Nexus)],
+                    [positions[worker_id]],
                 )
 
             action: CompoundAction
@@ -201,7 +204,7 @@ class Env(env.Env):
                 worker_action = assignment.action(
                     current_position=worker_position,
                     positions=positions,
-                    nexus_positions=nexus_positions,
+                    nexus_positions=[worker_position],
                 )
 
                 if isinstance(worker_action, Movement):
@@ -220,18 +223,37 @@ class Env(env.Env):
                     insufficient_resources = bool(
                         building.cost.as_counter() - resources
                     )
-                    if self.building_allowed(
+                    assert positions[worker_id] == assignment.location
+                    allowed = self.building_allowed(
                         building=building,
                         dependency=dependencies[building],
                         building_positions=building_positions,
                         insufficient_resources=insufficient_resources,
                         positions=positions,
                         assignment_location=assignment.location,
-                    ):
-                        building_positions[worker_position] = building
+                    )
+                    if allowed:
+                        building_positions[assignment.location] = building
                         resources -= building.cost.as_counter()
                 else:
                     raise RuntimeError
+
+    def building_allowed(
+        self,
+        building: Building,
+        dependency: Optional[Building],
+        building_positions: Dict[Coord, Building],
+        insufficient_resources: bool,
+        positions: Dict[WorldObject, Coord],
+        assignment_location: Coord,
+    ) -> bool:
+        if insufficient_resources:
+            return False
+        built = self.get_buildings(building_positions)
+        # print(fg("green"), building, dependency, built, RESET)
+        return dependency in built + [None] and assignment_location not in [
+            *building_positions
+        ]
 
 
 def main(debug_env: bool, **kwargs):

@@ -1,7 +1,6 @@
 import inspect
 import itertools
 import os
-from argparse import ArgumentParser
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
@@ -11,10 +10,10 @@ import gym
 import hydra
 import torch
 import torch.nn as nn
+import yaml
 from hydra.core.config_store import ConfigStore
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 
-import arguments
 import wandb
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
@@ -24,10 +23,10 @@ from aggregator import (
     TotalTimeKeeper,
     AverageTimeKeeper,
 )
-from arguments import Config
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
+from config import Config, NoEval, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -113,7 +112,7 @@ class Trainer:
     def main(cls):
         @hydra.main(config_name="config")
         def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(**cfg))
+            return cls.run(**cls.structure_config(cfg))
 
         app()
 
@@ -145,8 +144,8 @@ class Trainer:
         load_path: Path,
         log_interval: int,
         name: str,
-        no_eval: bool,
-        no_wandb: bool,
+        perform_eval: bool,
+        use_wandb: bool,
         normalize: float,
         num_frames: int,
         num_processes: int,
@@ -159,11 +158,11 @@ class Trainer:
         train_steps: int,
     ):
 
-        if no_wandb:
-            log_dir = Path("/tmp")
-        else:
+        if use_wandb:
             wandb.init(group=group, name=name)
             log_dir = Path(wandb.run.dir)
+        else:
+            log_dir = Path("/tmp")
         # Properly restrict pytorch to not consume extra resources.
         #  - https://github.com/pytorch/pytorch/issues/975
         #  - https://github.com/ray-project/ray/issues/3609
@@ -212,7 +211,7 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = cls.make_vec_envs(evaluating=False, **env_args)
+        train_envs = cls.make_vec_envs(evaluating=False, log_dir=log_dir, **env_args)
         print("Created train_envs")
         train_envs.to(device)
         agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -248,7 +247,7 @@ class Trainer:
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
             done = frames["so_far"] >= num_frames
-            if not no_eval and (
+            if perform_eval and (
                 i == 0
                 or done
                 or (eval_interval and frames["since_eval"] > eval_interval)
@@ -264,9 +263,11 @@ class Trainer:
 
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = cls.make_vec_envs(evaluating=True, **env_args)
+                eval_envs = cls.make_vec_envs(
+                    evaluating=True, log_dir=log_dir, **env_args
+                )
                 eval_envs.to(device)
-                with agent.recurrent_module.evaluating(eval_envs.observation_space):
+                with agent.evaluating(eval_envs.observation_space):
                     eval_recurrent_hidden_states = torch.zeros(
                         num_processes,
                         agent.recurrent_hidden_state_size,
@@ -386,10 +387,15 @@ class Trainer:
 
     @classmethod
     def structure_config(
-        cls, **config
+        cls, cfg: DictConfig
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        if config["render"]:
-            config["num_processes"] = 1
+        cfg = DictConfig(dict(flatten(cfg)))
+        if cfg.config is not None:
+            with open(cfg.config) as f:
+                cfg.update(yaml.load(f))
+
+        if cfg.render:
+            cfg.num_processes = 1
 
         def parameters(*ms):
             for method in ms:
@@ -397,8 +403,8 @@ class Trainer:
 
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
-        for k, v in config.items():
-            if k in ("_wandb", "wandb_version"):
+        for k, v in cfg.items():
+            if k in ("_wandb", "wandb_version", "config"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
@@ -412,6 +418,4 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    cs = ConfigStore.instance()
-    cs.store(name="config", node=Config)
     Trainer.main()

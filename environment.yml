@@ -17,5 +17,4 @@ dependencies:
   - treelib=1.6.1
   - pip: 
     - wandb==0.10.11
-    - Hydra==2.5
 prefix: /home/ethanbro/miniconda3/envs/ppo
