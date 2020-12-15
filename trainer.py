@@ -25,7 +25,7 @@ from aggregator import (
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from config import Config, NoEval
+from config import Config, flatten, NoEval, YesEval
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -108,12 +108,8 @@ class Trainer:
         )
 
     @classmethod
-    def main(cls):
-        @hydra.main(config_name="config")
-        def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(**cfg))
-
-        app()
+    def main(cls, cfg: DictConfig):
+        return cls.run(**cls.structure_config(cfg))
 
     @staticmethod
     def make_env(env, seed, rank, evaluating, **kwargs):
@@ -386,12 +382,12 @@ class Trainer:
 
     @classmethod
     def structure_config(
-        cls, **config
+        cls, cfg: DictConfig
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
-        config.update(config.pop("eval"))
+        cfg = DictConfig(dict(flatten(cfg)))
 
-        if config["render"]:
-            config["num_processes"] = 1
+        if cfg.render:
+            cfg.num_processes = 1
 
         def parameters(*ms):
             for method in ms:
@@ -399,7 +395,7 @@ class Trainer:
 
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
-        for k, v in config.items():
+        for k, v in cfg.items():
             if k in ("_wandb", "wandb_version"):
                 continue
             assigned = False
@@ -413,5 +409,12 @@ class Trainer:
         return args
 
 
+@hydra.main(config_name="config")
+def app(cfg: DictConfig) -> None:
+    Trainer.main(cfg)
+
+
 if __name__ == "__main__":
-    Trainer.main()
+    cs = ConfigStore.instance()
+    cs.store(name="config", node=Config)
+    app()
