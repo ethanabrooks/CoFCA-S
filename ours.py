@@ -19,7 +19,7 @@ import our_agent
 import trainer
 from aggregator import InfosAggregator
 from common.vec_env import VecEnv, VecEnvWrapper
-from config import BaseConfig, NoEval
+from config import BaseConfig
 from data_types import CurriculumSetting
 from utils import Discrete
 from wrappers import VecPyTorch
@@ -27,6 +27,7 @@ from wrappers import VecPyTorch
 
 @dataclass
 class OurConfig(BaseConfig, env.EnvConfig):
+    assimilator_prob: float = 0
     curriculum_level: int = 0
     curriculum_setting_load_path: Optional[str] = None
     curriculum_threshold: float = 0.9
@@ -142,17 +143,6 @@ class Trainer(trainer.Trainer):
             level=0,
         )
 
-    @classmethod
-    def main(cls):
-        if sys.platform == "darwin":
-            multiprocessing.set_start_method("fork")
-
-        @hydra.main(config_name="config")
-        def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(**cfg))
-
-        app()
-
     @staticmethod
     def make_env(
         rank: int,
@@ -172,7 +162,7 @@ class Trainer(trainer.Trainer):
     def make_vec_envs(
         cls,
         curriculum_level: int,
-        curriculum_setting_load_path: Optional[Path],
+        curriculum_setting_load_path: Optional[str],
         curriculum_threshold: float,
         debug_env: bool,
         evaluating: bool,
@@ -191,7 +181,7 @@ class Trainer(trainer.Trainer):
         assert min_lines >= 1
         assert max_lines >= min_lines
         if curriculum_setting_load_path:
-            with curriculum_setting_load_path.open("rb") as f:
+            with open(curriculum_setting_load_path, "rb") as f:
                 curriculum_setting = pickle.load(f)
                 print(
                     f"Loaded curriculum setting {curriculum_setting} "
@@ -249,8 +239,15 @@ class Trainer(trainer.Trainer):
         return venv
 
 
+@hydra.main(config_name="config")
+def app(cfg: DictConfig) -> None:
+    Trainer.main(cfg)
+
+
 if __name__ == "__main__":
+    if sys.platform == "darwin":
+        multiprocessing.set_start_method("fork")  # needed for osx_queue.Queue
+
     cs = ConfigStore.instance()
     cs.store(name="config", node=OurConfig)
-
-    Trainer.main()
+    app()

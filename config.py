@@ -1,13 +1,21 @@
 from collections import namedtuple
 
 from hydra.core.config_store import ConfigStore
-from omegaconf import MISSING
+from omegaconf import MISSING, DictConfig
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
 from dataclasses import dataclass, field
 from typing import Optional, Any, List
+
+
+def flatten(cfg: DictConfig):
+    for k, v in cfg.items():
+        if isinstance(v, DictConfig):
+            yield from flatten(v)
+        else:
+            yield k, v
 
 
 @dataclass
@@ -33,8 +41,8 @@ class BaseConfig:
     clip_param: float = 0.2
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
-    eval: Any = MISSING
     eps: float = 1e-5
+    eval: Any = MISSING
     gamma: float = 0.99
     group: Optional[str] = None
     hidden_size: int = 150
@@ -43,14 +51,14 @@ class BaseConfig:
     log_interval: int = int(2e4)
     max_grad_norm: float = 0.5
     name: Optional[str] = None
-    perform_eval: bool = False
-    cuda: bool = True
-    use_wandb: bool = True
     normalize: bool = False
     num_batch: int = 1
-    num_frames: int = int(1e8)
     num_processes: int = 100
+    perform_eval: bool = False
     ppo_epoch: int = 5
+    cuda: bool = True
+    use_wandb: bool = True
+    num_frames: int = int(1e8)
     render: bool = False
     render_eval: bool = False
     save_interval: int = int(2e4)
@@ -60,7 +68,13 @@ class BaseConfig:
     train_steps: int = 25
     use_gae: bool = False
     value_loss_coef: float = 0.5
-    defaults: List[Any] = field(default_factory=lambda: [dict(eval="eval")])
+    wandb_version: Optional[str] = None
+    _wandb: Optional[str] = None
+    defaults: List[Any] = field(
+        default_factory=lambda: [
+            {"eval": "no_eval"},
+        ]
+    )
 
 
 @dataclass
@@ -71,4 +85,5 @@ class Config(BaseConfig):
 
 
 cs = ConfigStore.instance()
-cs.store(group="eval", name="eval", node=NoEval)
+cs.store(group="eval", name="no_eval", node=NoEval)
+cs.store(group="eval", name="yes_eval", node=YesEval)
