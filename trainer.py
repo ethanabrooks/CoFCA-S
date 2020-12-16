@@ -142,7 +142,7 @@ class Trainer:
         perform_eval: bool,
         use_wandb: bool,
         normalize: float,
-        num_frames: int,
+        num_frames: Optional[int],
         num_processes: int,
         ppo_args: dict,
         render: bool,
@@ -241,7 +241,7 @@ class Trainer:
 
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
-            done = frames["so_far"] >= num_frames
+            done = num_frames is not None and frames["so_far"] >= num_frames
             if perform_eval and (
                 i == 0
                 or done

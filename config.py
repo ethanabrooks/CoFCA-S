@@ -58,7 +58,7 @@ class BaseConfig:
     ppo_epoch: int = 5
     cuda: bool = True
     use_wandb: bool = True
-    num_frames: int = int(1e8)
+    num_frames: Optional[int] = None
     render: bool = False
     render_eval: bool = False
     save_interval: int = int(2e4)
