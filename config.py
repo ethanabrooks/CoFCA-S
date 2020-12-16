@@ -70,11 +70,7 @@ class BaseConfig:
     value_loss_coef: float = 0.5
     wandb_version: Optional[str] = None
     _wandb: Optional[str] = None
-    defaults: List[Any] = field(
-        default_factory=lambda: [
-            {"eval": "no_eval"},
-        ]
-    )
+    defaults: List[Any] = field(default_factory=lambda: [dict(eval="no_eval")])
 
 
 @dataclass
