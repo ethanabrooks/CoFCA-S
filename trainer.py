@@ -170,6 +170,11 @@ class Trainer:
 
         if use_wandb:
             wandb.init(group=group, name=name)
+            os.symlink(
+                os.path.abspath(".hydra/config.yaml"),
+                os.path.join(wandb.run.dir, "hydra-config.yaml"),
+            )
+            wandb.save("hydra-config.yaml")
             log_dir = Path(wandb.run.dir)
         else:
             log_dir = Path("/tmp")
