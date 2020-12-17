@@ -52,7 +52,6 @@ class Agent(NNBase):
     entropy_coef: float
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
-    default_initializer: bool
     debug: bool
     gate_coef: float
     hidden_size: int
@@ -95,15 +94,7 @@ class Agent(NNBase):
             torch.randn(self.lower_embed_size), requires_grad=True
         )
 
-        if self.default_initializer:
-            self.gru.reset_parameters()
-        else:
-            for name, param in self.gru.named_parameters():
-                print("zeroed out", name)
-                if "bias" in name:
-                    nn.init.constant_(param, 0)
-                elif "weight" in name:
-                    nn.init.orthogonal_(param)
+        self.gru.reset_parameters()
 
         self.task_encoder = nn.GRU(
             self.task_embed_size,
@@ -114,8 +105,7 @@ class Agent(NNBase):
         self.initial_task_encoder_hxs = nn.Parameter(
             torch.randn(self.task_embed_size), requires_grad=True
         )
-        if self.default_initializer:
-            self.task_encoder.reset_parameters()
+        self.task_encoder.reset_parameters()
 
         self.embed_lower = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
@@ -413,11 +403,7 @@ class Agent(NNBase):
         return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
 
     def init_(self, m):
-        if self.default_initializer:
-            return init_(m, type(self.activation))
-        return init(
-            m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )
+        return init_(m, nn.ReLU)
 
     @property
     def is_recurrent(self):
