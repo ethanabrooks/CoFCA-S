@@ -67,8 +67,6 @@ class Trainer:
         state_dict = torch.load(str(checkpoint_path), map_location=device)
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
@@ -141,7 +139,6 @@ class Trainer:
         name: str,
         perform_eval: bool,
         use_wandb: bool,
-        normalize: float,
         num_frames: Optional[int],
         num_processes: int,
         ppo_args: dict,
@@ -251,10 +248,6 @@ class Trainer:
                 eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
                 frames["since_eval"] = 0
-                # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
-                #     vec_norm.eval()
-                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
 
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
@@ -374,8 +367,6 @@ class Trainer:
         modules = dict(
             optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")

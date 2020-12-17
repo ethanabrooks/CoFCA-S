@@ -13,7 +13,7 @@ from data_types import RecurrentState, RawAction
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
 from transformer import TransformerModel
-from utils import astuple, init
+from utils import astuple, init, init_
 
 
 class Categorical(torch.distributions.Categorical):
@@ -48,15 +48,18 @@ def gate(g, new, old):
 
 @dataclass
 class Agent(NNBase):
+    activation_name: str
     entropy_coef: float
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
+    default_initializer: bool
     debug: bool
     gate_coef: float
     hidden_size: int
     kernel_size: int
     lower_embed_size: int
     max_eval_lines: int
+    normalize: bool
     no_pointer: bool
     no_roll: bool
     no_scan: bool
@@ -74,6 +77,7 @@ class Agent(NNBase):
 
     def __post_init__(self):
         nn.Module.__init__(self)
+        self.activation = eval(f"nn.{self.activation_name}()")
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_size = self.action_space.nvec.size
 
@@ -87,14 +91,32 @@ class Agent(NNBase):
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
         self.gru = nn.GRU(self.lower_embed_size, self.lower_embed_size)
-        for name, param in self.gru.named_parameters():
-            print("zeroed out", name)
-            if "bias" in name:
-                nn.init.constant_(param, 0)
-            elif "weight" in name:
-                nn.init.orthogonal_(param)
+        self.initial_hxs = nn.Parameter(
+            torch.randn(self.lower_embed_size), requires_grad=True
+        )
 
-        self.task_encoder = self.build_task_encoder()
+        if self.default_initializer:
+            self.gru.reset_parameters()
+        else:
+            for name, param in self.gru.named_parameters():
+                print("zeroed out", name)
+                if "bias" in name:
+                    nn.init.constant_(param, 0)
+                elif "weight" in name:
+                    nn.init.orthogonal_(param)
+
+        self.task_encoder = nn.GRU(
+            self.task_embed_size,
+            self.task_embed_size,
+            bidirectional=True,
+            batch_first=True,
+        )
+        self.initial_task_encoder_hxs = nn.Parameter(
+            torch.randn(self.task_embed_size), requires_grad=True
+        )
+        if self.default_initializer:
+            self.task_encoder.reset_parameters()
+
         self.embed_lower = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
@@ -114,9 +136,12 @@ class Agent(NNBase):
             self.init_(
                 nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
             ),
-            nn.ReLU(),
+            self.activation,
         )
-        self.zeta = self.init_(nn.Linear(self.zeta_input_size, self.hidden_size))
+        self.zeta = nn.Sequential(
+            self.init_(nn.Linear(self.zeta_input_size, self.hidden_size)),
+            self.activation,
+        )
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
         self.d_gate = self.build_d_gate()
@@ -136,6 +161,8 @@ class Agent(NNBase):
                 nn.Linear(conv_out ** 2 * self.conv_hidden_size, self.conv_hidden_size)
             ),
         )
+        if self.normalize:
+            self.conv = nn.Sequential(nn.BatchNorm2d(d), self.conv)
         self.critic = self.init_(nn.Linear(self.hidden_size, 1))
 
         last = torch.zeros(2 * self.nl)
@@ -174,14 +201,6 @@ class Agent(NNBase):
             + self.conv_hidden_size
             + self.resources_hidden_size
             + 2 * self.lower_embed_size
-        )
-
-    def build_task_encoder(self):
-        return nn.GRU(
-            self.task_embed_size,
-            self.task_embed_size,
-            bidirectional=True,
-            batch_first=True,
         )
 
     def build_P(self, p, M, R):
@@ -278,7 +297,7 @@ class Agent(NNBase):
         )  # +1 to deal with negatives
         embed_a, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
         zeta_input = torch.cat([m, h1, resources, embedded_lower, embed_a], dim=-1)
-        z = F.relu(self.zeta(zeta_input))
+        z = self.zeta(zeta_input)
 
         value = self.critic(z)
 
@@ -393,11 +412,12 @@ class Agent(NNBase):
     def hash(self):
         return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
 
-    @staticmethod
-    def init_(m):
+    def init_(self, m):
+        if self.default_initializer:
+            return init_(m, type(self.activation))
         return init(
             m, nn.init.orthogonal_, lambda x: nn.init.constant_(x, 0), gain=0.01
-        )  # TODO: try init
+        )
 
     @property
     def is_recurrent(self):

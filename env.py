@@ -50,7 +50,6 @@ Dependencies = Dict[Building, Building]
 
 @dataclass
 class EnvConfig:
-    assimilator_prob: float = 0.5
     break_on_fail: bool = False
     destroy_building_prob: float = 0
     num_initial_buildings: int = 0
@@ -62,7 +61,6 @@ class EnvConfig:
 # noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
-    assimilator_prob: float
     break_on_fail: bool
     destroy_building_prob: float
     eval_steps: int
@@ -468,8 +466,6 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
-        if self.random.random() < self.assimilator_prob:
-            yield Assimilator(), gas
         occupied = [nexus, minerals, gas]
         while True:
             initial_pos = self.random.choice(
