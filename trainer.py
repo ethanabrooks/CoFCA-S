@@ -4,6 +4,7 @@ import os
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
+from queue import Queue
 from typing import Dict, DefaultDict, Union, Optional
 
 import gym
@@ -25,7 +26,7 @@ from aggregator import (
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from config import Config, flatten, NoEval, YesEval
+from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -43,6 +44,8 @@ class Trainer:
                 Agent.__init__,
                 MLPBase.__init__,
             ],
+            curriculum_args=[cls.initialize_curriculum],
+            failure_buffer_args=[cls.build_failure_buffer],
             rollouts_args=[RolloutStorage.__init__],
             ppo_args=[PPO.__init__],
             env_args=[cls.make_env, cls.make_vec_envs],
@@ -58,9 +61,22 @@ class Trainer:
             **agent_args,
         )
 
+    @classmethod
+    def build_failure_buffer(cls, **kwargs):
+        pass
+
     @staticmethod
     def build_infos_aggregator() -> InfosAggregator:
         return InfosAggregator()
+
+    @classmethod
+    def dump_failure_buffer(cls, failure_buffer, log_dir: Path):
+        pass
+
+    @classmethod
+    def initialize_curriculum(cls, **kwargs):
+        while True:
+            yield
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
@@ -130,9 +146,11 @@ class Trainer:
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
+        curriculum_args: dict,
         env_args: dict,
         eval_interval: Optional[int],
         eval_steps: Optional[int],
+        failure_buffer_args: dict,
         group: str,
         load_path: Path,
         log_interval: int,
@@ -203,7 +221,15 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = cls.make_vec_envs(evaluating=False, log_dir=log_dir, **env_args)
+        failure_buffer = cls.build_failure_buffer(**failure_buffer_args)
+        curriculum = cls.initialize_curriculum(log_dir=log_dir, **curriculum_args)
+        train_envs = cls.make_vec_envs(
+            evaluating=False,
+            log_dir=log_dir,
+            failure_buffer=failure_buffer,
+            curriculum_setting=next(curriculum),
+            **env_args,
+        )
         print("Created train_envs")
         train_envs.to(device)
         agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -303,6 +329,10 @@ class Trainer:
                 time_spent["logging"].update()
                 time_per["iter"].update()
 
+                time_spent["dumping failure buffer"].tick()
+                cls.dump_failure_buffer(failure_buffer, log_dir)
+                time_spent["dumping failure buffer"].update()
+
             if done or (save_interval and frames["since_save"] > save_interval):
                 time_spent["saving"].tick()
                 frames["since_save"] = 0
@@ -347,8 +377,7 @@ class Trainer:
                 )
                 time_per["frame"].update()
 
-            # noinspection PyArgumentList
-            train_envs.process_infos(train_infos)
+            curriculum.send((train_envs, train_infos))
 
             with torch.no_grad():
                 next_value = agent.get_value(
