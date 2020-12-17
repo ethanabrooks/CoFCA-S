@@ -5,8 +5,8 @@ config_dir="$(pwd)/$(dirname $(dirname $config))"
 cat $config | yq 'del(._wandb) | del(.wandb_version) | .[] |= .value' > "$config_dir/config.yaml"
 
 load=$(${0:a:h}/search $2 checkpoint.pt)
-#failure_buffer_load_path=$(${0:a:h}/search $2 failure_buffer.pkl)
+failure_buffer_load_path=$(${0:a:h}/search $2 failure_buffer.pkl)
 curriculum_setting_load_path=$(${0:a:h}/search $2 curriculum_setting.pkl)
-cmd="python $1 --config-path=$config_dir load_path=$(pwd)/$load curriculum_setting_load_path=$(pwd)/$curriculum_setting_load_path use_wandb=False ${@:3}"
+cmd="python $1 --config-path=$config_dir load_path=$(pwd)/$load curriculum_setting_load_path=$(pwd)/$curriculum_setting_load_path failure_buffer_load_path=$(pwd)/$failure_buffer_load_path use_wandb=False ${@:3}"
 echo "$cmd\n"
 eval "$cmd"
