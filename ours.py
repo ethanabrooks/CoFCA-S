@@ -76,20 +76,20 @@ class Trainer(trainer.Trainer):
 
     @staticmethod
     def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
+        failure_buffer = Queue(maxsize=failure_buffer_size)
+        try:
+            failure_buffer.qsize()
+        except NotImplementedError:
+            failure_buffer = osx_queue.Queue()
         if failure_buffer_load_path:
             with open(failure_buffer_load_path, "rb") as f:
-                failure_buffer = pickle.load(f)
-                assert isinstance(failure_buffer, Queue)
+                for x in pickle.load(f):
+                    failure_buffer.put_nowait(x)
+
                 print(
                     f"Loaded failure buffer of length {failure_buffer.qsize()} "
                     f"from {failure_buffer_load_path}"
                 )
-        else:
-            failure_buffer = Queue(maxsize=failure_buffer_size)
-            try:
-                failure_buffer.qsize()
-            except NotImplementedError:
-                failure_buffer = osx_queue.Queue()
         return failure_buffer
 
     @classmethod
