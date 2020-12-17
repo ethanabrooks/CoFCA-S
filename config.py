@@ -2,6 +2,7 @@ from collections import namedtuple
 
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, DictConfig
+from torch import nn
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
@@ -38,10 +39,10 @@ class YesEval(Eval):
 
 @dataclass
 class BaseConfig:
+    activation_name: str = "ReLU"
     clip_param: float = 0.2
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
-    eps: float = 1e-5
     eval: Any = MISSING
     gamma: float = 0.99
     group: Optional[str] = None
@@ -54,6 +55,7 @@ class BaseConfig:
     normalize: bool = False
     num_batch: int = 1
     num_processes: int = 100
+    optimizer: str = "Adam"
     perform_eval: bool = False
     ppo_epoch: int = 5
     cuda: bool = True

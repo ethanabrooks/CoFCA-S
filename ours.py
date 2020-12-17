@@ -27,11 +27,11 @@ from wrappers import VecPyTorch
 
 @dataclass
 class OurConfig(BaseConfig, env.EnvConfig):
-    assimilator_prob: float = 0
     curriculum_level: int = 0
     curriculum_setting_load_path: Optional[str] = None
     curriculum_threshold: float = 0.9
     debug_env: bool = False
+    default_initializer: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 50
