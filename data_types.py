@@ -303,8 +303,8 @@ Buildings: List[Building] = [
     RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    TemplarArchives(),
-    TwilightCouncil(),
+    # TemplarArchives(),
+    # TwilightCouncil(),
 ]
 
 Targets = [*Resource, *Buildings]
