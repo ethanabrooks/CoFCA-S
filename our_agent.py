@@ -89,7 +89,10 @@ class Agent(NNBase):
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
-        self.gru = nn.GRU(self.lower_embed_size, self.lower_embed_size)
+        self.gru = nn.GRU(
+            self.lower_embed_size + self.task_embed_size, self.hidden_size
+        )
+        print(self.lower_embed_size + self.task_embed_size)
         self.initial_hxs = nn.Parameter(
             torch.randn(self.lower_embed_size), requires_grad=True
         )
@@ -181,16 +184,11 @@ class Agent(NNBase):
 
     @property
     def zeta_input_size(self):
-        m_size = (
-            2 * self.task_embed_size + self.hidden_size
-            if self.no_pointer
-            else self.task_embed_size
-        )
         return (
-            m_size
-            + self.conv_hidden_size
+            self.conv_hidden_size
             + self.resources_hidden_size
-            + 2 * self.lower_embed_size
+            + self.lower_embed_size
+            + self.hidden_size
         )
 
     def build_P(self, p, M, R):
@@ -280,13 +278,15 @@ class Agent(NNBase):
         m = M[R, p]
         self.print("p", p)
 
-        h1 = self.conv(state.obs)
+        x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
         embedded_lower = self.embed_lower(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        embed_a, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
-        zeta_input = torch.cat([m, h1, resources, embedded_lower, embed_a], dim=-1)
+        h, rnn_hxs = self._forward_gru(
+            torch.cat([embedded_lower, m], dim=-1), rnn_hxs, masks
+        )
+        zeta_input = torch.cat([x, resources, embedded_lower, h], dim=-1)
         z = self.zeta(zeta_input)
 
         value = self.critic(z)
@@ -425,7 +425,7 @@ class Agent(NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return self.lower_embed_size
+        return self.hidden_size
 
     def to(self, *args, **kwargs):
         self.last = self.last.to(*args, **kwargs)
