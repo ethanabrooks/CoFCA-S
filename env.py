@@ -80,6 +80,7 @@ class Env(gym.Env):
     iterator = None
     render_thunk = None
     success_avg = 0.5
+    success_with_failure_buf_avg = 0.5
 
     def __post_init__(self):
         super().__init__()
@@ -237,15 +238,23 @@ class Env(gym.Env):
         if self.evaluating or not size:
             buf = False
         else:
-            use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
-            use_failure_prob = max(use_failure_prob, 0)
+            success_avg = max(
+                self.success_avg, self.success_with_failure_buf_avg + 1e-6
+            )
+            tgt_success_rate = max(
+                self.success_with_failure_buf_avg,
+                min(self.tgt_success_rate, success_avg),
+            )
+            use_failure_prob = 1 - (
+                tgt_success_rate - self.success_with_failure_buf_avg
+            ) / (success_avg - self.success_with_failure_buf_avg)
             buf = self.random.random() < use_failure_prob
         use_failure_buf = buf
         state = None
         if use_failure_buf:
 
             # randomly rotate queue
-            for i in range(self.random.choice(min(10, size))):
+            for i in range(self.random.choice(min(100, size))):
                 try:
                     state = self.failure_buffer.get_nowait()
                     self.failure_buffer.put_nowait(state)
@@ -286,8 +295,16 @@ class Env(gym.Env):
 
                 key = f"success ({'with' if use_failure_buf else 'without'} failure buffer)"
                 i.update({key: success})
-                if not use_failure_buf:
-                    self.success_avg += self.alpha * (success - self.success_avg)
+
+                def interpolate(old, new):
+                    return old + self.alpha * (new - old)
+
+                if use_failure_buf:
+                    self.success_with_failure_buf_avg = interpolate(
+                        self.success_with_failure_buf_avg, success
+                    )
+                else:
+                    self.success_avg = interpolate(self.success_avg, success)
 
                 put_failure_buf = not self.evaluating and not success
                 if put_failure_buf:
