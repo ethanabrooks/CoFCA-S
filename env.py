@@ -284,8 +284,9 @@ class Env(gym.Env):
             if t:
                 success = i["success"]
 
+                key = f"success ({'with' if use_failure_buf else 'without'} failure buffer)"
+                i.update({key: success})
                 if not use_failure_buf:
-                    i.update({"success (no failure buffer)": float(success)})
                     self.success_avg += self.alpha * (success - self.success_avg)
 
                 put_failure_buf = not self.evaluating and not success
