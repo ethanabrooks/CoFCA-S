@@ -347,8 +347,13 @@ class Env(gym.Env):
                         "time per line": elapsed_time / len(lines),
                     },
                 )
-                if any(l.building.cost.gas > 0 for l in lines):
-                    info.update({"success on gas buildings": state.success})
+                try:
+                    (line,) = lines
+                    if line.building.cost.gas > 0:
+                        info.update({"success on gas buildings": state.success})
+                except ValueError:
+                    pass
+
             # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
