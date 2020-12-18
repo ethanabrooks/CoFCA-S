@@ -288,13 +288,15 @@ class Env(gym.Env):
             s, r, t, i = iterator.send(action)
             render_thunk = self.render_thunk
             self.render_thunk = render
-            if not use_failure_buf:
-                i.update({"reward (no failure buffer)": r})
             if t:
                 success = i["success"]
 
-                key = f"success ({'with' if use_failure_buf else 'without'} failure buffer)"
-                i.update({key: success})
+                i.update(
+                    {
+                        f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
+                        for k, v in i.items()
+                    }
+                )
 
                 def interpolate(old, new):
                     return old + self.alpha * (new - old)
@@ -341,9 +343,6 @@ class Env(gym.Env):
                             state.success
                         ),
                         "instruction length": len(lines),
-                        "curriculum + success": float(
-                            self.curriculum_setting.level + state.success
-                        ),
                         "time per line": elapsed_time / len(lines),
                     },
                 )
