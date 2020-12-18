@@ -243,7 +243,7 @@ class Env(gym.Env):
                 self.success_with_failure_buf_avg,
                 min(self.tgt_success_rate, success_avg),
             )
-            use_failure_prob = (
+            use_failure_prob = 1 - (
                 tgt_success_rate - self.success_with_failure_buf_avg
             ) / (success_avg - self.success_with_failure_buf_avg)
             buf = self.random.random() < use_failure_prob
