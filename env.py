@@ -334,12 +334,16 @@ class Env(gym.Env):
 
         while True:
             if done:
+                floordiv = len(lines) // 5
+                key = (
+                    f"success on instructions length-{(floordiv-1) * 5} through length-{floordiv * 5}"
+                    if self.evaluating
+                    else f"success on length-{len(lines)} instructions"
+                )
                 info.update(
                     {
                         f"success": float(state.success),
-                        f"success on length-{len(lines)} instructions": float(
-                            state.success
-                        ),
+                        key: float(state.success),
                         "instruction length": len(lines),
                         "time per line": elapsed_time / len(lines),
                     },

@@ -34,7 +34,7 @@ class OurConfig(BaseConfig, env.EnvConfig):
     debug_env: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    max_eval_lines: int = 50
+    max_eval_lines: int = 25
     min_eval_lines: int = 1
     conv_hidden_size: int = 100
     debug: bool = False
