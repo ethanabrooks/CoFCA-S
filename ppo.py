@@ -6,22 +6,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+from agents import Agent
 from rollouts import Batch, RolloutStorage
 
 
 class PPO:
     def __init__(
         self,
-        agent,
-        clip_param,
-        ppo_epoch,
-        num_batch,
-        value_loss_coef,
-        learning_rate=None,
-        eps=None,
-        max_grad_norm=None,
-        use_clipped_value_loss=True,
-        aux_loss_only=False,
+        agent: Agent,
+        clip_param: float,
+        learning_rate: float,
+        optimizer: str,
+        ppo_epoch: int,
+        num_batch: int,
+        value_loss_coef: float,
+        max_grad_norm: float,
+        use_clipped_value_loss: bool = True,
+        aux_loss_only: bool = False,
     ):
 
         self.aux_loss_only = aux_loss_only
@@ -36,7 +37,8 @@ class PPO:
         self.max_grad_norm = max_grad_norm
         self.use_clipped_value_loss = use_clipped_value_loss
 
-        self.optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=eps)
+        optimizer = eval(f"optim.{optimizer}")
+        self.optimizer = optimizer(agent.parameters(), lr=learning_rate)
         self.reward_function = None
 
     def update(self, rollouts: RolloutStorage):

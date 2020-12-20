@@ -1,20 +1,27 @@
-import multiprocessing
-from multiprocessing.queues import Queue as Q
+from dataclasses import dataclass
 
 
-class Queue(Q):
-    def __init__(self, *args, **kwargs):
-        super().__init__(ctx=multiprocessing.get_context(), *args, **kwargs)
-        self.size = 0
+class Z:
+    def __init__(self, v):
+        self.v = v
 
 
-def foo(q):
-    print(q.size)
+@dataclass
+class A(Z):
+    a: int = 1
+
+    def __post_init__(self):
+        Z.__init__(self, 1)
 
 
-if __name__ == "__main__":
-    multiprocessing.set_start_method("fork")
-    q = Queue()
-    p = multiprocessing.Process(target=foo, args=(q,))
-    p.start()
-    p.join()
+@dataclass
+class B(Z):
+    b: int = 2
+
+
+@dataclass
+class C(A, B):
+    pass
+
+
+print(C().v)

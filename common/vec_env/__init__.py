@@ -189,9 +189,6 @@ class VecEnvWrapper(VecEnv):
     def set_curriculum(self, infos):
         pass
 
-    def process_infos(self, infos: InfosAggregator):
-        pass
-
 
 class CloudpickleWrapper(object):
     """

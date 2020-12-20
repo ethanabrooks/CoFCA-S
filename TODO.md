@@ -1,4 +1,6 @@
-- use cpu-pinning for benchmarking
 - add equivalent of `docker log -f` to `run.sh`
 - do profiling
-- reward structure
+- try Adam
+- try different initializers
+- try leaky
+- try feeding z to upsilon instead of zeta_input

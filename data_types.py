@@ -296,14 +296,14 @@ Buildings: List[Building] = [
     DarkShrine(),
     FleetBeacon(),
     Forge(),
-    Gateway(),
+    # Gateway(),
     Nexus(),
     PhotonCannon(),
     Pylon(),
     RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    TemplarArchives(),
+    # TemplarArchives(),
     TwilightCouncil(),
 ]
 
