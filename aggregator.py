@@ -114,4 +114,4 @@ class EvalWrapper(Aggregator):
 
     def items(self) -> Generator[Tuple[str, any], None, None]:
         for k, v in self.aggregator.items():
-            yield "eval_" + k, v
+            yield "(eval) " + k, v
