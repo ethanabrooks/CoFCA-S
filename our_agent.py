@@ -120,7 +120,6 @@ class Agent(NNBase):
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
-        self.nl = len(self.obs_spaces.lines.nvec)
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
         self.embed_resources = nn.Sequential(
@@ -157,10 +156,6 @@ class Agent(NNBase):
         if self.normalize:
             self.conv = nn.Sequential(nn.BatchNorm2d(d), self.conv)
         self.critic = self.init_(nn.Linear(self.hidden_size, 1))
-
-        last = torch.zeros(2 * self.nl)
-        last[-1] = 1
-        self.last = last.view(1, -1, 1)
 
         self.state_sizes = RecurrentState(
             a=1,
@@ -206,8 +201,13 @@ class Agent(NNBase):
         B = torch.stack([f, b.flip(-2)], dim=-2)
         B = B.view(N, 2 * self.nl, self.num_edges)
         # B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
-        zero_last = (1 - self.last) * B
-        B = zero_last + self.last  # this ensures that the last B is 1
+
+        last = torch.zeros(2 * self.nl)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
+
+        zero_last = (1 - last) * B
+        B = zero_last + last  # this ensures that the last B is 1
         C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
         P = B * C
         P = P.view(N, self.nl, 2, self.num_edges)
@@ -409,6 +409,10 @@ class Agent(NNBase):
     def is_recurrent(self):
         return True
 
+    @property
+    def nl(self):
+        return len(self.obs_spaces.lines.nvec)
+
     def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
         state_sizes = astuple(self.state_sizes)
         return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
@@ -426,7 +430,3 @@ class Agent(NNBase):
     @property
     def recurrent_hidden_state_size(self):
         return self.hidden_size
-
-    def to(self, *args, **kwargs):
-        self.last = self.last.to(*args, **kwargs)
-        return super().to(*args, **kwargs)

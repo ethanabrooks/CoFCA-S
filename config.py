@@ -29,12 +29,14 @@ class Eval:
 class NoEval(Eval):
     eval_interval: Optional[int] = None
     eval_steps: Optional[int] = None
+    perform_eval: bool = False
 
 
 @dataclass
 class YesEval(Eval):
     eval_interval: Optional[int] = int(1e6)
     eval_steps: Optional[int] = 500
+    perform_eval: bool = True
 
 
 @dataclass
@@ -56,7 +58,6 @@ class BaseConfig:
     num_batch: int = 1
     num_processes: int = 100
     optimizer: str = "Adam"
-    perform_eval: bool = False
     ppo_epoch: int = 5
     cuda: bool = True
     use_wandb: bool = True
@@ -72,11 +73,7 @@ class BaseConfig:
     value_loss_coef: float = 0.5
     wandb_version: Optional[str] = None
     _wandb: Optional[str] = None
-    defaults: List[Any] = field(
-        default_factory=lambda: [
-            {"eval": "no_eval"},
-        ]
-    )
+    defaults: List[Any] = field(default_factory=lambda: [dict(eval="yes")])
 
 
 @dataclass
@@ -87,5 +84,5 @@ class Config(BaseConfig):
 
 
 cs = ConfigStore.instance()
-cs.store(group="eval", name="no_eval", node=NoEval)
-cs.store(group="eval", name="yes_eval", node=YesEval)
+cs.store(group="eval", name="yes", node=YesEval)
+cs.store(group="eval", name="no", node=NoEval)

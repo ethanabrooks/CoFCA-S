@@ -119,8 +119,6 @@ class Trainer(trainer.Trainer):
         max_curriculum_level: int,
         max_lines: int,
         min_lines: int,
-        max_eval_lines: int,
-        min_eval_lines: int,
         curriculum_threshold: float,
     ):
         mean_successes = 0.5
@@ -200,15 +198,26 @@ class Trainer(trainer.Trainer):
     @classmethod
     def make_vec_envs(
         cls,
+        curriculum_setting: CurriculumSetting,
         evaluating: bool,
         failure_buffer: Queue,
+        max_eval_lines: int,
+        min_eval_lines: int,
         world_size: int,
         **kwargs,
     ):
+        if evaluating:
+            curriculum_setting = CurriculumSetting(
+                max_build_tree_depth=100,
+                max_lines=max_eval_lines,
+                n_lines_space=Discrete(min_eval_lines, max_eval_lines),
+                level=0,
+            )
         data_types.WORLD_SIZE = world_size
         return super().make_vec_envs(
-            evaluating=evaluating,
             non_pickle_args=dict(failure_buffer=failure_buffer),
+            curriculum_setting=curriculum_setting,
+            evaluating=evaluating,
             world_size=world_size,
             **kwargs,
         )
