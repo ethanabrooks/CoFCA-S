@@ -573,6 +573,7 @@ class Env(gym.Env):
         next(info_iterator)
         action = self.compound_action()
         state, render_state = next(state_iterator)
+        time_remaining = self.eval_steps
 
         def render():
             for tree in self.build_trees(dependencies):
@@ -609,8 +610,9 @@ class Env(gym.Env):
 
             if action.is_op():
                 state, render_state = state_iterator.send(action)
-            elif self.evaluating:
-                state = replace(state, time_remaining=state.time_remaining - 1)
+            if self.evaluating:
+                time_remaining -= 1
+                state = replace(state, time_remaining=time_remaining)
 
     @staticmethod
     def compound_action(*args, **kwargs) -> CompoundAction:
@@ -635,11 +637,7 @@ class Env(gym.Env):
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
-        time_remaining = (
-            self.eval_steps - 1
-            if self.evaluating
-            else (1 + len(lines)) * self.time_per_line
-        )
+        time_remaining = (1 + len(lines)) * self.time_per_line
 
         while True:
             destroyed_buildings = [
