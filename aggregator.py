@@ -69,7 +69,7 @@ class EpisodeAggregator(Aggregator):
         self.incomplete_episodes = defaultdict(list)
 
     def update(self, dones: Collection[bool], **values):
-        values.update(time_steps=[1 for _ in dones])
+        values.update({"time steps": [1 for _ in dones]})
         for k, vs in values.items():
             incomplete_episodes = self.incomplete_episodes[k]
             if not incomplete_episodes:
@@ -114,4 +114,4 @@ class EvalWrapper(Aggregator):
 
     def items(self) -> Generator[Tuple[str, any], None, None]:
         for k, v in self.aggregator.items():
-            yield "(eval) " + k, v
+            yield "eval " + k, v
