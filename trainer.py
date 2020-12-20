@@ -228,11 +228,12 @@ class Trainer:
 
         failure_buffer = cls.build_failure_buffer(**failure_buffer_args)
         curriculum = cls.initialize_curriculum(log_dir=log_dir, **curriculum_args)
+        curriculum_setting = next(curriculum)
         train_envs = cls.make_vec_envs(
             evaluating=False,
             log_dir=log_dir,
             failure_buffer=failure_buffer,
-            curriculum_setting=next(curriculum),
+            curriculum_setting=curriculum_setting,
             **env_args,
         )
         print("Created train_envs")
@@ -283,7 +284,11 @@ class Trainer:
                 # self.envs.evaluate()
                 eval_masks = torch.zeros(num_processes, 1, device=device)
                 eval_envs = cls.make_vec_envs(
-                    evaluating=True, log_dir=log_dir, **env_args
+                    log_dir=log_dir,
+                    failure_buffer=failure_buffer,
+                    curriculum_setting=curriculum_setting,
+                    evaluating=True,
+                    **env_args,
                 )
                 eval_envs.to(device)
                 with agent.evaluating(eval_envs.observation_space):
