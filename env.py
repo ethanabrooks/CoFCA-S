@@ -334,12 +334,15 @@ class Env(gym.Env):
 
         while True:
             if done:
-                floordiv = len(lines) // 5
-                key = (
-                    f"success on instructions length-{(floordiv-1) * 5} through length-{floordiv * 5}"
-                    if self.evaluating
-                    else f"success on length-{len(lines)} instructions"
-                )
+                if self.evaluating:
+                    bucket_size = 5
+                    lower = (len(lines) - 1) // bucket_size * bucket_size + 1
+                    upper = (1 + (len(lines) - 1) // bucket_size) * bucket_size
+                    key = (
+                        f"success on instructions length-{lower} through length-{upper}"
+                    )
+                else:
+                    key = f"success on length-{len(lines)} instructions"
                 info.update(
                     {
                         f"success": float(state.success),
