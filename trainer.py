@@ -321,6 +321,8 @@ class Trainer:
                 rollouts.obs[0].copy_(train_envs.reset())
                 rollouts.masks[0] = 1
                 rollouts.recurrent_hidden_states[0] = 0
+                train_report.reset()
+                train_infos.reset()
             if done or i == 0 or frames["since_log"] > log_interval:
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
