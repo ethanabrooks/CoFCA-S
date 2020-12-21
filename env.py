@@ -84,6 +84,7 @@ class Env(gym.Env):
         super().__init__()
         data_types.WORLD_SIZE = self.world_size
         self.random, _ = seeding.np_random(self.random_seed)
+        self.curriculum_setting.n_lines_space.seed(self.random_seed)
         max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
         self.a_size = max_a_action = max(
