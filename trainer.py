@@ -277,6 +277,7 @@ class Trainer:
                 or (eval_interval and frames["since_eval"] > eval_interval)
             ):
                 print("Evaluating...")
+                time_spent["evaluating"].tick()
                 eval_report = EvalWrapper(EpisodeAggregator())
                 eval_infos = EvalWrapper(InfosAggregator())
                 frames["since_eval"] = 0
@@ -323,6 +324,7 @@ class Trainer:
                 rollouts.recurrent_hidden_states[0] = 0
                 train_report.reset()
                 train_infos.reset()
+                time_spent["evaluating"].update()
             if done or i == 0 or frames["since_log"] > log_interval:
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
