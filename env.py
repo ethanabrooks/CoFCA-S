@@ -235,7 +235,7 @@ class Env(gym.Env):
         use_failure_buf = False
         size = self.failure_buffer.qsize()
         if self.evaluating or not size:
-            buf = False
+            use_failure_buf = False
         else:
             success_avg = max(
                 self.success_avg, self.success_with_failure_buf_avg + 1e-6
@@ -247,8 +247,7 @@ class Env(gym.Env):
             use_failure_prob = 1 - (
                 tgt_success_rate - self.success_with_failure_buf_avg
             ) / (success_avg - self.success_with_failure_buf_avg)
-            buf = self.random.random() < use_failure_prob
-        use_failure_buf = buf
+            use_failure_buf = self.random.random() < use_failure_prob
         state = None
         if use_failure_buf:
 
@@ -290,12 +289,13 @@ class Env(gym.Env):
             if t:
                 success = i["success"]
 
-                i.update(
-                    {
-                        f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
-                        for k, v in i.items()
-                    }
-                )
+                if not self.evaluating:
+                    i.update(
+                        {
+                            f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
+                            for k, v in i.items()
+                        }
+                    )
 
                 def interpolate(old, new):
                     return old + self.alpha * (new - old)
