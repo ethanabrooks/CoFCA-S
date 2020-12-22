@@ -51,7 +51,7 @@ Dependencies = Dict[Building, Building]
 @dataclass
 class EnvConfig:
     break_on_fail: bool = False
-    destroy_building_prob: float = 0
+    attack_prob: float = 0
     num_initial_buildings: int = 0
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
@@ -62,7 +62,7 @@ class EnvConfig:
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
-    destroy_building_prob: float
+    attack_prob: float
     eval_steps: int
     failure_buffer: Queue
     num_initial_buildings: int
@@ -641,18 +641,17 @@ class Env(gym.Env):
         time_remaining = (1 + len(lines)) * self.time_per_line
 
         while True:
-            destroyed_buildings = [
-                (c, b)
-                for c, b in building_positions.items()
-                if self.random.random() < self.destroy_building_prob
-                and not isinstance(b, Nexus)
-            ]
-            if destroyed_buildings:
-                destroy_coords, destroyed_buildings = zip(*destroyed_buildings)
-                for coord in destroy_coords:
-                    del building_positions[coord]
-
             success = not required - Counter(building_positions.values())
+
+            if self.random.random() < self.attack_prob:
+                num_destroyed = self.random.randint(len(building_positions))
+                destroy = [
+                    c for c, b in building_positions.items() if not isinstance(b, Nexus)
+                ]
+                self.random.shuffle(destroy)
+                destroy = destroy[:num_destroyed]
+                for coord in destroy:
+                    del building_positions[coord]
 
             state = State(
                 building_positions=building_positions,
@@ -670,9 +669,9 @@ class Env(gym.Env):
                 print("Resources:")
                 pprint(resources)
                 pprint(assignments)
-                if destroyed_buildings:
+                if destroy:
                     print(fg("red"), "Destroyed:", sep="")
-                    print(*destroyed_buildings, sep="\n", end=RESET + "\n")
+                    print(*destroy, sep="\n", end=RESET + "\n")
 
             self.render_thunk = render
 
