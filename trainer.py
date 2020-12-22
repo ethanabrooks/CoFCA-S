@@ -271,61 +271,59 @@ class Trainer:
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
             done = num_frames is not None and frames["so_far"] >= num_frames
-            if perform_eval and (
-                i == 0
-                or done
-                or (eval_interval and frames["since_eval"] > eval_interval)
-            ):
-                print("Evaluating...")
-                time_spent["evaluating"].tick()
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
-                frames["since_eval"] = 0
-
-                # self.envs.evaluate()
-                eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = cls.make_vec_envs(
-                    log_dir=log_dir,
-                    failure_buffer=failure_buffer,
-                    curriculum_setting=curriculum_setting,
-                    evaluating=True,
-                    **env_args,
-                )
-                eval_envs.to(device)
-                with agent.evaluating(eval_envs.observation_space):
-                    eval_recurrent_hidden_states = torch.zeros(
-                        num_processes,
-                        agent.recurrent_hidden_state_size,
-                        device=device,
-                    )
-
-                    for output in run_epoch(
-                        obs=eval_envs.reset(),
-                        rnn_hxs=eval_recurrent_hidden_states,
-                        masks=eval_masks,
-                        envs=eval_envs,
-                        num_steps=eval_steps,
-                    ):
-                        eval_report.update(
-                            reward=output.reward.cpu().numpy(),
-                            dones=output.done,
-                        )
-                        eval_infos.update(*output.infos, dones=output.done)
-                    cls.report(
-                        **dict(eval_report.items()),
-                        **dict(eval_infos.items()),
-                        frames=frames["so_far"],
-                        log_dir=log_dir,
-                    )
-                    print("Done evaluating...")
-                eval_envs.close()
-                rollouts.obs[0].copy_(train_envs.reset())
-                rollouts.masks[0] = 1
-                rollouts.recurrent_hidden_states[0] = 0
-                train_report.reset()
-                train_infos.reset()
-                time_spent["evaluating"].update()
             if done or i == 0 or frames["since_log"] > log_interval:
+                if perform_eval and (
+                    i == 0
+                    or done
+                    or (eval_interval and frames["since_eval"] > eval_interval)
+                ):
+                    print("Evaluating...")
+                    time_spent["evaluating"].tick()
+                    eval_report = EvalWrapper(EpisodeAggregator())
+                    eval_infos = EvalWrapper(InfosAggregator())
+                    frames["since_eval"] = 0
+
+                    # self.envs.evaluate()
+                    eval_masks = torch.zeros(num_processes, 1, device=device)
+                    eval_envs = cls.make_vec_envs(
+                        log_dir=log_dir,
+                        failure_buffer=failure_buffer,
+                        curriculum_setting=curriculum_setting,
+                        evaluating=True,
+                        **env_args,
+                    )
+                    eval_envs.to(device)
+                    with agent.evaluating(eval_envs.observation_space):
+                        eval_recurrent_hidden_states = torch.zeros(
+                            num_processes,
+                            agent.recurrent_hidden_state_size,
+                            device=device,
+                        )
+
+                        for output in run_epoch(
+                            obs=eval_envs.reset(),
+                            rnn_hxs=eval_recurrent_hidden_states,
+                            masks=eval_masks,
+                            envs=eval_envs,
+                            num_steps=eval_steps,
+                        ):
+                            eval_report.update(
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
+                            )
+                            eval_infos.update(*output.infos, dones=output.done)
+                        cls.report(
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            frames=frames["so_far"],
+                            log_dir=log_dir,
+                        )
+                        print("Done evaluating...")
+                    eval_envs.close()
+                    rollouts.obs[0].copy_(train_envs.reset())
+                    rollouts.masks[0] = 1
+                    rollouts.recurrent_hidden_states[0] = 0
+                    time_spent["evaluating"].update()
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
                 report = dict(
