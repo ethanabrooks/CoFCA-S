@@ -324,6 +324,9 @@ class Trainer:
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
                     time_spent["evaluating"].update()
+                    train_report = EpisodeAggregator()
+                    train_infos = cls.build_infos_aggregator()
+
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
                 report = dict(
