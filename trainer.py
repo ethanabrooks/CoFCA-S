@@ -272,6 +272,28 @@ class Trainer:
             frames.update(so_far=frames_per_update)
             done = num_frames is not None and frames["so_far"] >= num_frames
             if done or i == 0 or frames["since_log"] > log_interval:
+
+                time_spent["logging"].tick()
+                frames["since_log"] = 0
+                report = dict(
+                    **train_results,
+                    **dict(train_report.items()),
+                    **dict(train_infos.items()),
+                    **dict(time_per.items()),
+                    **dict(time_spent.items()),
+                    frames=frames["so_far"],
+                    log_dir=log_dir,
+                )
+                cls.report(**report)
+                train_report.reset()
+                train_infos.reset()
+                time_spent["logging"].update()
+                time_per["iter"].update()
+
+                time_spent["dumping failure buffer"].tick()
+                cls.dump_failure_buffer(failure_buffer, log_dir)
+                time_spent["dumping failure buffer"].update()
+
                 if perform_eval and (
                     i == 0
                     or done
@@ -326,27 +348,6 @@ class Trainer:
                     time_spent["evaluating"].update()
                     train_report = EpisodeAggregator()
                     train_infos = cls.build_infos_aggregator()
-
-                time_spent["logging"].tick()
-                frames["since_log"] = 0
-                report = dict(
-                    **train_results,
-                    **dict(train_report.items()),
-                    **dict(train_infos.items()),
-                    **dict(time_per.items()),
-                    **dict(time_spent.items()),
-                    frames=frames["so_far"],
-                    log_dir=log_dir,
-                )
-                cls.report(**report)
-                train_report.reset()
-                train_infos.reset()
-                time_spent["logging"].update()
-                time_per["iter"].update()
-
-                time_spent["dumping failure buffer"].tick()
-                cls.dump_failure_buffer(failure_buffer, log_dir)
-                time_spent["dumping failure buffer"].update()
 
             if done or (save_interval and frames["since_save"] > save_interval):
                 time_spent["saving"].tick()
