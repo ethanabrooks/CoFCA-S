@@ -238,10 +238,13 @@ def app(cfg: DictConfig) -> None:
     Trainer.main(cfg)
 
 
-if __name__ == "__main__":
+def main(_app):
     if sys.platform == "darwin":
         multiprocessing.set_start_method("fork")  # needed for osx_queue.Queue
-
     cs = ConfigStore.instance()
     cs.store(name="config", node=OurConfig)
-    app()
+    _app()
+
+
+if __name__ == "__main__":
+    main(app)

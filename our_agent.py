@@ -89,10 +89,8 @@ class Agent(NNBase):
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
         )
-        self.gru = nn.GRU(
-            self.lower_embed_size + self.task_embed_size, self.hidden_size
-        )
-        print(self.lower_embed_size + self.task_embed_size)
+        gru_in_size = self.get_gru_in_size()
+        self.gru = nn.GRU(gru_in_size, self.hidden_size)
         self.initial_hxs = nn.Parameter(
             torch.randn(self.lower_embed_size), requires_grad=True
         )
@@ -168,6 +166,9 @@ class Agent(NNBase):
             dg_probs=2,
             dg=1,
         )
+
+    def get_gru_in_size(self):
+        return self.lower_embed_size + self.task_embed_size
 
     def build_d_gate(self):
         return self.init_(nn.Linear(self.zeta_input_size, 2))
@@ -275,7 +276,7 @@ class Agent(NNBase):
         R = torch.arange(N, device=p.device)
         ones = self.ones.expand_as(R)
         P = self.build_P(p, M, R)
-        m = M[R, p]
+        m = self.build_m(M, R, p)
         self.print("p", p)
 
         x = self.conv(state.obs)
@@ -374,6 +375,10 @@ class Agent(NNBase):
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
+
+    @staticmethod
+    def build_m(M, R, p):
+        return M[R, p]
 
     def get_delta(self, P, dg, line_mask, ones, zeta_input):
         u = self.upsilon(zeta_input).softmax(dim=-1)  # TODO: try z

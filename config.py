@@ -23,6 +23,7 @@ def flatten(cfg: DictConfig):
 class Eval:
     eval_interval: Optional[int] = MISSING
     eval_steps: Optional[int] = MISSING
+    perform_eval: bool = MISSING
 
 
 @dataclass
