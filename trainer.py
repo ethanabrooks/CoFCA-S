@@ -4,7 +4,6 @@ import os
 from collections import namedtuple, Counter, defaultdict
 from pathlib import Path
 from pprint import pprint
-from queue import Queue
 from typing import Dict, DefaultDict, Union, Optional
 
 import gym
@@ -19,9 +18,10 @@ from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
     EpisodeAggregator,
     InfosAggregator,
-    EvalWrapper,
     TotalTimeKeeper,
     AverageTimeKeeper,
+    EvalEpisodeAggregator,
+    EvalInfosAggregator,
 )
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -301,8 +301,8 @@ class Trainer:
                 ):
                     print("Evaluating...")
                     time_spent["evaluating"].tick()
-                    eval_report = EvalWrapper(EpisodeAggregator())
-                    eval_infos = EvalWrapper(InfosAggregator())
+                    eval_report = EvalEpisodeAggregator()
+                    eval_infos = EvalInfosAggregator()
                     frames["since_eval"] = 0
 
                     # self.envs.evaluate()

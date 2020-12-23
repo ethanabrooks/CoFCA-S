@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
 from queue import Empty, Full
-from typing import Optional
+from typing import Optional, DefaultDict, Dict, Union
 
 import hydra
 import numpy as np
@@ -224,13 +224,12 @@ class Trainer(trainer.Trainer):
         )
 
     @classmethod
-    def run(
-        cls,
-        eval_steps: int,
-        max_eval_lines: int,
-        **kwargs,
-    ):
-        super().run(eval_steps=5 * max_eval_lines, **kwargs)
+    def structure_config(
+        cls, cfg: DictConfig
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        cfg.eval.eval_steps = 5 * cfg.max_eval_lines
+        cfg = super().structure_config(cfg)
+        return cfg
 
 
 @hydra.main(config_name="config")
