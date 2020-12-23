@@ -59,11 +59,12 @@ class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         mapping["env_args"] += [
             env.Env.__init__,
             trainer.Trainer.make_vec_envs,
         ]
-        mapping["agent_args"] += [our_agent.Agent.__init__]
+        mapping["run_args"] += [trainer.Trainer.run]
         return mapping
 
     @staticmethod
@@ -221,6 +222,15 @@ class Trainer(trainer.Trainer):
             world_size=world_size,
             **kwargs,
         )
+
+    @classmethod
+    def run(
+        cls,
+        eval_steps: int,
+        max_eval_lines: int,
+        **kwargs,
+    ):
+        super().run(eval_steps=5 * max_eval_lines, **kwargs)
 
 
 @hydra.main(config_name="config")
