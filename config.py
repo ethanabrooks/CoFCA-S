@@ -51,7 +51,7 @@ class BaseConfig:
     hidden_size: int = 150
     learning_rate: float = 0.0025
     load_path: Optional[str] = None
-    log_interval: int = int(2e4)
+    log_interval: int = int(3e4)
     max_grad_norm: float = 0.5
     name: Optional[str] = None
     normalize: bool = False
@@ -64,7 +64,7 @@ class BaseConfig:
     num_frames: Optional[int] = None
     render: bool = False
     render_eval: bool = False
-    save_interval: int = int(2e4)
+    save_interval: int = int(3e4)
     seed: int = 0
     synchronous: bool = False
     tau: float = 0.95
