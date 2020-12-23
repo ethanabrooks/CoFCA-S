@@ -12,7 +12,6 @@ import gym
 import numpy as np
 from colored import fg
 from gym import spaces
-from gym.spaces import MultiDiscrete
 from gym.utils import seeding
 from treelib import Tree
 
@@ -23,6 +22,7 @@ from data_types import (
     Resource,
     Building,
     Coord,
+    DoNothing,
     WorldObject,
     WorldObjects,
     Movement,
@@ -37,7 +37,6 @@ from data_types import (
     Targets,
     IJAction,
     WorkerAction,
-    WorkerActions,
     Buildings,
     Assimilator,
     Nexus,
@@ -120,7 +119,6 @@ class Env(gym.Env):
         # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         # )
         resources_space = spaces.MultiDiscrete(np.inf * np.ones(2))
-        next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
                 1 + a
@@ -138,7 +136,6 @@ class Env(gym.Env):
                     can_open_gate=spaces.MultiBinary(max_a_action),
                     lines=lines_space,
                     line_mask=line_mask_space,
-                    next_actions=next_actions_space,
                     obs=obs_space,
                     partial_action=partial_action_space,
                     resources=resources_space,
@@ -439,9 +436,6 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            next_actions = np.array(
-                [WorkerActions.index(a) for a in state.next_action.values()]
-            )
             action_mask = np.array([*state.action.mask(self.a_size)])
             can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
             partial_action = np.array([*state.action.partial_actions()])
@@ -453,7 +447,6 @@ class Env(gym.Env):
                         resources=resources,
                         line_mask=line_mask,
                         lines=preprocessed,
-                        next_actions=next_actions,
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
@@ -769,8 +762,9 @@ class Env(gym.Env):
                     ):
                         building_positions[worker_position] = building
                         resources -= building.cost.as_counter()
+                        assignments[worker_id] = DoNothing()
                 else:
-                    raise RuntimeError
+                    assert isinstance(worker_action, DoNothing)
 
     def gathered_resource(
         self, building_positions, positions, resource, worker_position
