@@ -155,7 +155,6 @@ class Trainer:
         load_path: Path,
         log_interval: int,
         name: str,
-        perform_eval: bool,
         use_wandb: bool,
         num_frames: Optional[int],
         num_processes: int,
@@ -167,6 +166,10 @@ class Trainer:
         save_interval: int,
         train_steps: int,
     ):
+        assert (eval_interval and eval_steps) or not (eval_interval or eval_steps), (
+            eval_steps,
+            eval_interval,
+        )
 
         if use_wandb:
             wandb.init(group=group, name=name)
@@ -294,10 +297,8 @@ class Trainer:
                 cls.dump_failure_buffer(failure_buffer, log_dir)
                 time_spent["dumping failure buffer"].update()
 
-                if perform_eval and (
-                    i == 0
-                    or done
-                    or (eval_interval and frames["since_eval"] > eval_interval)
+                if eval_interval and (
+                    i == 0 or done or frames["since_eval"] > eval_interval
                 ):
                     print("Evaluating...")
                     time_spent["evaluating"].tick()
@@ -432,7 +433,7 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in cfg.items():
-            if k in ("_wandb", "wandb_version"):
+            if k in ("_wandb", "wandb_version", "eval_perform"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
