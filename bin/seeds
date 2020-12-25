@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+cat | yq eval '.. style= "" | del(.early_terminate) | del(._wandb) | del(.seed) | .seed.values = [0, 1, 2, 3] | {"parameters": .} | .command = ["${env}", "${interpreter}", "${program}", "${args_no_hyphens}"] | .method = "grid" | .program = "ours.py"' -
