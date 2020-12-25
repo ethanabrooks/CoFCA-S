@@ -15,6 +15,10 @@ class Agent(our_agent.Agent):
     def build_d_gate(self):
         return None
 
+    @staticmethod
+    def build_m(M, R, p):
+        return M.view(M.size(0), -1)
+
     def build_P(self, *args, **kwargs):
         return None
 
@@ -29,3 +33,6 @@ class Agent(our_agent.Agent):
 
     def get_delta(self, P, dg, line_mask, ones, zeta_input):
         return torch.ones_like(ones) * self.nl, None
+
+    def get_gru_in_size(self):
+        return self.lower_embed_size + self.nl * self.task_embed_size

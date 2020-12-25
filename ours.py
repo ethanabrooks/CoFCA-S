@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
 from queue import Empty, Full
-from typing import Optional
+from typing import Optional, DefaultDict, Dict, Union
 
 import hydra
 import numpy as np
@@ -34,7 +34,7 @@ class OurConfig(BaseConfig, env.EnvConfig):
     debug_env: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    max_eval_lines: int = 25
+    max_eval_lines: int = 13
     min_eval_lines: int = 1
     conv_hidden_size: int = 100
     debug: bool = False
@@ -59,11 +59,12 @@ class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         mapping["env_args"] += [
             env.Env.__init__,
             trainer.Trainer.make_vec_envs,
         ]
-        mapping["agent_args"] += [our_agent.Agent.__init__]
+        mapping["run_args"] += [trainer.Trainer.run]
         return mapping
 
     @staticmethod
@@ -244,6 +245,14 @@ class Trainer(trainer.Trainer):
             **kwargs,
         )
 
+    @classmethod
+    def structure_config(
+        cls, cfg: DictConfig
+    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+        cfg.eval.eval_steps = 5 * cfg.max_eval_lines
+        cfg = super().structure_config(cfg)
+        return cfg
+
 
 @hydra.main(config_name="config")
 def app(cfg: DictConfig) -> None:
@@ -256,10 +265,13 @@ def app(cfg: DictConfig) -> None:
         return super().structure_config(debug_env=debug_env or debug_env_opt, **config)
 
 
-if __name__ == "__main__":
+def main(_app):
     if sys.platform == "darwin":
         multiprocessing.set_start_method("fork")  # needed for osx_queue.Queue
-
     cs = ConfigStore.instance()
     cs.store(name="config", node=OurConfig)
-    app()
+    _app()
+
+
+if __name__ == "__main__":
+    main(app)

@@ -1,6 +1,3 @@
-- add equivalent of `docker log -f` to `run.sh`
-- do profiling
-- try Adam
-- try different initializers
-- try leaky
 - try feeding z to upsilon instead of zeta_input
+- is rldl14 slow??
+- fix the runs-not-terminating bug
