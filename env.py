@@ -674,6 +674,7 @@ class Env(gym.Env):
         while True:
             success = not required - Counter(building_positions.values())
 
+            destroy = []
             if self.random.random() < self.attack_prob:
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
