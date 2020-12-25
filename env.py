@@ -402,7 +402,7 @@ class Env(gym.Env):
                 for l in lines:
                     built = l.building in buildings
                     yield Line(
-                        required=l.required and not built,
+                        required=not built,
                         building=l.building,
                     )
                     if built and l.required:
@@ -617,9 +617,9 @@ class Env(gym.Env):
             render_t()
             render_i()
             render_state()
+            render_s()
             print("Action:", end=" ")
             print(action)
-            render_s()
             print(RESET)
 
         while True:
@@ -700,10 +700,11 @@ class Env(gym.Env):
                 print("Time remaining:", time_remaining)
                 print("Resources:")
                 pprint(resources)
-                pprint(assignments)
                 if destroy:
                     print(fg("red"), "Destroyed:", sep="")
                     print(*destroy, sep="\n", end=RESET + "\n")
+                for k, v in sorted(assignments.items()):
+                    print(f"{k}: {v}")
 
             self.render_thunk = render
 

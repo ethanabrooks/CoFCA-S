@@ -44,6 +44,10 @@ class Worker(WorldObject, Enum):
         # noinspection PyArgumentList
         return Enum.__eq__(self, other)
 
+    def __lt__(self, other):
+        # noinspection PyArgumentList
+        return self.value < other.value
+
     def __hash__(self):
         # noinspection PyArgumentList
         return Enum.__hash__(self)
