@@ -1,48 +1,50 @@
 import itertools
+import sys
 import typing
 from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
-from multiprocessing.queues import Queue
+from multiprocessing import Queue
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
 
 import gym
+import hydra
 import numpy as np
 from colored import fg
 from gym import spaces
 from gym.utils import seeding
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig
 from treelib import Tree
 
 import data_types
 import keyboard_control
+import osx_queue
 from data_types import (
+    NoWorkersAction,
+    Carrying,
+    BuildingPositions,
+    Assignment,
+    Positions,
+    Resources,
+    ActionComponent,
     Obs,
     Resource,
     Building,
-    Coord,
-    DoNothing,
     WorldObject,
     WorldObjects,
-    Movement,
     Worker,
     State,
     Line,
-    BuildOrder,
     CompoundAction,
     RawAction,
-    Assignment,
-    WorkerTargetAction,
-    Targets,
-    IJAction,
-    WorkerAction,
     Buildings,
     Assimilator,
     Nexus,
-    CurriculumSetting,
 )
-from utils import RESET
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -51,6 +53,8 @@ Dependencies = Dict[Building, Building]
 class EnvConfig:
     break_on_fail: bool = False
     attack_prob: float = 0
+    max_lines: int = 10
+    min_lines: int = 1
     num_initial_buildings: int = 2
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
@@ -64,6 +68,8 @@ class Env(gym.Env):
     attack_prob: float
     eval_steps: int
     failure_buffer: Queue
+    max_lines: int
+    min_lines: int
     num_initial_buildings: int
     rank: int
     random_seed: int
@@ -71,7 +77,6 @@ class Env(gym.Env):
     time_per_line: int
     world_size: int
     alpha: float = 0.05
-    curriculum_setting: CurriculumSetting = None
     evaluating: bool = None
     i: int = 0
     iterator = None
@@ -83,27 +88,27 @@ class Env(gym.Env):
         super().__init__()
         data_types.WORLD_SIZE = self.world_size
         self.random, _ = seeding.np_random(self.random_seed)
-        self.curriculum_setting.n_lines_space.seed(self.random_seed)
-        max_lines = self.curriculum_setting.max_lines
+        self.n_lines_space = Discrete(self.min_lines, self.max_lines)
+        self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
-        self.a_size = max_a_action = max(
-            [c.size_a() for c in self.compound_action().classes()]
-        )
+        action_size = CompoundAction.action_size()
         self.action_space = spaces.MultiDiscrete(
             np.array(
                 astuple(
                     RawAction(
-                        delta=2 * max_lines,
+                        delta=2 * self.max_lines,
                         dg=2,
-                        a=max_a_action,
-                        ptr=max_lines,
+                        a=action_size,
+                        ptr=self.max_lines,
                     )
                 )
             )
         )
 
-        lines_space = spaces.MultiDiscrete(np.array([[2, len(Buildings)]] * max_lines))
-        line_mask_space = spaces.MultiDiscrete(2 * np.ones(max_lines))
+        lines_space = spaces.MultiDiscrete(
+            np.array([[2, len(Buildings)]] * self.max_lines)
+        )
+        line_mask_space = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
         self.world_shape = world_shape = np.array([self.world_size, self.world_size])
         self.world_space = spaces.Box(
             low=np.zeros_like(world_shape, dtype=np.float32),
@@ -115,29 +120,19 @@ class Env(gym.Env):
             low=np.zeros(shape, dtype=np.float32),
             high=np.ones(shape, dtype=np.float32),
         )
-        # self.time_per_line = 2 * max(
-        # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
-        # )
-        resources_space = spaces.MultiDiscrete(np.inf * np.ones(2))
-        partial_action_space = spaces.MultiDiscrete(
-            [
-                1 + a
-                for c in self.compound_action().classes()
-                for a in astuple(c.num_values())
-            ]  # [:-1]
-        )
-        pointer_space = spaces.Discrete(max_lines)
+        resources_space = spaces.MultiDiscrete([sys.maxsize] * 2)
+        pointer_space = spaces.Discrete(self.max_lines)
 
         # noinspection PyTypeChecker
         self.observation_space = spaces.Dict(
             asdict(
                 Obs(
-                    action_mask=spaces.MultiBinary(max_a_action),
-                    can_open_gate=spaces.MultiBinary(max_a_action),
+                    action_mask=spaces.MultiBinary(action_size),
+                    can_open_gate=spaces.MultiBinary(action_size),
                     lines=lines_space,
                     line_mask=line_mask_space,
                     obs=obs_space,
-                    partial_action=partial_action_space,
+                    partial_action=CompoundAction.space(),
                     resources=resources_space,
                     ptr=pointer_space,
                 )
@@ -145,11 +140,13 @@ class Env(gym.Env):
         )
 
     def build_dependencies(
-        self, max_depth: int
+        self, max_depth: int = None
     ) -> Generator[Tuple[Building, Optional[Building]], None, None]:
         buildings = [b for b in Buildings if not isinstance(b, Assimilator)]
         self.random.shuffle(buildings)
-        n = min(max_depth, len(buildings))
+        n = len(buildings)
+        if max_depth is not None:
+            n = min(max_depth, n)
         dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
         dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
@@ -193,7 +190,7 @@ class Env(gym.Env):
                 and not isinstance(building, Assimilator),
             )
 
-        n_lines = self.curriculum_setting.n_lines_space.sample()
+        n_lines = self.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
         required = [i.building for i in instructions if i.required]
         assert required.count(Assimilator()) <= 1
@@ -320,9 +317,6 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def set_curriculum(self, curriculum_setting: CurriculumSetting):
-        self.curriculum_setting = curriculum_setting
-
     def info_generator(self, *lines):
         state: State
         done: bool
@@ -362,38 +356,13 @@ class Env(gym.Env):
             elapsed_time += 1
 
     def main(self):
-        def action_fn(string: str):
-            try:
-                *args, target = map(int, string.split())
-                try:
-                    i, j = args
-                    worker = 0
-                except ValueError:
-                    if Targets[target] is Building:
-                        print("Must specify i/j for buildings.")
-                        return
-                    i, j = 0, 0
-                    worker = 1
-                worker = Worker(worker + 1)
-                target = Targets[target]
-                return self.compound_action(
-                    # IsOpAction(is_op=True),
-                    WorkerTargetAction(worker, target),
-                    IJAction(i, j),
-                )
-            except (ValueError, TypeError) as e:
-                print(e)
-
-        keyboard_control.run(self, action_fn)
+        keyboard_control.run(self, lambda: None)
 
     def obs_generator(self, *lines: Line):
         state: State
         state = yield
 
-        padded: List[Optional[Line]] = [
-            *lines,
-            *[None] * (self.curriculum_setting.max_lines - len(lines)),
-        ]
+        padded: List[Optional[Line]] = [*lines, *[None] * (self.max_lines - len(lines))]
         line_mask = np.array([p is None for p in padded])
 
         def render():
@@ -414,7 +383,7 @@ class Env(gym.Env):
                         i,
                         "-" if i == state.pointer else " ",
                         "*" if line.required else " ",
-                        Targets.index(line.building),
+                        Buildings.index(line.building),
                         str(line.building),
                         line.building.cost,
                     )
@@ -436,10 +405,10 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            action_mask = np.array([*state.action.mask(self.a_size)])
-            can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
-            partial_action = np.array([*state.action.partial_actions()])
-            ptr = np.array([state.pointer])
+            assert isinstance(state.action, CompoundAction)
+            action_mask = np.array([*state.action.mask()])
+            can_open_gate = np.array([*state.action.can_open_gate()])
+            partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
                     Obs(
@@ -450,18 +419,18 @@ class Env(gym.Env):
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
-                        ptr=ptr,
+                        ptr=state.pointer,
                     )
                 )
             )
-            # for (k, space), (n, o) in zip(
-            # self.observation_space.spaces.items(), obs.items()
-            # ):
-            # if not space.contains(o):
-            # import ipdb
+            for (k, space), (n, o) in zip(
+                self.observation_space.spaces.items(), obs.items()
+            ):
+                if not space.contains(o):
+                    import ipdb
 
-            # ipdb.set_trace()
-            # space.contains(o)
+                    ipdb.set_trace()
+                    space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
 
@@ -514,11 +483,7 @@ class Env(gym.Env):
         else:
             max_initial_buildings = max(
                 0,
-                (
-                    self.world_size ** 2
-                    - len(occupied)
-                    - self.curriculum_setting.max_lines
-                ),
+                (self.world_size ** 2 - len(occupied) - self.max_lines),
             )
             if max_initial_buildings > 0:
                 num_initial_buildings = self.random.randint(max_initial_buildings + 1)
@@ -589,10 +554,8 @@ class Env(gym.Env):
 
     def srti_generator(
         self,
-    ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        dependencies = dict(
-            self.build_dependencies(self.curriculum_setting.max_build_tree_depth)
-        )
+    ) -> Generator[Tuple[any, float, bool, dict], Optional[RawAction], None]:
+        dependencies = dict(self.build_dependencies())
         lines = self.build_lines(dependencies)
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
@@ -603,7 +566,6 @@ class Env(gym.Env):
         next(reward_iterator)
         next(done_iterator)
         next(info_iterator)
-        action = self.compound_action()
         state, render_state = next(state_iterator)
         time_remaining = self.eval_steps
 
@@ -618,8 +580,6 @@ class Env(gym.Env):
             render_i()
             render_state()
             render_s()
-            print("Action:", end=" ")
-            print(action)
             print(RESET)
 
         while True:
@@ -635,44 +595,113 @@ class Env(gym.Env):
 
             self.render_thunk = render
 
+            a: Optional[RawAction]
             # noinspection PyTypeChecker
             a = yield s, r, t, i
-            action = action.update(a)
-            state = replace(state, action=action)
 
-            if action.is_op():
-                state, render_state = state_iterator.send(action)
+            state, render_state = state_iterator.send(a)
             if self.evaluating:
                 time_remaining -= 1
                 state = replace(state, time_remaining=time_remaining)
 
-    @staticmethod
-    def compound_action(*args, **kwargs) -> CompoundAction:
-        return CompoundAction(*args, **kwargs)
-
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
-    ) -> Generator[State, CompoundAction, None]:
+    ) -> Generator[State, Optional[RawAction], None]:
         positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
-        building_positions: Dict[Coord, Building] = dict(
+        building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
-        positions: Dict[Union[Resource, Worker], Coord] = dict(
-            [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
+        pending_positions: BuildingPositions = {}
+        positions: Positions = dict(
+            [
+                (o, (i, j))
+                for o, (i, j) in positions
+                if isinstance(o, (Resource, Worker))
+            ]
         )
-        assignments: Dict[Worker, Assignment] = {}
-        next_actions: Dict[Worker, WorkerAction] = {}
-        for worker_id in Worker:
-            assignments[worker_id] = self.initial_assignment()
-
+        assignments: Dict[Worker, Assignment] = {w: Resource.MINERALS for w in Worker}
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
+        carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
-        action = self.compound_action()
+        destroy = []
+        action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
+        valid = True
+
+        def render():
+            print("Time remaining:", time_remaining)
+            print("Resources:")
+            pprint(resources)
+            for k, v in sorted(assignments.items()):
+                print(f"{k}: {v}")
+            if destroy:
+                print(fg("red"), "Destroyed:", sep="")
+                print(*destroy, sep="\n", end=RESET + "\n")
+            if not valid:
+                print(fg("red"), "Action not valid.", RESET, sep="")
+
+        self.render_thunk = render
 
         while True:
             success = not required - Counter(building_positions.values())
+
+            state = State(
+                building_positions=building_positions,
+                positions=positions,
+                resources=resources,
+                success=success,
+                pointer=ptr,
+                action=action,
+                time_remaining=time_remaining,
+            )
+
+            a: Optional[RawAction]
+            # noinspection PyTypeChecker
+            a = yield state, render
+            if a is None:
+                a: ActionComponent = action.from_input()
+            if isinstance(a, RawAction):
+                a = a.a
+                ptr = a.ptr
+            new_action = action.update(a)
+            valid = new_action.valid(
+                resources=resources,
+                dependencies=dependencies,
+                building_positions=building_positions,
+                pending_positions=pending_positions,
+                positions=positions,
+            )
+            if not valid:
+                time_remaining -= 1  # penalize agent for invalid
+                continue
+
+            action = new_action
+            assignment = action.assignment(positions)
+            is_op = assignment is not None
+            if is_op:
+                time_remaining -= 1
+            else:
+                continue
+
+            for worker in action.get_workers():
+                assignments[worker] = assignment
+
+            worker_id: Worker
+            for worker_id, assignment in sorted(
+                assignments.items(),
+                key=lambda w: isinstance(w[1], Resource),
+                reverse=True,
+            ):  # collect resources first.
+                assignment.execute(
+                    assignments=assignments,
+                    worker=worker_id,
+                    positions=positions,
+                    building_positions=building_positions,
+                    pending_positions=pending_positions,
+                    carrying=carrying,
+                    resources=resources,
+                )
 
             destroy = []
             if self.random.random() < self.attack_prob:
@@ -685,139 +714,33 @@ class Env(gym.Env):
                 for coord in destroy:
                     del building_positions[coord]
 
-            state = State(
-                building_positions=building_positions,
-                next_action=next_actions,
-                positions=positions,
-                resources=resources,
-                success=success,
-                pointer=ptr,
-                action=action,
-                time_remaining=time_remaining,
-            )
-
-            def render():
-                print("Time remaining:", time_remaining)
-                print("Resources:")
-                pprint(resources)
-                if destroy:
-                    print(fg("red"), "Destroyed:", sep="")
-                    print(*destroy, sep="\n", end=RESET + "\n")
-                for k, v in sorted(assignments.items()):
-                    print(f"{k}: {v}")
-
-            self.render_thunk = render
-
-            nexus_positions: List[Coord] = [
-                p for p, b in building_positions.items() if isinstance(b, Nexus)
-            ]
-            assert nexus_positions
-            for worker_id, assignment in assignments.items():
-                next_actions[worker_id] = assignment.action(
-                    positions[worker_id],
-                    positions,
-                    [p for p, b in building_positions.items() if isinstance(b, Nexus)],
-                )
-
-            action: CompoundAction
-            # noinspection PyTypeChecker
-            action = yield state, render
-            ptr = action.ptr
-            time_remaining -= 1
-            assignments[action.worker()] = action.assignment()
-
-            worker_id: Worker
-            assignment: Assignment
-            for worker_id, assignment in sorted(
-                assignments.items(), key=lambda w: isinstance(w[1], BuildOrder)
-            ):  # collect resources first.
-                worker_position = positions[worker_id]
-                worker_action = assignment.action(
-                    current_position=worker_position,
-                    positions=positions,
-                    nexus_positions=nexus_positions,
-                )
-
-                if isinstance(worker_action, Movement):
-                    new_position = tuple(
-                        np.array(worker_position) + np.array(astuple(worker_action))
-                    )
-                    positions[worker_id] = new_position
-                    if isinstance(building_positions.get(new_position, None), Nexus):
-                        for resource in Resource:
-                            if self.gathered_resource(
-                                building_positions, positions, resource, worker_position
-                            ):
-                                resources[resource] += 1
-                elif isinstance(worker_action, Building):
-                    building = worker_action
-                    insufficient_resources = bool(
-                        building.cost.as_counter() - resources
-                    )
-                    if self.building_allowed(
-                        building=building,
-                        dependency=dependencies[building],
-                        building_positions=building_positions,
-                        insufficient_resources=insufficient_resources,
-                        positions=positions,
-                        assignment_location=assignment.location,
-                    ):
-                        building_positions[worker_position] = building
-                        resources -= building.cost.as_counter()
-                        assignments[worker_id] = DoNothing()
-                else:
-                    assert isinstance(worker_action, DoNothing)
-
-    def gathered_resource(
-        self, building_positions, positions, resource, worker_position
-    ):
-        return positions[resource] == worker_position and (
-            resource != Resource.GAS
-            or isinstance(building_positions.get(worker_position, None), Assimilator)
-        )
-
-    @staticmethod
-    def initial_assignment():
-        return Resource.MINERALS
-
-    def building_allowed(
-        self,
-        building: Building,
-        dependency: Optional[Building],
-        building_positions: Dict[Coord, Building],
-        insufficient_resources: bool,
-        positions: Dict[WorldObject, Coord],
-        assignment_location: Coord,
-    ) -> bool:
-        if (
-            insufficient_resources
-            or assignment_location in building_positions
-            or dependency not in [*building_positions.values(), None]
-        ):
-            return False
-        if isinstance(building, Assimilator):
-            return assignment_location == positions[Resource.GAS]
-        else:
-            return assignment_location not in (
-                positions[Resource.GAS],
-                positions[Resource.MINERALS],
-            )
-
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):
             action = RawAction(*action)
         return self.iterator.send(action)
 
 
-def main(debug_env: bool, world_size, **kwargs):
-    data_types.WORLD_SIZE = world_size
-    Env(rank=0, eval_steps=500, world_size=world_size, **kwargs).main()
+@hydra.main(config_name="config")
+def app(cfg: DictConfig) -> None:
+    failure_buffer = Queue()
+    try:
+        failure_buffer.qsize()
+    except NotImplementedError:
+        failure_buffer = osx_queue.Queue()
+    Env(
+        **cfg,
+        rank=0,
+        eval_steps=500,
+        failure_buffer=failure_buffer,
+    ).main()
 
 
 if __name__ == "__main__":
-    import argparse
 
-    PARSER = argparse.ArgumentParser()
-    Env.add_arguments(PARSER)
-    PARSER.add_argument("--random-seed", default=0, type=int)
-    main(**vars(PARSER.parse_args()))
+    @dataclass
+    class Config(EnvConfig):
+        random_seed: int = 0
+
+    cs = ConfigStore.instance()
+    cs.store(name="config", node=Config)
+    app()

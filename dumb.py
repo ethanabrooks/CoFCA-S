@@ -1,27 +1,18 @@
-from dataclasses import dataclass
-
-
-class Z:
-    def __init__(self, v):
-        self.v = v
+from dataclasses import dataclass, fields
+from typing import Optional
 
 
 @dataclass
-class A(Z):
-    a: int = 1
-
-    def __post_init__(self):
-        Z.__init__(self, 1)
-
-
-@dataclass
-class B(Z):
-    b: int = 2
+class A:
+    @property
+    def a(self):
+        return None
 
 
 @dataclass
-class C(A, B):
-    pass
+class B(A):
+    a = 1
 
 
-print(C().v)
+print(A().a)
+print(B().a)
