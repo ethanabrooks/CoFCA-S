@@ -41,7 +41,6 @@ class YesEval(Eval):
 class BaseConfig:
     activation_name: str = "ReLU"
     clip_param: float = 0.2
-    config: Optional[str] = None
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
     eval: Any = MISSING

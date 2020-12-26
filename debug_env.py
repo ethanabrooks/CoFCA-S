@@ -132,23 +132,6 @@ class Env(env.Env):
             *building_positions
         ]
 
-    def building_allowed(
-        self,
-        building: Building,
-        dependency: Optional[Building],
-        building_positions: Dict[Coord, Building],
-        insufficient_resources: bool,
-        positions: Dict[WorldObject, Coord],
-        assignment_location: Coord,
-    ) -> bool:
-        if insufficient_resources:
-            return False
-        built = self.get_buildings(building_positions)
-        # print(fg("green"), building, dependency, built, RESET)
-        return dependency in built + [None] and assignment_location not in [
-            *building_positions
-        ]
-
 
 def main(debug_env: bool, **kwargs):
     Env(rank=0, eval_steps=500, **kwargs).main()

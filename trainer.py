@@ -10,7 +10,6 @@ import gym
 import hydra
 import torch
 import torch.nn as nn
-import yaml
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
