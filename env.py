@@ -662,8 +662,7 @@ class Env(gym.Env):
             if a is None:
                 a: ActionComponent = action.from_input()
             if isinstance(a, RawAction):
-                a = a.a
-                ptr = a.ptr
+                a, prt = map(int, (a.a, a.ptr))
             new_action = action.update(a)
             valid = new_action.valid(
                 resources=resources,

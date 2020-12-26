@@ -85,7 +85,7 @@ class Building(WorldObject, ActionComponent, ABC):
         pass
 
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
-        return self == building_positions.get(astuple(coord))
+        return self == building_positions.get(coord)
 
     @staticmethod
     def parse(n: int) -> ActionComponent:
@@ -464,11 +464,15 @@ class CompoundAction:
 
         return spaces.MultiDiscrete([*gen()])
 
-    def mask(self) -> Generator[int, None, None]:
+    def active(self):
         active_components = {*self.active_components()}
         for component in self.component_classes():
             assert issubclass(component, ActionComponent)
             active = component in active_components
+            yield component, active
+
+    def mask(self) -> Generator[int, None, None]:
+        for component, active in self.active():
             for a in range(component.input_space().n):
                 yield not active
 
@@ -493,7 +497,12 @@ class CompoundAction:
 
     def update(self, a: Union[int, ActionComponent]) -> "CompoundAction":
         if isinstance(a, int):
-            a = self._parse_int(a)
+            for component, active in self.active():
+                if active:
+                    a = self._parse_int(a)
+                    break
+                else:
+                    a -= component.input_space().n
         return self._update(a)
 
     @abstractmethod
