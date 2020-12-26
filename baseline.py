@@ -18,7 +18,7 @@ class Trainer(ours.Trainer):
 
 @hydra.main(config_name="config")
 def app(cfg: ours.OurConfig) -> None:
-    cfg.eval.perform_eval = False
+    cfg.eval.interval = cfg.eval.steps = None
     assert isinstance(cfg, DictConfig)
     Trainer.main(cfg)
 
