@@ -12,7 +12,6 @@ import gym
 import numpy as np
 from colored import fg
 from gym import spaces
-from gym.spaces import MultiDiscrete
 from gym.utils import seeding
 from treelib import Tree
 
@@ -23,6 +22,7 @@ from data_types import (
     Resource,
     Building,
     Coord,
+    DoNothing,
     WorldObject,
     WorldObjects,
     Movement,
@@ -37,7 +37,6 @@ from data_types import (
     Targets,
     IJAction,
     WorkerAction,
-    WorkerActions,
     Buildings,
     Assimilator,
     Nexus,
@@ -50,10 +49,9 @@ Dependencies = Dict[Building, Building]
 
 @dataclass
 class EnvConfig:
-    assimilator_prob: float = 0.5
     break_on_fail: bool = False
-    destroy_building_prob: float = 0
-    num_initial_buildings: int = 0
+    attack_prob: float = 0
+    num_initial_buildings: int = 2
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
     world_size: int = 3
@@ -62,9 +60,8 @@ class EnvConfig:
 # noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
-    assimilator_prob: float
     break_on_fail: bool
-    destroy_building_prob: float
+    attack_prob: float
     eval_steps: int
     failure_buffer: Queue
     num_initial_buildings: int
@@ -80,11 +77,13 @@ class Env(gym.Env):
     iterator = None
     render_thunk = None
     success_avg = 0.5
+    success_with_failure_buf_avg = 0.5
 
     def __post_init__(self):
         super().__init__()
         data_types.WORLD_SIZE = self.world_size
         self.random, _ = seeding.np_random(self.random_seed)
+        self.curriculum_setting.n_lines_space.seed(self.random_seed)
         max_lines = self.curriculum_setting.max_lines
         self.non_failure_random = self.random.get_state()
         self.a_size = max_a_action = max(
@@ -120,7 +119,6 @@ class Env(gym.Env):
         # reduce(lambda a, b: a | b, Costs.values(), Costs[Building.NEXUS]).values()
         # )
         resources_space = spaces.MultiDiscrete(np.inf * np.ones(2))
-        next_actions_space = MultiDiscrete(np.ones(len(Worker)) * len(WorkerActions))
         partial_action_space = spaces.MultiDiscrete(
             [
                 1 + a
@@ -138,7 +136,6 @@ class Env(gym.Env):
                     can_open_gate=spaces.MultiBinary(max_a_action),
                     lines=lines_space,
                     line_mask=line_mask_space,
-                    next_actions=next_actions_space,
                     obs=obs_space,
                     partial_action=partial_action_space,
                     resources=resources_space,
@@ -235,17 +232,24 @@ class Env(gym.Env):
         use_failure_buf = False
         size = self.failure_buffer.qsize()
         if self.evaluating or not size:
-            buf = False
+            use_failure_buf = False
         else:
-            use_failure_prob = 1 - self.tgt_success_rate / self.success_avg
-            use_failure_prob = max(use_failure_prob, 0)
-            buf = self.random.random() < use_failure_prob
-        use_failure_buf = buf
+            success_avg = max(
+                self.success_avg, self.success_with_failure_buf_avg + 1e-6
+            )
+            tgt_success_rate = max(
+                self.success_with_failure_buf_avg,
+                min(self.tgt_success_rate, success_avg),
+            )
+            use_failure_prob = 1 - (
+                tgt_success_rate - self.success_with_failure_buf_avg
+            ) / (success_avg - self.success_with_failure_buf_avg)
+            use_failure_buf = self.random.random() < use_failure_prob
         state = None
         if use_failure_buf:
 
             # randomly rotate queue
-            for i in range(self.random.choice(min(10, size))):
+            for i in range(self.random.choice(min(100, size))):
                 try:
                     state = self.failure_buffer.get_nowait()
                     self.failure_buffer.put_nowait(state)
@@ -279,14 +283,26 @@ class Env(gym.Env):
             s, r, t, i = iterator.send(action)
             render_thunk = self.render_thunk
             self.render_thunk = render
-            if not use_failure_buf:
-                i.update({"reward (no failure buffer)": r})
             if t:
                 success = i["success"]
 
-                if not use_failure_buf:
-                    i.update({"success (no failure buffer)": float(success)})
-                    self.success_avg += self.alpha * (success - self.success_avg)
+                if not self.evaluating:
+                    i.update(
+                        {
+                            f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
+                            for k, v in i.items()
+                        }
+                    )
+
+                def interpolate(old, new):
+                    return old + self.alpha * (new - old)
+
+                if use_failure_buf:
+                    self.success_with_failure_buf_avg = interpolate(
+                        self.success_with_failure_buf_avg, success
+                    )
+                else:
+                    self.success_avg = interpolate(self.success_avg, success)
 
                 put_failure_buf = not self.evaluating and not success
                 if put_failure_buf:
@@ -316,21 +332,30 @@ class Env(gym.Env):
 
         while True:
             if done:
+                if self.evaluating:
+                    bucket_size = 5
+                    lower = (len(lines) - 1) // bucket_size * bucket_size + 1
+                    upper = (1 + (len(lines) - 1) // bucket_size) * bucket_size
+                    key = (
+                        f"success on instructions length-{lower} through length-{upper}"
+                    )
+                else:
+                    key = f"success on length-{len(lines)} instructions"
                 info.update(
                     {
                         f"success": float(state.success),
-                        f"success on length-{len(lines)} instructions": float(
-                            state.success
-                        ),
+                        key: float(state.success),
                         "instruction length": len(lines),
-                        "curriculum + success": float(
-                            self.curriculum_setting.level + state.success
-                        ),
                         "time per line": elapsed_time / len(lines),
                     },
                 )
-                if any(l.building.cost.gas > 0 for l in lines):
-                    info.update({"success on gas buildings": state.success})
+                try:
+                    (line,) = lines
+                    if line.building.cost.gas > 0:
+                        info.update({"success on gas buildings": state.success})
+                except ValueError:
+                    pass
+
             # noinspection PyTupleAssignmentBalance
             state, done = yield info, lambda: None
             info = {}
@@ -415,9 +440,6 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            next_actions = np.array(
-                [WorkerActions.index(a) for a in state.next_action.values()]
-            )
             action_mask = np.array([*state.action.mask(self.a_size)])
             can_open_gate = np.array([*state.action.can_open_gate(self.a_size)])
             partial_action = np.array([*state.action.partial_actions()])
@@ -429,7 +451,6 @@ class Env(gym.Env):
                         resources=resources,
                         line_mask=line_mask,
                         lines=preprocessed,
-                        next_actions=next_actions,
                         action_mask=action_mask,
                         can_open_gate=can_open_gate,
                         partial_action=partial_action,
@@ -468,25 +489,61 @@ class Env(gym.Env):
         yield Resource.MINERALS, minerals
         yield Resource.GAS, gas
 
-        if self.random.random() < self.assimilator_prob:
-            yield Assimilator(), gas
         occupied = [nexus, minerals, gas]
-        while True:
-            initial_pos = self.random.choice(
-                self.world_size, size=(self.num_initial_buildings, 2)
+        occupied_indices = np.sort(
+            np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
+        )
+
+        if self.num_initial_buildings:
+
+            while True:
+                initial_pos = self.random.choice(
+                    self.world_size, size=(self.num_initial_buildings, 2)
+                )
+                initial_in_occupied = (
+                    np.equal(
+                        np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1)
+                    )
+                    .all(axis=-1)
+                    .any()
+                )
+                if not initial_in_occupied:
+                    initial_buildings = self.random.choice(
+                        Buildings, size=self.num_initial_buildings
+                    )
+                    for b, p in zip(initial_buildings, initial_pos):
+                        yield b, gas if isinstance(b, Assimilator) else p
+                    return
+
+        else:
+            max_initial_buildings = max(
+                0,
+                (
+                    self.world_size ** 2
+                    - len(occupied)
+                    - self.curriculum_setting.max_lines
+                ),
             )
-            initial_in_occupied = (
-                np.equal(np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1))
-                .all(axis=-1)
-                .any()
-            )
-            if not initial_in_occupied:
+            if max_initial_buildings > 0:
+                num_initial_buildings = self.random.randint(max_initial_buildings + 1)
+                initial_index = self.random.choice(
+                    max_initial_buildings,
+                    size=max_initial_buildings,
+                    replace=False,
+                )
+                for i in occupied_indices:
+                    initial_index[initial_index >= i] += 1
+                initial_pos = np.stack(
+                    np.unravel_index(initial_index, self.world_shape), axis=-1
+                )
                 initial_buildings = self.random.choice(
-                    Buildings, size=self.num_initial_buildings
+                    Buildings,
+                    size=num_initial_buildings,
                 )
                 for b, p in zip(initial_buildings, initial_pos):
+                    # assert not any(np.array_equal(p, p_) for p_ in occupied)
+                    # occupied += [p]
                     yield b, gas if isinstance(b, Assimilator) else p
-                return
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
@@ -552,6 +609,7 @@ class Env(gym.Env):
         next(info_iterator)
         action = self.compound_action()
         state, render_state = next(state_iterator)
+        time_remaining = self.eval_steps
 
         def render():
             if t:
@@ -585,8 +643,9 @@ class Env(gym.Env):
 
             if action.is_op():
                 state, render_state = state_iterator.send(action)
-            elif self.evaluating:
-                state = replace(state, time_remaining=state.time_remaining - 1)
+            if self.evaluating:
+                time_remaining -= 1
+                state = replace(state, time_remaining=time_remaining)
 
     @staticmethod
     def compound_action(*args, **kwargs) -> CompoundAction:
@@ -611,25 +670,21 @@ class Env(gym.Env):
         resources: typing.Counter[Resource] = Counter()
         ptr: int = 0
         action = self.compound_action()
-        time_remaining = (
-            self.eval_steps - 1
-            if self.evaluating
-            else (1 + len(lines)) * self.time_per_line
-        )
+        time_remaining = (1 + len(lines)) * self.time_per_line
 
         while True:
-            destroyed_buildings = [
-                (c, b)
-                for c, b in building_positions.items()
-                if self.random.random() < self.destroy_building_prob
-                and not isinstance(b, Nexus)
-            ]
-            if destroyed_buildings:
-                destroy_coords, destroyed_buildings = zip(*destroyed_buildings)
-                for coord in destroy_coords:
-                    del building_positions[coord]
-
             success = not required - Counter(building_positions.values())
+
+            destroy = []
+            if self.random.random() < self.attack_prob:
+                num_destroyed = self.random.randint(len(building_positions))
+                destroy = [
+                    c for c, b in building_positions.items() if not isinstance(b, Nexus)
+                ]
+                self.random.shuffle(destroy)
+                destroy = destroy[:num_destroyed]
+                for coord in destroy:
+                    del building_positions[coord]
 
             state = State(
                 building_positions=building_positions,
@@ -647,9 +702,9 @@ class Env(gym.Env):
                 print("Resources:")
                 pprint(resources)
                 pprint(assignments)
-                if destroyed_buildings:
+                if destroy:
                     print(fg("red"), "Destroyed:", sep="")
-                    print(*destroyed_buildings, sep="\n", end=RESET + "\n")
+                    print(*destroy, sep="\n", end=RESET + "\n")
 
             self.render_thunk = render
 
@@ -709,8 +764,9 @@ class Env(gym.Env):
                     ):
                         building_positions[worker_position] = building
                         resources -= building.cost.as_counter()
+                        assignments[worker_id] = DoNothing()
                 else:
-                    raise RuntimeError
+                    assert isinstance(worker_action, DoNothing)
 
     def gathered_resource(
         self, building_positions, positions, resource, worker_position

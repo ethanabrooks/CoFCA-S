@@ -117,126 +117,20 @@ class DebugCompoundAction(CompoundAction):
 
 @dataclass
 class Env(env.Env):
-    def state_generator(
-        self, lines: List[Line], dependencies: Dict[Building, Building]
-    ) -> Generator[State, CompoundAction, None]:
-        positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
-        initial_buildings = dict(
-            ((i, j), b) for b, (i, j) in positions if isinstance(b, Building)
-        )
-        building_positions: Dict[Coord, Building] = copy.deepcopy(initial_buildings)
-        positions: Dict[Union[Resource, Worker], Coord] = dict(
-            [(o, (i, j)) for o, (i, j) in positions if not isinstance(o, Building)]
-        )
-        assignments: Dict[Worker, Assignment] = {}
-        next_actions: Dict[Worker, WorkerAction] = {}
-        for worker_id in Worker:
-            assignments[worker_id] = self.initial_assignment()
-
-        required = Counter(li.building for li in lines if li.required)
-        resources: typing.Counter[Resource] = Counter()
-        ptr: int = 0
-        action = self.compound_action()
-        time_remaining = (
-            self.eval_steps - 1
-            if self.evaluating
-            else (1 + len(lines)) * self.time_per_line
-        )
-        complete: typing.Counter[Building] = Counter()
-
-        while True:
-            buildings = Counter(self.get_buildings(building_positions)) - Counter(
-                self.get_buildings(initial_buildings)
-            )
-            success = not required - buildings
-
-            state = State(
-                building_positions=building_positions,
-                next_action=next_actions,
-                positions=positions,
-                resources=resources,
-                success=success,
-                pointer=ptr,
-                action=action,
-                time_remaining=time_remaining,
-            )
-
-            def render():
-                print("Time remaining:", time_remaining)
-                print("Complete:", complete)
-                pprint(assignments)
-
-            self.render_thunk = render
-
-            for worker_id, assignment in assignments.items():
-                next_actions[worker_id] = assignment.action(
-                    positions[worker_id],
-                    positions,
-                    # [p for p, b in building_positions.items() if isinstance(b, Nexus)],
-                    [positions[worker_id]],
-                )
-
-            action: CompoundAction
-            # noinspection PyTypeChecker
-            action = yield state, render
-            assignment = action.assignment()
-            dependency = (
-                dependencies[assignment.building]
-                if isinstance(assignment, BuildOrder)
-                else None
-            )
-            if (
-                isinstance(assignment, BuildOrder)
-                and dependency is None
-                or bool(complete[dependency])
-            ):
-                complete.update([assignment.building])
-            ptr = action.ptr
-            time_remaining -= 1
-            assignments[action.worker()] = action.assignment()
-
-            worker_id: Worker
-            assignment: Assignment
-            for worker_id, assignment in sorted(
-                assignments.items(), key=lambda w: isinstance(w[1], BuildOrder)
-            ):  # collect resources first.
-                worker_position = positions[worker_id]
-                worker_action = assignment.action(
-                    current_position=worker_position,
-                    positions=positions,
-                    nexus_positions=[worker_position],
-                )
-
-                if isinstance(worker_action, Movement):
-                    new_position = tuple(
-                        np.array(worker_position) + np.array(astuple(worker_action))
-                    )
-                    positions[worker_id] = new_position
-                    if isinstance(building_positions.get(new_position, None), Nexus):
-                        for resource in Resource:
-                            if self.gathered_resource(
-                                building_positions, positions, resource, worker_position
-                            ):
-                                resources[resource] += 1
-                elif isinstance(worker_action, Building):
-                    building = worker_action
-                    insufficient_resources = bool(
-                        building.cost.as_counter() - resources
-                    )
-                    assert positions[worker_id] == assignment.location
-                    allowed = self.building_allowed(
-                        building=building,
-                        dependency=dependencies[building],
-                        building_positions=building_positions,
-                        insufficient_resources=insufficient_resources,
-                        positions=positions,
-                        assignment_location=assignment.location,
-                    )
-                    if allowed:
-                        building_positions[assignment.location] = building
-                        resources -= building.cost.as_counter()
-                else:
-                    raise RuntimeError
+    def building_allowed(
+        self,
+        building: Building,
+        dependency: Optional[Building],
+        building_positions: Dict[Coord, Building],
+        insufficient_resources: bool,
+        positions: Dict[WorldObject, Coord],
+        assignment_location: Coord,
+    ) -> bool:
+        built = self.get_buildings(building_positions)
+        # print(fg("green"), building, dependency, built, RESET)
+        return dependency in built + [None] and assignment_location not in [
+            *building_positions
+        ]
 
     def building_allowed(
         self,

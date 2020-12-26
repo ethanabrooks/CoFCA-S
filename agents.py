@@ -137,7 +137,20 @@ class NNBase(nn.Module):
     def output_size(self):
         return self._hidden_size
 
-    def _forward_gru(self, x, hxs, masks):
+    def apply_mask(
+        self, hxs: torch.Tensor, mask: torch.Tensor, initial_hxs: torch.Tensor = None
+    ):
+        try:
+            masked = hxs * mask
+        except RuntimeError:
+            import ipdb
+
+            ipdb.set_trace()
+        if initial_hxs is not None:
+            masked = hxs + (1 - mask) * initial_hxs
+        return masked
+
+    def _forward_gru(self, x, hxs, masks, initial_hxs=None):
         if x.size(0) == hxs.size(0):
             x, hxs = self.gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)

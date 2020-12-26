@@ -19,14 +19,15 @@ from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
     EpisodeAggregator,
     InfosAggregator,
-    EvalWrapper,
     TotalTimeKeeper,
     AverageTimeKeeper,
+    EvalEpisodeAggregator,
+    EvalInfosAggregator,
 )
 from common.vec_env.dummy_vec_env import DummyVecEnv
 from common.vec_env.subproc_vec_env import SubprocVecEnv
 from common.vec_env.util import set_seeds
-from config import Config, NoEval, flatten
+from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
 from wrappers import VecPyTorch
@@ -44,6 +45,8 @@ class Trainer:
                 Agent.__init__,
                 MLPBase.__init__,
             ],
+            curriculum_args=[cls.initialize_curriculum],
+            failure_buffer_args=[cls.build_failure_buffer],
             rollouts_args=[RolloutStorage.__init__],
             ppo_args=[PPO.__init__],
             env_args=[cls.make_env, cls.make_vec_envs],
@@ -59,17 +62,28 @@ class Trainer:
             **agent_args,
         )
 
+    @classmethod
+    def build_failure_buffer(cls, **kwargs):
+        pass
+
     @staticmethod
     def build_infos_aggregator() -> InfosAggregator:
         return InfosAggregator()
+
+    @classmethod
+    def dump_failure_buffer(cls, failure_buffer, log_dir: Path):
+        pass
+
+    @classmethod
+    def initialize_curriculum(cls, **kwargs):
+        while True:
+            yield
 
     @staticmethod
     def load_checkpoint(checkpoint_path, ppo, agent, device):
         state_dict = torch.load(str(checkpoint_path), map_location=device)
         agent.load_state_dict(state_dict["agent"])
         ppo.optimizer.load_state_dict(state_dict["optimizer"])
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     self.envs.venv.load_state_dict(state_dict["vec_normalize"])
         print(f"Loaded parameters from {checkpoint_path}.")
         return state_dict.get("step", -1) + 1
 
@@ -109,12 +123,8 @@ class Trainer:
         )
 
     @classmethod
-    def main(cls):
-        @hydra.main(config_name="config")
-        def app(cfg: DictConfig) -> None:
-            return cls.run(**cls.structure_config(cfg))
-
-        app()
+    def main(cls, cfg: DictConfig):
+        return cls.run(**cls.structure_config(cfg))
 
     @staticmethod
     def make_env(env, seed, rank, evaluating, **kwargs):
@@ -137,17 +147,17 @@ class Trainer:
         agent_args: dict,
         cuda: bool,
         cuda_deterministic: bool,
+        curriculum_args: dict,
         env_args: dict,
         eval_interval: Optional[int],
         eval_steps: Optional[int],
+        failure_buffer_args: dict,
         group: str,
         load_path: Path,
         log_interval: int,
         name: str,
-        perform_eval: bool,
         use_wandb: bool,
-        normalize: float,
-        num_frames: int,
+        num_frames: Optional[int],
         num_processes: int,
         ppo_args: dict,
         render: bool,
@@ -157,9 +167,18 @@ class Trainer:
         save_interval: int,
         train_steps: int,
     ):
+        assert (eval_interval and eval_steps) or not (eval_interval or eval_steps), (
+            eval_steps,
+            eval_interval,
+        )
 
         if use_wandb:
             wandb.init(group=group, name=name)
+            os.symlink(
+                os.path.abspath(".hydra/config.yaml"),
+                os.path.join(wandb.run.dir, "hydra-config.yaml"),
+            )
+            wandb.save("hydra-config.yaml")
             log_dir = Path(wandb.run.dir)
         else:
             log_dir = Path("/tmp")
@@ -211,7 +230,16 @@ class Trainer:
             device = torch.device("cpu")
         print("Using device", device)
 
-        train_envs = cls.make_vec_envs(evaluating=False, log_dir=log_dir, **env_args)
+        failure_buffer = cls.build_failure_buffer(**failure_buffer_args)
+        curriculum = cls.initialize_curriculum(log_dir=log_dir, **curriculum_args)
+        curriculum_setting = next(curriculum)
+        train_envs = cls.make_vec_envs(
+            evaluating=False,
+            log_dir=log_dir,
+            failure_buffer=failure_buffer,
+            curriculum_setting=curriculum_setting,
+            **env_args,
+        )
         print("Created train_envs")
         train_envs.to(device)
         agent = cls.build_agent(envs=train_envs, **agent_args)
@@ -246,58 +274,9 @@ class Trainer:
 
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
-            done = frames["so_far"] >= num_frames
-            if perform_eval and (
-                i == 0
-                or done
-                or (eval_interval and frames["since_eval"] > eval_interval)
-            ):
-                print("Evaluating...")
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
-                frames["since_eval"] = 0
-                # vec_norm = get_vec_normalize(eval_envs)
-                # if vec_norm is not None:
-                #     vec_norm.eval()
-                #     vec_norm.ob_rms = get_vec_normalize(envs).ob_rms
-
-                # self.envs.evaluate()
-                eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = cls.make_vec_envs(
-                    evaluating=True, log_dir=log_dir, **env_args
-                )
-                eval_envs.to(device)
-                with agent.evaluating(eval_envs.observation_space):
-                    eval_recurrent_hidden_states = torch.zeros(
-                        num_processes,
-                        agent.recurrent_hidden_state_size,
-                        device=device,
-                    )
-
-                    for output in run_epoch(
-                        obs=eval_envs.reset(),
-                        rnn_hxs=eval_recurrent_hidden_states,
-                        masks=eval_masks,
-                        envs=eval_envs,
-                        num_steps=eval_steps,
-                    ):
-                        eval_report.update(
-                            reward=output.reward.cpu().numpy(),
-                            dones=output.done,
-                        )
-                        eval_infos.update(*output.infos, dones=output.done)
-                    cls.report(
-                        **dict(eval_report.items()),
-                        **dict(eval_infos.items()),
-                        frames=frames["so_far"],
-                        log_dir=log_dir,
-                    )
-                    print("Done evaluating...")
-                eval_envs.close()
-                rollouts.obs[0].copy_(train_envs.reset())
-                rollouts.masks[0] = 1
-                rollouts.recurrent_hidden_states[0] = 0
+            done = num_frames is not None and frames["so_far"] >= num_frames
             if done or i == 0 or frames["since_log"] > log_interval:
+
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
                 report = dict(
@@ -314,6 +293,63 @@ class Trainer:
                 train_infos.reset()
                 time_spent["logging"].update()
                 time_per["iter"].update()
+
+                time_spent["dumping failure buffer"].tick()
+                cls.dump_failure_buffer(failure_buffer, log_dir)
+                time_spent["dumping failure buffer"].update()
+
+                if eval_interval and (
+                    i == 0 or done or frames["since_eval"] > eval_interval
+                ):
+                    print("Evaluating...")
+                    time_spent["evaluating"].tick()
+                    eval_report = EvalEpisodeAggregator()
+                    eval_infos = EvalInfosAggregator()
+                    frames["since_eval"] = 0
+
+                    # self.envs.evaluate()
+                    eval_masks = torch.zeros(num_processes, 1, device=device)
+                    eval_envs = cls.make_vec_envs(
+                        log_dir=log_dir,
+                        failure_buffer=failure_buffer,
+                        curriculum_setting=curriculum_setting,
+                        evaluating=True,
+                        **env_args,
+                    )
+                    eval_envs.to(device)
+                    with agent.evaluating(eval_envs.observation_space):
+                        eval_recurrent_hidden_states = torch.zeros(
+                            num_processes,
+                            agent.recurrent_hidden_state_size,
+                            device=device,
+                        )
+
+                        for output in run_epoch(
+                            obs=eval_envs.reset(),
+                            rnn_hxs=eval_recurrent_hidden_states,
+                            masks=eval_masks,
+                            envs=eval_envs,
+                            num_steps=eval_steps,
+                        ):
+                            eval_report.update(
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
+                            )
+                            eval_infos.update(*output.infos, dones=output.done)
+                        cls.report(
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            frames=frames["so_far"],
+                            log_dir=log_dir,
+                        )
+                        print("Done evaluating...")
+                    eval_envs.close()
+                    rollouts.obs[0].copy_(train_envs.reset())
+                    rollouts.masks[0] = 1
+                    rollouts.recurrent_hidden_states[0] = 0
+                    time_spent["evaluating"].update()
+                    train_report = EpisodeAggregator()
+                    train_infos = cls.build_infos_aggregator()
 
             if done or (save_interval and frames["since_save"] > save_interval):
                 time_spent["saving"].tick()
@@ -359,8 +395,7 @@ class Trainer:
                 )
                 time_per["frame"].update()
 
-            # noinspection PyArgumentList
-            train_envs.process_infos(train_infos)
+            curriculum.send((train_envs, train_infos))
 
             with torch.no_grad():
                 next_value = agent.get_value(
@@ -379,8 +414,6 @@ class Trainer:
         modules = dict(
             optimizer=ppo.optimizer, agent=agent
         )  # type: Dict[str, torch.nn.Module]
-        # if isinstance(self.envs.venv, VecNormalize):
-        #     modules.update(vec_normalize=self.envs.venv)
         state_dict = {name: module.state_dict() for name, module in modules.items()}
         torch.save(dict(step=step, **state_dict), save_path)
         print(f"Saved parameters to {save_path}")
@@ -390,9 +423,6 @@ class Trainer:
         cls, cfg: DictConfig
     ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
         cfg = DictConfig(dict(flatten(cfg)))
-        if cfg.config is not None:
-            with open(cfg.config) as f:
-                cfg.update(yaml.load(f))
 
         if cfg.render:
             cfg.num_processes = 1
@@ -404,7 +434,7 @@ class Trainer:
         args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
         for k, v in cfg.items():
-            if k in ("_wandb", "wandb_version", "config"):
+            if k in ("_wandb", "wandb_version", "eval_perform"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():
@@ -417,5 +447,12 @@ class Trainer:
         return args
 
 
+@hydra.main(config_name="config")
+def app(cfg: DictConfig) -> None:
+    Trainer.main(cfg)
+
+
 if __name__ == "__main__":
-    Trainer.main()
+    cs = ConfigStore.instance()
+    cs.store(name="config", node=Config)
+    app()
