@@ -420,7 +420,7 @@ class Trainer:
     @classmethod
     def structure_config(
         cls, cfg: DictConfig
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+    ) -> Dict[str, Dict[str, Union[bool, int, float]]]:
         cfg = DictConfig(dict(flatten(cfg)))
 
         if cfg.render:
@@ -430,8 +430,8 @@ class Trainer:
             for method in ms:
                 yield from inspect.signature(method).parameters
 
-        args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
+        args = {k: {} for k in args_to_methods}
         for k, v in cfg.items():
             if k in ("_wandb", "wandb_version", "eval_perform"):
                 continue

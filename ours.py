@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
+from pprint import pprint
 from queue import Empty, Full
 from typing import Optional, DefaultDict, Dict, Union
 
@@ -12,7 +13,6 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import data_types
-import debug_env as _debug_env
 import env
 import osx_queue
 import our_agent
@@ -25,7 +25,6 @@ from wrappers import VecPyTorch
 class OurConfig(BaseConfig, env.EnvConfig):
     conv_hidden_size: int = 100
     debug: bool = False
-    debug_env: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     gate_coef: float = 0.01
@@ -104,20 +103,17 @@ class Trainer(trainer.Trainer):
     def make_env(
         rank: int,
         seed: int,
-        debug_env=False,
         env_id=None,
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        if debug_env:
-            return _debug_env.Env(**kwargs)
-        else:
-            return env.Env(**kwargs)
+        return env.Env(**kwargs)
 
     # noinspection PyMethodOverriding
     @classmethod
     def make_vec_envs(
         cls,
+        curriculum_setting,
         evaluating: bool,
         failure_buffer: Queue,
         max_eval_lines: int,
@@ -152,6 +148,7 @@ class Trainer(trainer.Trainer):
 
 @hydra.main(config_name="config")
 def app(cfg: DictConfig) -> None:
+    pprint(dict(**cfg))
     Trainer.main(cfg)
 
 
