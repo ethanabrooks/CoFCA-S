@@ -139,6 +139,15 @@ class Worker(WorldObject, Enum):
     A = auto()
     B = auto()
     C = auto()
+    D = auto()
+    E = auto()
+    F = auto()
+    G = auto()
+    H = auto()
+    I = auto()
+    J = auto()
+    K = auto()
+    L = auto()
 
     def __eq__(self, other):
         # noinspection PyArgumentList
@@ -208,7 +217,7 @@ class Resource(WorldObject, Assignment, Enum):
             )
             if positions[worker] == nexus:
                 assert isinstance(carrying[worker], Resource)
-                resources[carrying[worker]] += 1
+                resources[carrying[worker]] += 5
                 carrying[worker] = None
 
     def on(
@@ -772,7 +781,7 @@ def get_nearest(
 class Assimilator(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=1, gas=0)
+        return Resources(minerals=75, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -782,7 +791,7 @@ class Assimilator(Building):
 class CyberneticsCore(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
+        return Resources(minerals=150, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -792,37 +801,37 @@ class CyberneticsCore(Building):
 class DarkShrine(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+        return Resources(minerals=150, gas=2)
 
     @property
     def symbol(self) -> str:
         return "D"
 
 
-class Forge(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
-
-    @property
-    def symbol(self) -> str:
-        return "f"
-
-
 class FleetBeacon(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=3, gas=2)
+        return Resources(minerals=300, gas=200)
 
     @property
     def symbol(self) -> str:
         return "b"
 
 
+class Forge(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "f"
+
+
 class Gateway(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
+        return Resources(minerals=150, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -832,7 +841,7 @@ class Gateway(Building):
 class Nexus(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=4, gas=0)
+        return Resources(minerals=400, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -842,7 +851,7 @@ class Nexus(Building):
 class PhotonCannon(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
+        return Resources(minerals=150, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -852,7 +861,7 @@ class PhotonCannon(Building):
 class Pylon(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=1, gas=0)
+        return Resources(minerals=100, gas=0)
 
     @property
     def symbol(self) -> str:
@@ -862,7 +871,7 @@ class Pylon(Building):
 class RoboticsBay(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+        return Resources(minerals=200, gas=2)
 
     @property
     def symbol(self) -> str:
@@ -872,7 +881,7 @@ class RoboticsBay(Building):
 class RoboticsFacility(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=1)
+        return Resources(minerals=200, gas=1)
 
     @property
     def symbol(self) -> str:
@@ -882,7 +891,7 @@ class RoboticsFacility(Building):
 class StarGate(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+        return Resources(minerals=150, gas=2)
 
     @property
     def symbol(self) -> str:
@@ -892,7 +901,7 @@ class StarGate(Building):
 class TemplarArchives(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+        return Resources(minerals=150, gas=2)
 
     @property
     def symbol(self) -> str:
@@ -902,7 +911,7 @@ class TemplarArchives(Building):
 class TwilightCouncil(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=2, gas=1)
+        return Resources(minerals=150, gas=1)
 
     @property
     def symbol(self) -> str:
