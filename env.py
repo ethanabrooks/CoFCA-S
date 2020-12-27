@@ -633,6 +633,7 @@ class Env(gym.Env):
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
+            pprint(action)
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
