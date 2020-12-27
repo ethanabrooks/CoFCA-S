@@ -1,4 +1,5 @@
 import itertools
+import re
 import sys
 import typing
 from collections import Counter, OrderedDict
@@ -47,6 +48,15 @@ from data_types import (
 from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
+
+
+def multi_worker_symbol(num_workers: int):
+    return f"w{num_workers}"
+
+
+def strip_color(s: str):
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", s)
 
 
 @dataclass
@@ -524,20 +534,36 @@ class Env(gym.Env):
         return s
 
     def room_strings(self, room):
-        grid_size = 5
+
+        max_symbol_size = max(
+            [
+                len(multi_worker_symbol(len(Worker))),
+                *[len(strip_color(str(x.symbol))) for x in WorldObjects],
+            ]
+        )
+        max_symbols_per_grid = 2
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
-                assert len(nonzero) <= grid_size
-                for _, k in zip_longest(range(grid_size), nonzero):
-                    if k is None:
-                        yield " "
+                objects = [WorldObjects[k] for k in nonzero]
+                worker_symbol = None
+                if len(objects) > max_symbols_per_grid:
+                    worker_symbol = f"w{sum([isinstance(o, Worker) for o in objects])}"
+                    objects = [o for o in objects if not isinstance(o, Worker)]
+                symbols = [o.symbol for o in objects]
+                if worker_symbol is not None:
+                    symbols += [worker_symbol]
+
+                for _, symbol in zip_longest(range(max_symbols_per_grid), symbols):
+                    if symbol is None:
+                        symbol = " " * max_symbol_size
                     else:
-                        world_obj = WorldObjects[k]
-                        yield world_obj.symbol
+                        symbol += " " * (max_symbol_size - len(strip_color(symbol)))
+                    yield from symbol
                 yield RESET
                 yield "|"
-            yield "\n" + "-" * (grid_size + 1) * self.world_size + "\n"
+            grid_size = max_symbols_per_grid * max_symbol_size
+            yield f"\n" + ("-" * (grid_size) + "+") * self.world_size + "\n"
 
     @staticmethod
     def reward_generator():

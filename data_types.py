@@ -226,9 +226,9 @@ class Resource(WorldObject, Assignment, Enum):
     @property
     def symbol(self):
         if self is Resource.GAS:
-            return fg("green") + "G" + RESET
+            return fg("green") + "g" + RESET
         if self is Resource.MINERALS:
-            return fg("blue") + "M" + RESET
+            return fg("blue") + "m" + RESET
         raise RuntimeError
 
 
@@ -781,7 +781,7 @@ class Assimilator(Building):
 
     @property
     def symbol(self) -> str:
-        return "a"
+        return "A"
 
 
 class CyberneticsCore(Building):
@@ -791,7 +791,7 @@ class CyberneticsCore(Building):
 
     @property
     def symbol(self) -> str:
-        return "C"
+        return "CC"
 
 
 class DarkShrine(Building):
@@ -801,7 +801,7 @@ class DarkShrine(Building):
 
     @property
     def symbol(self) -> str:
-        return "D"
+        return "DS"
 
 
 class FleetBeacon(Building):
@@ -811,7 +811,7 @@ class FleetBeacon(Building):
 
     @property
     def symbol(self) -> str:
-        return "b"
+        return "FB"
 
 
 class Forge(Building):
@@ -831,7 +831,7 @@ class Gateway(Building):
 
     @property
     def symbol(self) -> str:
-        return "g"
+        return "GW"
 
 
 class Nexus(Building):
@@ -841,7 +841,7 @@ class Nexus(Building):
 
     @property
     def symbol(self) -> str:
-        return "n"
+        return "N"
 
 
 class PhotonCannon(Building):
@@ -851,7 +851,7 @@ class PhotonCannon(Building):
 
     @property
     def symbol(self) -> str:
-        return "c"
+        return "PC"
 
 
 class Pylon(Building):
@@ -861,7 +861,7 @@ class Pylon(Building):
 
     @property
     def symbol(self) -> str:
-        return "p"
+        return "P"
 
 
 class RoboticsBay(Building):
@@ -871,7 +871,7 @@ class RoboticsBay(Building):
 
     @property
     def symbol(self) -> str:
-        return "B"
+        return "RB"
 
 
 class RoboticsFacility(Building):
@@ -881,7 +881,7 @@ class RoboticsFacility(Building):
 
     @property
     def symbol(self) -> str:
-        return "F"
+        return "RF"
 
 
 class StarGate(Building):
@@ -891,7 +891,7 @@ class StarGate(Building):
 
     @property
     def symbol(self) -> str:
-        return "S"
+        return "SG"
 
 
 class TemplarArchives(Building):
@@ -901,7 +901,7 @@ class TemplarArchives(Building):
 
     @property
     def symbol(self) -> str:
-        return "A"
+        return "TA"
 
 
 class TwilightCouncil(Building):
@@ -911,7 +911,7 @@ class TwilightCouncil(Building):
 
     @property
     def symbol(self) -> str:
-        return "T"
+        return "TC"
 
 
 Buildings: List[Building] = [
