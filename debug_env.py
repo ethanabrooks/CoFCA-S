@@ -102,7 +102,7 @@ class DebugCompoundAction(CompoundAction):
     def classes(cls):
         yield DebugAction1
 
-    def component_classes(self):
+    def _component_classes(self):
         yield self.action1
 
     def worker(self) -> Worker:

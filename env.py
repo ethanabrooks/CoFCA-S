@@ -28,8 +28,8 @@ from data_types import (
     Carrying,
     BuildingPositions,
     Assignment,
+    IntrinsicActions,
     Positions,
-    Resources,
     ActionComponent,
     Obs,
     Resource,
@@ -45,7 +45,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete
+from utils import RESET, Discrete, get_max_shape
 
 Dependencies = Dict[Building, Building]
 
@@ -55,8 +55,10 @@ def multi_worker_symbol(num_workers: int):
 
 
 def strip_color(s: str):
-    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-    return ansi_escape.sub("", s)
+    """
+    https://stackoverflow.com/questions/14693701/how-can-i-remove-the-ansi-escape-sequences-from-a-string-in-python
+    """
+    return re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])").sub("", s)
 
 
 @dataclass
@@ -101,16 +103,20 @@ class Env(gym.Env):
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
-        action_size = CompoundAction.action_size()
-        self.action_space = spaces.MultiDiscrete(
-            np.array(
-                astuple(
-                    RawAction(
-                        delta=2 * self.max_lines,
-                        dg=2,
-                        a=action_size,
-                        ptr=self.max_lines,
-                    )
+        action_space = CompoundAction.input_space()
+        self.action_space = spaces.Tuple(
+            astuple(
+                RawAction(
+                    intrinsic_actions=spaces.MultiDiscrete(
+                        astuple(
+                            IntrinsicActions(
+                                delta=2 * self.max_lines,
+                                dg=2,
+                                ptr=self.max_lines,
+                            )
+                        )
+                    ),
+                    a=action_space,
                 )
             )
         )
@@ -125,24 +131,38 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        shape = (len(WorldObjects), *world_shape)
+        max_shape = (len(WorldObjects), *world_shape)
         obs_space = spaces.Box(
-            low=np.zeros(shape, dtype=np.float32),
-            high=np.ones(shape, dtype=np.float32),
+            low=np.zeros(max_shape, dtype=np.float32),
+            high=np.ones(max_shape, dtype=np.float32),
         )
         resources_space = spaces.MultiDiscrete([sys.maxsize] * 2)
         pointer_space = spaces.Discrete(self.max_lines)
 
         # noinspection PyTypeChecker
+        def gate_openers():
+            for subclass in CompoundAction.subclasses():
+                yield subclass.gate_openers()
+
+        gate_openers = [np.array(o) for o in gate_openers()]
+        self.gate_opener_shape = get_max_shape(*gate_openers)
+        padded = np.stack([self.pad_gate_openers(o) for o in gate_openers])
+        assert np.all(np.min(padded, axis=0) == 0)
+        gate_opener_space = spaces.MultiDiscrete(
+            np.max(padded, axis=0) + 1
+        )  # +1 because upper bound is not inclusive
+        action_mask_space = spaces.MultiBinary(
+            action_space.nvec.max() * action_space.nvec.size
+        )
         self.observation_space = spaces.Dict(
             asdict(
                 Obs(
-                    action_mask=spaces.MultiBinary(action_size),
-                    can_open_gate=spaces.MultiBinary(action_size),
+                    action_mask=action_mask_space,
+                    gate_openers=gate_opener_space,
                     lines=lines_space,
                     line_mask=line_mask_space,
                     obs=obs_space,
-                    partial_action=CompoundAction.space(),
+                    partial_action=CompoundAction.representation_space(),
                     resources=resources_space,
                     ptr=pointer_space,
                 )
@@ -416,8 +436,7 @@ class Env(gym.Env):
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, CompoundAction)
-            action_mask = np.array([*state.action.mask()])
-            can_open_gate = np.array([*state.action.can_open_gate()])
+            gate_openers = self.pad_gate_openers(np.array(state.action.gate_openers()))
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
@@ -426,8 +445,8 @@ class Env(gym.Env):
                         resources=resources,
                         line_mask=line_mask,
                         lines=preprocessed,
-                        action_mask=action_mask,
-                        can_open_gate=can_open_gate,
+                        action_mask=state.action.mask().ravel(),
+                        gate_openers=gate_openers,
                         partial_action=partial_action,
                         ptr=state.pointer,
                     )
@@ -443,6 +462,11 @@ class Env(gym.Env):
                     space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
+
+    def pad_gate_openers(self, gate_openers):
+        pad_amount, too_short = self.gate_opener_shape - np.array(gate_openers.shape)
+        assert not too_short
+        return np.pad(gate_openers, [(0, pad_amount), (0, 0)], mode="edge")
 
     def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
@@ -534,7 +558,6 @@ class Env(gym.Env):
         return s
 
     def room_strings(self, room):
-
         max_symbol_size = max(
             [
                 len(multi_worker_symbol(len(Worker))),
@@ -687,10 +710,10 @@ class Env(gym.Env):
             # noinspection PyTypeChecker
             a = yield state, render
             if a is None:
-                a: ActionComponent = action.from_input()
+                a: List[ActionComponent] = [*action.from_input()]
             if isinstance(a, RawAction):
-                a, prt = map(int, (a.a, a.ptr))
-            new_action = action.update(a)
+                a, prt = map(int, (a.a, a.intrinsic_actions.ptr))
+            new_action = action.update(*a)
             valid = new_action.valid(
                 resources=resources,
                 dependencies=dependencies,
@@ -720,13 +743,13 @@ class Env(gym.Env):
                 reverse=True,
             ):  # collect resources first.
                 assignment.execute(
-                    assignments=assignments,
-                    worker=worker_id,
                     positions=positions,
+                    worker=worker_id,
+                    assignments=assignments,
                     building_positions=building_positions,
                     pending_positions=pending_positions,
-                    carrying=carrying,
                     resources=resources,
+                    carrying=carrying,
                 )
 
             destroy = []
@@ -742,7 +765,7 @@ class Env(gym.Env):
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):
-            action = RawAction(*action)
+            action = RawAction.parse(action)
         return self.iterator.send(action)
 
 

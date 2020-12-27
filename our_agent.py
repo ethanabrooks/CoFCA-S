@@ -311,7 +311,7 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        can_open_gate = state.can_open_gate[R, action.a.long()]
+        can_open_gate = state.gate_openers[R, action.a.long()]
         dg, dg_dist = self.get_dg(
             can_open_gate=can_open_gate,
             ones=ones,

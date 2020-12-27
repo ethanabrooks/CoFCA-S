@@ -92,7 +92,7 @@ class DiagGaussian(nn.Module):
         return FixedNormal(action_mean, action_logstd.exp())
 
 
-class JointCategorical(Categorical):
+class JointCategorical(torch.distributions.Categorical):
     def __init__(
         self, distribution: Categorical, *distributions: Categorical, **kwargs
     ):
