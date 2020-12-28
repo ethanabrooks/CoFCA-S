@@ -561,7 +561,7 @@ class Env(gym.Env):
                 *[len(strip_color(str(x.symbol))) for x in WorldObjects],
             ]
         )
-        max_symbols_per_grid = 2
+        max_symbols_per_grid = 3
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
                 (nonzero,) = channel.nonzero()
