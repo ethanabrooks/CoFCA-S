@@ -28,7 +28,6 @@ from data_types import (
     Carrying,
     BuildingPositions,
     Assignment,
-    IntrinsicActions,
     Positions,
     ActionComponent,
     Obs,
@@ -104,21 +103,19 @@ class Env(gym.Env):
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
         action_space = CompoundAction.input_space()
-        self.action_space = spaces.Tuple(
-            astuple(
-                RawAction(
-                    intrinsic_actions=spaces.MultiDiscrete(
-                        astuple(
-                            IntrinsicActions(
-                                delta=2 * self.max_lines,
-                                dg=2,
-                                ptr=self.max_lines,
-                            )
-                        )
-                    ),
-                    a=action_space,
+        self.action_space = spaces.MultiDiscrete(
+            [
+                x
+                for field in astuple(
+                    RawAction(
+                        delta=[2 * self.max_lines],
+                        dg=[2],
+                        ptr=[self.max_lines],
+                        a=CompoundAction.input_space().nvec,
+                    )
                 )
-            )
+                for x in field
+            ]
         )
 
         lines_space = spaces.MultiDiscrete(
@@ -712,7 +709,7 @@ class Env(gym.Env):
             if a is None:
                 a: List[ActionComponent] = [*action.from_input()]
             if isinstance(a, RawAction):
-                a, prt = map(int, (a.a, a.intrinsic_actions.ptr))
+                a, prt = a.a, a.ptr
             new_action = action.update(*a)
             valid = new_action.valid(
                 resources=resources,
@@ -765,7 +762,7 @@ class Env(gym.Env):
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):
-            action = RawAction.parse(action)
+            action = RawAction.parse(*action)
         return self.iterator.send(action)
 
 

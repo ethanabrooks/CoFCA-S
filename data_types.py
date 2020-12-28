@@ -365,21 +365,21 @@ X = typing.TypeVar("X")
 
 
 @dataclass(frozen=True)
-class IntrinsicActions:
-    delta: int
-    dg: int
-    ptr: int
-
-
-@dataclass(frozen=True)
 class RawAction:
-    intrinsic_actions: Union[IntrinsicActions, spaces.MultiDiscrete]
-    a: Union[np.ndarray, spaces.MultiDiscrete]
+    delta: Union[np.ndarray, torch.Tensor, X]
+    dg: Union[np.ndarray, torch.Tensor, X]
+    ptr: Union[np.ndarray, torch.Tensor, X]
+    a: Union[np.ndarray, torch.Tensor, X]
 
     @staticmethod
-    def parse(array: np.ndarray):
-        delta, dg, ptr, *a = array
-        return RawAction(IntrinsicActions(delta, dg, ptr), a)
+    def parse(*xs) -> "RawAction":
+        delta, dg, ptr, *a = xs
+        if a == [None]:
+            a = None
+        return RawAction(delta, dg, ptr, a)
+
+    def flatten(self) -> Generator[any, None, None]:
+        yield from astuple(self)
 
 
 @dataclass(frozen=True)
@@ -422,7 +422,7 @@ class CompoundAction:
                     *[not cls._worker_active() for _ in range(2)],
                 ]
             yield [
-                cls._worker_active()
+                cls._coord_active()
                 or cls._building_active(),  # mask if either is active
                 *[not cls._coord_active() for _ in range(Coord.space().n)],
                 *[not cls._building_active() for _ in range(Building.space().n)],
@@ -436,7 +436,7 @@ class CompoundAction:
             )
             for m in unpadded
         ]
-        return np.flip(np.stack(padded, axis=-1), axis=0)
+        return np.stack(padded)
 
     @staticmethod
     @abstractmethod
@@ -529,18 +529,24 @@ class CompoundAction:
         self, *components: Union[np.ndarray, Iterable[ActionComponent]]
     ) -> "CompoundAction":
         def components_gen():
-            if isinstance(components, np.ndarray):
-                *worker_component, target_component = components - 1
-                # -1 to remove no-op
-                if self._worker_active():
-                    for w in worker_component:
-                        yield Worker.parse(w)
-                if self._coord_active():
-                    yield Coord.parse(target_component)
-                if self._building_active():
-                    yield Building.parse(target_component - Coord.space().n)
-            else:
-                yield from components
+            try:
+                array = np.array(components) - 1
+            except ValueError:
+                for component in components:
+                    assert isinstance(component, ActionComponent)
+                    yield component
+                return
+            *worker_component, target_component = array
+            # -1 to remove no-op
+            if self._worker_active():
+                for i, w in enumerate(worker_component, 1):
+                    if w:
+                        yield Worker.parse(i)
+            if self._coord_active() and Coord.space().contains(target_component):
+                yield Coord.parse(target_component)
+            target_component -= Coord.space().n
+            if self._building_active() and Building.space().contains(target_component):
+                yield Building.parse(target_component)
 
         return self._update(*components_gen())
 
