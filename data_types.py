@@ -139,15 +139,15 @@ class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMe
     W1 = auto()
     W2 = auto()
     W3 = auto()
-    W4 = auto()
-    W5 = auto()
-    W6 = auto()
-    W7 = auto()
-    W8 = auto()
-    W9 = auto()
-    W10 = auto()
-    W11 = auto()
-    W12 = auto()
+    # W4 = auto()
+    # W5 = auto()
+    # W6 = auto()
+    # W7 = auto()
+    # W8 = auto()
+    # W9 = auto()
+    # W10 = auto()
+    # W11 = auto()
+    # W12 = auto()
 
     def __eq__(self, other):
         # noinspection PyArgumentList
@@ -233,7 +233,7 @@ class Resource(WorldObject, Assignment, Enum):
             if positions[worker] == nexus:
                 resource = carrying[worker]
                 assert isinstance(resource, Resource)
-                resources[resource] += 5
+                resources[resource] += 100
                 carrying[worker] = None
 
     def on(
