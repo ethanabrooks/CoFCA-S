@@ -12,8 +12,7 @@ from agents import AgentOutputs, NNBase
 from data_types import RecurrentState, RawAction
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
-from transformer import TransformerModel
-from utils import astuple, init, init_
+from utils import astuple, init_
 
 
 class Categorical(torch.distributions.Categorical):
@@ -23,9 +22,13 @@ class Categorical(torch.distributions.Categorical):
         value = value.long().unsqueeze(-1)
         value, log_pmf = torch.broadcast_tensors(value, self.logits)
         value = value[..., :1]
+        shape = value.shape
+        value = value.view(-1, 1)
         # gather = log_pmf.gather(-1, value).squeeze(-1)
         R = torch.arange(value.size(0))
-        return log_pmf[R, value.squeeze(-1)]  # deterministic
+        log_pmf = log_pmf.view(-1, log_pmf.size(-1))
+        log_prob = log_pmf[R, value.squeeze(-1)]  # deterministic
+        return log_prob.view(shape)
 
 
 def optimal_padding(h, kernel, stride):
@@ -78,13 +81,10 @@ class Agent(NNBase):
         nn.Module.__init__(self)
         self.activation = eval(f"nn.{self.activation_name}()")
         self.obs_spaces = Obs(**self.observation_space.spaces)
-        self.action_size = self.action_space.nvec.size
-
+        self.action_nvec = RawAction.parse(*self.action_space.nvec)
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
-
-        action_nvec = RawAction(*map(int, self.action_space.nvec))
 
         self.embed_task = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
@@ -113,7 +113,10 @@ class Agent(NNBase):
             embedding_dim=self.lower_embed_size,
         )
 
-        self.actor = self.init_(nn.Linear(self.hidden_size, action_nvec.a))
+        extrinsic_nvec = self.action_nvec.a
+        self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
+        num_actor_logits = int(np.prod(self.actor_logits_shape))
+        self.actor = self.init_(nn.Linear(self.hidden_size, num_actor_logits))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         d, h, w = self.obs_spaces.obs.shape
@@ -157,7 +160,7 @@ class Agent(NNBase):
 
         self.state_sizes = RecurrentState(
             a=1,
-            a_probs=action_nvec.a,
+            a_probs=num_actor_logits,
             d=1,
             d_probs=(self.d_space()),
             h=self.hidden_size,
@@ -250,11 +253,12 @@ class Agent(NNBase):
     ):
         N, dim = inputs.shape
 
-        dists = RawAction(None, None, None, None)
+        dists = RawAction.parse(None, None, None, None)
         if action is None:
-            action = RawAction(None, None, None, None)
+            action = RawAction.parse(None, None, None, None)
         else:
-            action = RawAction(*action.unbind(-1))
+            action = RawAction.parse(*action.unbind(-1))
+            action = replace(action, a=torch.stack(action.a, dim=-1))
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -292,8 +296,10 @@ class Agent(NNBase):
 
         value = self.critic(z)
 
-        a_logits = self.actor(z) - state.action_mask * self.inf
-        dists = replace(dists, a=Categorical(logits=a_logits))
+        a_logits = self.actor(z).view(-1, *self.actor_logits_shape)
+        mask = state.action_mask.view(-1, *self.actor_logits_shape)
+        mask = mask * -self.inf
+        dists = replace(dists, a=Categorical(logits=a_logits + mask))
 
         self.print("a_probs", dists.a.probs)
 
@@ -311,7 +317,12 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        can_open_gate = state.gate_openers[R, action.a.long()]
+        gate_openers_shape = self.obs_spaces.gate_openers.nvec.shape
+        gate_openers = state.gate_openers.view(-1, *gate_openers_shape)[R]
+        matches = gate_openers == action.a.unsqueeze(1)
+        assert isinstance(matches, torch.Tensor)
+        # noinspection PyArgumentList
+        can_open_gate = matches.all(-1).any(-1)
         dg, dg_dist = self.get_dg(
             can_open_gate=can_open_gate,
             ones=ones,
@@ -358,19 +369,37 @@ class Agent(NNBase):
         if action.ptr is None:
             action = replace(action, ptr=p + delta)
 
-        action_log_probs = sum(
-            dist.log_prob(x).unsqueeze(-1)
-            for dist, x in zip(astuple(dists), astuple(action))
-            if dist is not None
+        def compute_metric(raw: RawAction):
+            raw = astuple(replace(raw, a=raw.a.sum(1)))
+            return sum([x for x in raw if x is not None])
+
+        action_log_probs = RawAction(
+            *[
+                None if dist is None else dist.log_prob(x)  # .unsqueeze(-1)
+                for dist, x in zip(astuple(dists), astuple(action))
+            ],
         )
-        entropy = sum(
-            [dist.entropy() for dist in astuple(dists) if dist is not None]
-        ).mean()
+        entropy = RawAction(
+            *[None if dist is None else dist.entropy() for dist in astuple(dists)]
+        )
+        aux_loss = -self.entropy_coef * compute_metric(entropy).mean()
+        action = torch.cat(
+            astuple(
+                replace(
+                    action,
+                    dg=action.dg.unsqueeze(-1),
+                    delta=action.delta.unsqueeze(-1),
+                    ptr=action.ptr.unsqueeze(-1),
+                )
+            ),
+            dim=-1,
+        )
+        # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,
-            action=torch.stack(astuple(action), dim=-1),
-            action_log_probs=action_log_probs,
-            aux_loss=-self.entropy_coef * entropy,
+            action=action,
+            action_log_probs=compute_metric(action_log_probs),
+            aux_loss=aux_loss,
             dist=None,
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
