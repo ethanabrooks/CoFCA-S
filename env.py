@@ -404,13 +404,11 @@ class Env(gym.Env):
 
             for i, line in enumerate(list(lines_iterator())):
                 print(
-                    "{:2}{}{} ({}) {}: {}".format(
+                    "{:2}{}{} {}".format(
                         i,
                         "-" if i == state.pointer else " ",
                         "*" if line.required else " ",
-                        Buildings.index(line.building),
-                        str(line.building),
-                        line.building.cost,
+                        repr(line.building),
                     )
                 )
             print("Obs:")
@@ -677,7 +675,7 @@ class Env(gym.Env):
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
-            pprint(action)
+            pprint(action if valid else new_action)
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
