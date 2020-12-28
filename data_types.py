@@ -171,7 +171,7 @@ class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMe
 
     @staticmethod
     def space() -> spaces.Discrete:
-        return spaces.Discrete(2)  # binary: in or out
+        return spaces.Discrete(len(Worker))  # binary: in or out
 
     @property
     def symbol(self) -> str:
@@ -422,8 +422,7 @@ class CompoundAction:
                     *[not cls._worker_active() for _ in range(2)],
                 ]
             yield [
-                cls._coord_active()
-                or cls._building_active(),  # mask if either is active
+                False,  # always allowed to cancel
                 *[not cls._coord_active() for _ in range(Coord.space().n)],
                 *[not cls._building_active() for _ in range(Building.space().n)],
             ]
@@ -526,29 +525,24 @@ class CompoundAction:
         )
 
     def update(
-        self, *components: Union[np.ndarray, Iterable[ActionComponent]]
+        self, *components: Union[np.ndarray, Iterable[Optional[ActionComponent]]]
     ) -> "CompoundAction":
-        def components_gen():
-            try:
-                array = np.array(components) - 1
-            except ValueError:
-                for component in components:
-                    assert isinstance(component, ActionComponent)
-                    yield component
-                return
-            *worker_component, target_component = array
-            # -1 to remove no-op
-            if self._worker_active():
-                for i, w in enumerate(worker_component, 1):
-                    if w:
-                        yield Worker.parse(i)
-            if self._coord_active() and Coord.space().contains(target_component):
-                yield Coord.parse(target_component)
-            target_component -= Coord.space().n
-            if self._building_active() and Building.space().contains(target_component):
-                yield Building.parse(target_component)
-
-        return self._update(*components_gen())
+        if not components or None in [*components]:
+            return NoWorkersAction()
+        if any(isinstance(c, ActionComponent) for c in components):
+            return self._update(*components)
+        *worker_component, n = np.array(components) - 1  # -1 to remove no-op
+        if self._worker_active():
+            return self._update(
+                *[Worker.parse(i) for i, w in enumerate(worker_component, 1) if w]
+            )
+        if self._coord_active() and Coord.space().contains(n):
+            return self._update(Coord.parse(n))
+        n -= Coord.space().n
+        if self._building_active() and Building.space().contains(n):
+            return self._update(Building.parse(n))
+        assert not (Coord.space().contains(n) or Building.space().contains(n))
+        return NoWorkersAction()
 
     @abstractmethod
     def valid(
@@ -671,7 +665,10 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
         try:
             yield Buildings[int(s)]
         except ValueError:
-            yield parse_coord(s)
+            try:
+                yield parse_coord(s)
+            except ValueError:
+                yield
 
     @staticmethod
     def _prompt() -> str:
