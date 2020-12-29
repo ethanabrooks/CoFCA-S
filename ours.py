@@ -1,4 +1,3 @@
-import multiprocessing
 import pickle
 import sys
 from dataclasses import dataclass
@@ -6,7 +5,7 @@ from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
 from queue import Empty, Full
-from typing import Optional, DefaultDict, Dict, Union
+from typing import Optional, Dict
 
 import hydra
 from hydra.core.config_store import ConfigStore
@@ -127,23 +126,22 @@ class Trainer(trainer.Trainer):
             min_lines = min_eval_lines
             max_lines = max_eval_lines
         data_types.WORLD_SIZE = world_size
+        mp_kwargs = dict()
         return super().make_vec_envs(
-            non_pickle_args=dict(failure_buffer=failure_buffer),
+            mp_kwargs=mp_kwargs,
             min_lines=min_lines,
             max_lines=max_lines,
             evaluating=evaluating,
             world_size=world_size,
+            failure_buffer=failure_buffer,
             **kwargs,
         )
 
     @classmethod
-    def structure_config(
-        cls, cfg: DictConfig
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
         if cfg.eval.interval:
             cfg.eval.steps = 5 * cfg.max_eval_lines
-        cfg = super().structure_config(cfg)
-        return cfg
+        return super().structure_config(cfg)
 
 
 @hydra.main(config_name="config")
@@ -153,8 +151,6 @@ def app(cfg: DictConfig) -> None:
 
 
 def main(_app):
-    if sys.platform == "darwin":
-        multiprocessing.set_start_method("fork")  # needed for osx_queue.Queue
     cs = ConfigStore.instance()
     cs.store(name="config", node=OurConfig)
     _app()

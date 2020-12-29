@@ -1,19 +1,22 @@
 import inspect
 import itertools
 import os
-from collections import namedtuple, Counter, defaultdict
+from collections import namedtuple, Counter
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, DefaultDict, Union, Optional
+from typing import Dict, Optional
 
 import gym
 import hydra
+import numpy as np
 import torch
 import torch.nn as nn
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import wandb
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
     EpisodeAggregator,
@@ -23,9 +26,6 @@ from aggregator import (
     EvalEpisodeAggregator,
     EvalInfosAggregator,
 )
-from common.vec_env.dummy_vec_env import DummyVecEnv
-from common.vec_env.subproc_vec_env import SubprocVecEnv
-from common.vec_env.util import set_seeds
 from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
@@ -94,17 +94,17 @@ class Trainer:
         render: bool,
         synchronous: bool,
         log_dir=None,
-        non_pickle_args: dict = None,
+        mp_kwargs: dict = None,
         **kwargs,
     ) -> VecPyTorch:
-        if non_pickle_args is None:
-            non_pickle_args = {}
+        if mp_kwargs is None:
+            mp_kwargs = {}
 
         if num_processes == 1:
             synchronous = True
 
         if synchronous:
-            kwargs.update(non_pickle_args)
+            kwargs.update(mp_kwargs)
 
         def env_thunk(rank):
             def thunk(**_kwargs):
@@ -116,9 +116,9 @@ class Trainer:
 
         env_fns = [env_thunk(i) for i in range(num_processes)]
         return VecPyTorch(
-            DummyVecEnv(env_fns, render=render)
+            DummyVecEnv(env_fns)
             if synchronous
-            else SubprocVecEnv(env_fns, **non_pickle_args)
+            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork")
         )
 
     @classmethod
@@ -196,6 +196,8 @@ class Trainer:
                     )  # type: AgentOutputs
 
                 action = envs.preprocess(act.action)
+                if render:
+                    envs.render()
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(action)
 
@@ -218,10 +220,11 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(seed)
-        if cuda and cuda_deterministic:
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.deterministic = True
+        # if cuda_deterministic:
+        #     torch.set_deterministic(True)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
 
         if cuda:
             device = torch.device("cuda")
@@ -418,9 +421,7 @@ class Trainer:
         print(f"Saved parameters to {save_path}")
 
     @classmethod
-    def structure_config(
-        cls, cfg: DictConfig
-    ) -> Dict[str, Dict[str, Union[bool, int, float]]]:
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
         cfg = DictConfig(dict(flatten(cfg)))
 
         if cfg.render:
