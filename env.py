@@ -349,7 +349,7 @@ class Env(gym.Env):
         done: bool
         state, done = yield
         info = {}
-        elapsed_time = 0
+        elapsed_time = -1
 
         while True:
             if done:
@@ -373,6 +373,9 @@ class Env(gym.Env):
                 if len(lines) == 1 and elapsed_time > 0:
                     (line,) = lines
                     if line.building.cost.gas > 0:
+                        import ipdb
+
+                        ipdb.set_trace()
                         info.update({"success on gas buildings": state.success})
 
             # noinspection PyTupleAssignmentBalance
