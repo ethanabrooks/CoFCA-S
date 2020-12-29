@@ -14,6 +14,7 @@ import torch
 import torch.jit
 import torch.nn as nn
 from gym import spaces
+import gym
 
 
 def round(x, dec):
@@ -253,3 +254,19 @@ def get_max_shape(*xs) -> np.ndarray:
         return new if max_so_far is None else np.maximum(new, max_so_far)
 
     return reduce(compare_shape, map(np.array, xs), None)
+
+
+def space_shape(space: gym.Space):
+    if isinstance(space, gym.spaces.Box):
+        return space.low.shape
+    if isinstance(space, gym.spaces.Dict):
+        return {k: space_shape(v) for k, v in space.spaces.items()}
+    if isinstance(space, gym.spaces.Tuple):
+        return tuple(space_shape(s) for s in space.spaces)
+    if isinstance(space, gym.spaces.MultiDiscrete):
+        return space.nvec.shape
+    if isinstance(space, gym.spaces.Discrete):
+        return (1,)
+    if isinstance(space, gym.spaces.MultiBinary):
+        return (space.n,)
+    raise NotImplementedError

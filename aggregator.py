@@ -97,6 +97,8 @@ class InfosAggregator(EpisodeAggregator):
 
     def log_info(self, i, done, info, n):
         for k, v in info.items():
+            if k == "terminal_observation":
+                continue
             incomplete_episodes = self.incomplete_episodes[k]
             if not incomplete_episodes:
                 incomplete_episodes = self.incomplete_episodes[k] = [

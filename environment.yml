@@ -17,4 +17,5 @@ dependencies:
   - treelib=1.6.1
   - pip:
       - wandb==0.10.11
+      - stable-baselines3==0.10.0
 prefix: /home/ethanbro/miniconda3/envs/ppo

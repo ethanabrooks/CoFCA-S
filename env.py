@@ -84,7 +84,7 @@ class Env(gym.Env):
     num_initial_buildings: int
     rank: int
     random_seed: int
-    tgt_success_rate: int
+    tgt_success_rate: float
     time_per_line: int
     world_size: int
     alpha: float = 0.05
@@ -373,9 +373,6 @@ class Env(gym.Env):
                 if len(lines) == 1 and elapsed_time > 0:
                     (line,) = lines
                     if line.building.cost.gas > 0:
-                        import ipdb
-
-                        ipdb.set_trace()
                         info.update({"success on gas buildings": state.success})
 
             # noinspection PyTupleAssignmentBalance
@@ -549,7 +546,8 @@ class Env(gym.Env):
 
     def reset(self):
         self.i += 1
-        self.iterator = self.failure_buffer_wrapper(self.srti_generator())
+        # self.iterator = self.failure_buffer_wrapper(self.srti_generator())
+        self.iterator = self.srti_generator()
         s, r, t, i = next(self.iterator)
         return s
 
