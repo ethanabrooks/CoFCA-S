@@ -391,12 +391,20 @@ class Env(gym.Env):
         line_mask = np.array([p is None for p in padded])
 
         def render():
+            def requirement_for():
+                depender = None
+                for l in reversed(lines):
+                    if l.required:
+                        depender = l.building
+                    yield depender
+
             def lines_iterator():
                 buildings = [*state.building_positions.values()]
-                for l in lines:
+                dependers = reversed([*requirement_for()])
+                for l, d in zip(lines, dependers):
                     built = l.building in buildings
                     yield Line(
-                        required=not built,
+                        required=l.building not in buildings and d not in buildings,
                         building=l.building,
                     )
                     if built and l.required:

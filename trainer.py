@@ -116,9 +116,9 @@ class Trainer:
 
         env_fns = [env_thunk(i) for i in range(num_processes)]
         return VecPyTorch(
-            DummyVecEnv(env_fns)
-            if synchronous
-            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork")
+            DummyVecEnv(env_fns, render=render)
+            if synchronous or num_processes == 1
+            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork", render=render)
         )
 
     @classmethod
@@ -196,8 +196,6 @@ class Trainer:
                     )  # type: AgentOutputs
 
                 action = envs.preprocess(act.action)
-                if render:
-                    envs.render()
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(action)
 
