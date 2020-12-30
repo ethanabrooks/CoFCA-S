@@ -72,6 +72,7 @@ class Agent(NNBase):
     stride: int
     task_embed_size: int
     transformer: bool
+    zeta_activation: bool
     inf: float = 1e5
 
     def __hash__(self):
@@ -135,6 +136,8 @@ class Agent(NNBase):
             self.init_(nn.Linear(self.zeta_input_size, self.hidden_size)),
             self.activation,
         )
+        if self.zeta_activation:
+            self.zeta = nn.Sequential(self.activation, self.zeta)
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
         self.d_gate = self.build_d_gate()
