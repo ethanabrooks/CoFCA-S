@@ -40,6 +40,7 @@ class OurConfig(BaseConfig, env.EnvConfig):
     stride: int = 1
     task_embed_size: int = 128
     transformer: bool = False
+    zeta_activation: bool = False
 
 
 class Trainer(trainer.Trainer):
