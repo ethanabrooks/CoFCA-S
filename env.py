@@ -398,24 +398,27 @@ class Env(gym.Env):
                         depender = l.building
                     yield depender
 
-            def lines_iterator():
+            def required_iterator():
                 buildings = [*state.building_positions.values()]
                 dependers = reversed([*requirement_for()])
                 for l, d in zip(lines, dependers):
                     built = l.building in buildings
-                    yield Line(
-                        required=l.building not in buildings and d not in buildings,
-                        building=l.building,
-                    )
+                    yield l.building not in buildings and d not in buildings
                     if built and l.required:
                         buildings.remove(l.building)
 
-            for i, line in enumerate(list(lines_iterator())):
+            for i, (required, line) in enumerate(zip(required_iterator(), lines)):
+                symbol = (
+                    ("*" if line.required else "↘")
+                    if required
+                    else ("✓" if line.required else " ")
+                )
+
                 print(
                     "{:2}{}{} {}".format(
                         i,
                         "-" if i == state.pointer else " ",
-                        "*" if line.required else " ",
+                        symbol,
                         repr(line.building),
                     )
                 )
