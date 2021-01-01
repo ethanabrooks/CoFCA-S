@@ -417,7 +417,7 @@ class Agent(NNBase):
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         unmask = 1 - line_mask
-        masked = d_probs * unmask
+        masked = d_probs / (d_probs * unmask).sum(-1, keepdim=True) * unmask
         self.print("masked", Categorical(probs=masked).probs)
         delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
         self.print("dists.delta", delta_dist.probs)
