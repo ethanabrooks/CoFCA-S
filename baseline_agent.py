@@ -28,10 +28,10 @@ class Agent(our_agent.Agent):
     def build_upsilon(self):
         return None
 
-    def get_dg(self, can_open_gate, ones, zeta_input):
+    def get_dg(self, can_open_gate, ones, z):
         return torch.ones_like(ones), None
 
-    def get_delta(self, P, dg, line_mask, ones, zeta_input):
+    def get_delta(self, P, dg, line_mask, ones, z):
         return torch.ones_like(ones) * self.nl, None
 
     def get_gru_in_size(self):
