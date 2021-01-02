@@ -66,7 +66,7 @@ class EnvConfig:
     attack_prob: float = 0
     max_lines: int = 10
     min_lines: int = 1
-    num_initial_buildings: int = 2
+    num_initial_buildings: Optional[int] = None
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
     world_size: int = 3
@@ -497,7 +497,9 @@ class Env(gym.Env):
             np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
         )
 
-        if self.num_initial_buildings:
+        if self.num_initial_buildings is not None:
+            if self.num_initial_buildings == 0:
+                return
 
             while True:
                 initial_pos = self.random.choice(
