@@ -226,12 +226,14 @@ class Agent(NNBase):
         last[-1] = 1
         last = last.view(1, -1, 1)
 
+        B = (1 - last).flip(-2) * B  # this ensures the first B is 0
         zero_last = (1 - last) * B
         B = zero_last + last  # this ensures that the last B is 1
         C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
         P = B * C
         P = P.view(N, self.nl, 2, self.num_edges)
         f, b = torch.unbind(P, dim=-2)
+
         return torch.cat([b.flip(-2), f], dim=-2)
 
     def build_upsilon(self):
@@ -348,7 +350,7 @@ class Agent(NNBase):
         matches = gate_openers == action.a.unsqueeze(1)
         assert isinstance(matches, torch.Tensor)
         # noinspection PyArgumentList
-        can_open_gate = matches.all(-1).any(-1)
+        can_open_gate = matches.all(-1).any(-1) * ((1 - line_mask[p, R]).sum(-1) > 1)
         dg, dg_dist = self.get_dg(
             can_open_gate=can_open_gate,
             ones=ones,
@@ -440,9 +442,10 @@ class Agent(NNBase):
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         unmask = 1 - line_mask
-        masked = d_probs / (d_probs * unmask).sum(-1, keepdim=True) * unmask
-        self.print("masked", Categorical(probs=masked).probs)
+        masked = d_probs * unmask
+        masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
         delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        # self.print("masked", Categorical(probs=masked).probs)
         self.print("dists.delta", delta_dist.probs)
         delta = delta_dist.sample()
         return delta, delta_dist
