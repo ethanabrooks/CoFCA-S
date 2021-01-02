@@ -225,7 +225,18 @@ class Env(gym.Env):
         instructions = [*random_instructions_under(n_lines)]
         required = [i.building for i in instructions if i.required]
         assert required.count(Assimilator()) <= 1
-        return instructions
+
+        def reverse_instructions():
+            building = None
+            for building in dependencies.keys():
+                if building not in dependencies.values():
+                    break
+
+            while building is not None:
+                yield Line(building=building, required=True)
+                building = dependencies[building]
+
+        return [*reversed([*reverse_instructions()])][:n_lines]
 
     @staticmethod
     def build_trees(dependencies: Dependencies) -> typing.Set[Tree]:
