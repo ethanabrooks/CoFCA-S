@@ -254,7 +254,10 @@ class Env(gym.Env):
 
         while True:
             # noinspection PyTypeChecker
-            state = yield state.success or not state.time_remaining, lambda: None
+            state = (
+                yield state.success or not state.time_remaining or not state.valid,
+                lambda: None,
+            )
 
     def failure_buffer_wrapper(self, iterator):
         use_failure_buf = False
@@ -714,6 +717,7 @@ class Env(gym.Env):
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
+                valid=valid,
             )
 
             a: Optional[RawAction]
