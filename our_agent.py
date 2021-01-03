@@ -329,7 +329,7 @@ class Agent(NNBase):
         mask = mask * -self.inf
         dists = replace(dists, a=Categorical(logits=a_logits + mask))
 
-        self.print("a_probs", dists.a.probs)
+        # self.print("a_probs", dists.a.probs)
 
         if action.a is None:
             a = dists.a.sample()
@@ -441,12 +441,16 @@ class Agent(NNBase):
         u = self.upsilon(z).softmax(dim=-1)  # TODO: try z
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+        self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
         unmask = 1 - line_mask
         masked = d_probs * unmask
         masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
+        self.print("masked", masked.view(masked.size(0), 2, -1))
         delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
-        self.print("dists.delta", delta_dist.probs)
+        self.print(
+            "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
+        )
         delta = delta_dist.sample()
         return delta, delta_dist
 
