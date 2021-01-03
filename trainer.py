@@ -214,7 +214,6 @@ class Trainer:
             eval_interval = 1
         if render or render_eval:
             ppo_args.update(ppo_epoch=0)
-            num_processes = 1
             cuda = False
         cuda &= torch.cuda.is_available()
 
