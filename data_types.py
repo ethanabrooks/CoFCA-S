@@ -872,7 +872,7 @@ class CyberneticsCore(Building):
 class DarkShrine(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=150)
+        return Resources(minerals=150, gas=0)  # 150)
 
     @property
     def symbol(self) -> str:
@@ -882,7 +882,7 @@ class DarkShrine(Building):
 class FleetBeacon(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=300, gas=200)
+        return Resources(minerals=300, gas=0)  # 200)
 
     @property
     def symbol(self) -> str:
@@ -942,7 +942,7 @@ class Pylon(Building):
 class RoboticsBay(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=200, gas=200)
+        return Resources(minerals=200, gas=0)  # 200)
 
     @property
     def symbol(self) -> str:
@@ -952,7 +952,7 @@ class RoboticsBay(Building):
 class RoboticsFacility(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=200, gas=100)
+        return Resources(minerals=200, gas=0)  # 100)
 
     @property
     def symbol(self) -> str:
@@ -962,7 +962,7 @@ class RoboticsFacility(Building):
 class StarGate(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=150)
+        return Resources(minerals=150, gas=0)  # 150)
 
     @property
     def symbol(self) -> str:
@@ -972,7 +972,7 @@ class StarGate(Building):
 class TemplarArchives(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=200)
+        return Resources(minerals=150, gas=0)  # 200)
 
     @property
     def symbol(self) -> str:
@@ -982,7 +982,7 @@ class TemplarArchives(Building):
 class TwilightCouncil(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=100)
+        return Resources(minerals=150, gas=0)  # 100)
 
     @property
     def symbol(self) -> str:
@@ -992,17 +992,17 @@ class TwilightCouncil(Building):
 Buildings: List[Building] = [
     # Assimilator(),
     CyberneticsCore(),
-    # DarkShrine(),
-    # FleetBeacon(),
+    DarkShrine(),
+    FleetBeacon(),
     Forge(),
-    # Gateway(),
+    Gateway(),
     Nexus(),
     PhotonCannon(),
     Pylon(),
-    # RoboticsBay(),
-    # RoboticsFacility(),
-    # StarGate(),
-    # TemplarArchives(),
-    # TwilightCouncil(),
+    RoboticsBay(),
+    RoboticsFacility(),
+    StarGate(),
+    TemplarArchives(),
+    TwilightCouncil(),
 ]
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)
