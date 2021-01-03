@@ -2,6 +2,7 @@ import inspect
 import itertools
 import os
 from collections import namedtuple, Counter
+from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
 from typing import Dict, Optional
@@ -62,7 +63,7 @@ class Trainer:
         )
 
     @classmethod
-    def build_failure_buffer(cls, **kwargs):
+    def build_failure_buffer(cls, **kwargs) -> Optional[Queue]:
         pass
 
     @staticmethod
@@ -288,6 +289,8 @@ class Trainer:
                     frames=frames["so_far"],
                     log_dir=log_dir,
                 )
+                if failure_buffer is not None:
+                    report.update({"failure buffer size": failure_buffer.qsize()})
                 cls.report(**report)
                 train_report.reset()
                 train_infos.reset()

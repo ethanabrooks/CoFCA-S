@@ -356,8 +356,6 @@ class Env(gym.Env):
                         pass
 
                 i.update({"used failure buffer": use_failure_buf})
-                if use_failure_buf or put_failure_buf:
-                    i.update({"failure buffer size": self.failure_buffer.qsize()})
 
             if t:
                 # noinspection PyAttributeOutsideInit
