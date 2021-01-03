@@ -812,7 +812,6 @@ class State:
     resources: typing.Counter[Resource]
     success: bool
     time_remaining: int
-    valid: bool
 
 
 @dataclass
