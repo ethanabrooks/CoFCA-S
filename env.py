@@ -63,6 +63,7 @@ def strip_color(s: str):
 @dataclass
 class EnvConfig:
     break_on_fail: bool = False
+    bucket_size: int = 5
     attack_prob: float = 0
     max_lines: int = 10
     min_lines: int = 1
@@ -76,12 +77,13 @@ class EnvConfig:
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
+    bucket_size: int
     attack_prob: float
     eval_steps: int
     failure_buffer: Queue
     max_lines: int
     min_lines: int
-    num_initial_buildings: int
+    num_initial_buildings: Optional[int]
     rank: int
     random_seed: int
     tgt_success_rate: float
@@ -372,9 +374,10 @@ class Env(gym.Env):
         while True:
             if done:
                 if self.evaluating:
-                    bucket_size = 5
-                    lower = (len(lines) - 1) // bucket_size * bucket_size + 1
-                    upper = (1 + (len(lines) - 1) // bucket_size) * bucket_size
+                    lower = (len(lines) - 1) // self.bucket_size * self.bucket_size + 1
+                    upper = (
+                        1 + (len(lines) - 1) // self.bucket_size
+                    ) * self.bucket_size
                     key = (
                         f"success on instructions length-{lower} through length-{upper}"
                     )
