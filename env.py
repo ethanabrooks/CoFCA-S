@@ -560,8 +560,8 @@ class Env(gym.Env):
             if max_initial_buildings > 0:
                 num_initial_buildings = self.random.randint(max_initial_buildings + 1)
                 initial_index = self.random.choice(
-                    max_initial_buildings,
-                    size=max_initial_buildings,
+                    self.world_size ** 2 - len(occupied),
+                    size=num_initial_buildings,
                     replace=False,
                 )
                 for i in occupied_indices:
