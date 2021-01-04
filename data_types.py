@@ -124,9 +124,10 @@ class Assignment:
         assignments: "Assignments",
         building_positions: "BuildingPositions",
         pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> bool:
         raise NotImplementedError
 
 
@@ -205,9 +206,10 @@ class Resource(WorldObject, Assignment, Enum):
         assignments: "Assignments",
         building_positions: "BuildingPositions",
         pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> bool:
         worker_pos = positions[worker]
 
         if carrying[worker] is None:
@@ -218,7 +220,7 @@ class Resource(WorldObject, Assignment, Enum):
                 if self is Resource.GAS and not isinstance(
                     building_positions.get(positions[worker]), Assimilator
                 ):
-                    return  # no op on gas unless Assimilator
+                    return True  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -234,6 +236,7 @@ class Resource(WorldObject, Assignment, Enum):
                 assert isinstance(resource, Resource)
                 resources[resource] += 100
                 carrying[worker] = None
+        return True
 
     def on(
         self,
@@ -311,22 +314,28 @@ class BuildOrder(Assignment):
         assignments: "Assignments",
         building_positions: "BuildingPositions",
         pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> bool:
         if positions[worker] == self.coord:
+            remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
+            if self.building not in remaining:
+                return False
             assignments[worker] = DoNothing()
+            return True
         else:
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
-            GoTo(self.coord).execute(
+            return GoTo(self.coord).execute(
                 positions=positions,
                 worker=worker,
                 assignments=assignments,
                 building_positions=building_positions,
                 pending_positions=pending_positions,
+                required=required,
                 resources=resources,
                 carrying=carrying,
             )
@@ -338,13 +347,14 @@ class GoTo(Assignment):
 
     def execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
-    ) -> None:
+    ) -> bool:
         positions[worker] = move_from(positions[worker], toward=self.coord)
+        return True
 
 
 class DoNothing(Assignment):
-    def execute(self, *args, **kwargs) -> None:
-        pass
+    def execute(self, *args, **kwargs) -> bool:
+        return True
 
 
 Command = Union[BuildOrder, Resource]

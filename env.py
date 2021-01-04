@@ -734,7 +734,8 @@ class Env(gym.Env):
         self.render_thunk = render
 
         while True:
-            success = not required - Counter(building_positions.values())
+            remaining = required - Counter(building_positions.values())
+            success = not remaining
 
             state = State(
                 building_positions=building_positions,
@@ -783,12 +784,13 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                assignment.execute(
+                valid &= assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
                     building_positions=building_positions,
                     pending_positions=pending_positions,
+                    required=required,
                     resources=resources,
                     carrying=carrying,
                 )
