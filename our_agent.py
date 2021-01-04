@@ -329,7 +329,7 @@ class Agent(NNBase):
         mask = mask * -self.inf
         dists = replace(dists, a=Categorical(logits=a_logits + mask))
 
-        # self.print("a_probs", dists.a.probs)
+        self.print("a_probs", dists.a.probs)
 
         if action.a is None:
             a = dists.a.sample()
