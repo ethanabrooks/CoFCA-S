@@ -503,7 +503,9 @@ class Env(gym.Env):
         assert not too_short
         return np.pad(gate_openers, [(0, pad_amount), (0, 0)], mode="edge")
 
-    def place_objects(self) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
+    def place_objects(
+        self, n_lines: int
+    ) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
         yield Nexus(), nexus
         for w in Worker:
@@ -553,8 +555,7 @@ class Env(gym.Env):
 
         else:
             max_initial_buildings = max(
-                0,
-                (self.world_size ** 2 - len(occupied) - self.max_lines),
+                0, (self.world_size ** 2 - len(occupied) - n_lines)
             )
             if max_initial_buildings > 0:
                 num_initial_buildings = self.random.randint(max_initial_buildings + 1)
@@ -693,7 +694,9 @@ class Env(gym.Env):
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
     ) -> Generator[State, Optional[RawAction], None]:
-        positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects()]
+        positions: List[Tuple[WorldObject, np.ndarray]] = [
+            *self.place_objects(len(lines))
+        ]
         building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
