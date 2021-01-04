@@ -9,6 +9,8 @@ from multiprocessing import Queue
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
+from pathlib import Path
+import pickle
 
 import gym
 import hydra
@@ -272,6 +274,11 @@ class Env(gym.Env):
                 lambda: None,
             )
 
+    @staticmethod
+    def dump_state(state: State, path: Path) -> None:
+        with path.open("wb") as f:
+            pickle.dump(state, f)
+
     def failure_buffer_wrapper(self, iterator):
         use_failure_buf = False
         size = self.failure_buffer.qsize()
@@ -398,6 +405,11 @@ class Env(gym.Env):
             state, done = yield info, lambda: None
             info = {}
             elapsed_time += 1
+
+    @staticmethod
+    def load_state(path: Path) -> State:
+        with path.open("rb") as f:
+            return pickle.load(f)
 
     def main(self):
         keyboard_control.run(self, lambda: None)
