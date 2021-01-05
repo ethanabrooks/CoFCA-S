@@ -716,7 +716,7 @@ class Env(gym.Env):
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
-        ptr: int = 0
+        old_ptr = ptr = 0
         destroy = []
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
@@ -751,6 +751,9 @@ class Env(gym.Env):
                 time_remaining=time_remaining,
                 valid=valid,
             )
+            if ptr == 4 != old_ptr:
+                import ipdb; ipdb.set_trace()
+                resources[Resource.MINERALS] = lines[4].building.cost.minerals
 
             a: Optional[RawAction]
             # noinspection PyTypeChecker
@@ -758,6 +761,7 @@ class Env(gym.Env):
             if a is None:
                 a: List[ActionComponent] = [*action.from_input()]
             if isinstance(a, RawAction):
+                old_ptr = ptr
                 a, ptr = a.a, a.ptr
             new_action = action.update(*a)
             valid = new_action.valid(
