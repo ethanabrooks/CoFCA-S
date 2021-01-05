@@ -16,7 +16,7 @@ class FixedCategorical(torch.distributions.Categorical):
     def sample(self, sample_shape=torch.Size()):
         return super().sample().unsqueeze(-1)
 
-    def log_prob_cat(self, value):
+    def log_prob_deterministic(self, value):
         if self._validate_args:
             self._validate_sample(value)
         value = value.long().unsqueeze(-1)
@@ -27,7 +27,7 @@ class FixedCategorical(torch.distributions.Categorical):
         return log_pmf[R, value.squeeze(-1)]  # deterministic
 
     def log_probs(self, value):
-        return self.log_prob_cat(value.squeeze(-1)).unsqueeze(-1)
+        return self.log_prob_deterministic(value.squeeze(-1)).unsqueeze(-1)
 
     def mode(self):
         return self.probs.argmax(dim=1, keepdim=True)
@@ -92,7 +92,7 @@ class DiagGaussian(nn.Module):
         return FixedNormal(action_mean, action_logstd.exp())
 
 
-class JointCategorical(Categorical):
+class JointCategorical(torch.distributions.Categorical):
     def __init__(
         self, distribution: Categorical, *distributions: Categorical, **kwargs
     ):

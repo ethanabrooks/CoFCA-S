@@ -1,31 +1,32 @@
 import inspect
 import itertools
 import os
-from collections import namedtuple, Counter, defaultdict
+from collections import namedtuple, Counter
+from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
-from queue import Queue
-from typing import Dict, DefaultDict, Union, Optional
+from typing import Dict, Optional
 
 import gym
 import hydra
+import numpy as np
 import torch
 import torch.nn as nn
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import wandb
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
     EpisodeAggregator,
     InfosAggregator,
-    EvalWrapper,
     TotalTimeKeeper,
     AverageTimeKeeper,
+    EvalEpisodeAggregator,
+    EvalInfosAggregator,
 )
-from common.vec_env.dummy_vec_env import DummyVecEnv
-from common.vec_env.subproc_vec_env import SubprocVecEnv
-from common.vec_env.util import set_seeds
 from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
@@ -62,7 +63,7 @@ class Trainer:
         )
 
     @classmethod
-    def build_failure_buffer(cls, **kwargs):
+    def build_failure_buffer(cls, **kwargs) -> Optional[Queue]:
         pass
 
     @staticmethod
@@ -94,17 +95,17 @@ class Trainer:
         render: bool,
         synchronous: bool,
         log_dir=None,
-        non_pickle_args: dict = None,
+        mp_kwargs: dict = None,
         **kwargs,
     ) -> VecPyTorch:
-        if non_pickle_args is None:
-            non_pickle_args = {}
+        if mp_kwargs is None:
+            mp_kwargs = {}
 
         if num_processes == 1:
             synchronous = True
 
         if synchronous:
-            kwargs.update(non_pickle_args)
+            kwargs.update(mp_kwargs)
 
         def env_thunk(rank):
             def thunk(**_kwargs):
@@ -117,8 +118,8 @@ class Trainer:
         env_fns = [env_thunk(i) for i in range(num_processes)]
         return VecPyTorch(
             DummyVecEnv(env_fns, render=render)
-            if synchronous
-            else SubprocVecEnv(env_fns, **non_pickle_args)
+            if synchronous or num_processes == 1
+            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork", render=render)
         )
 
     @classmethod
@@ -155,7 +156,6 @@ class Trainer:
         load_path: Path,
         log_interval: int,
         name: str,
-        perform_eval: bool,
         use_wandb: bool,
         num_frames: Optional[int],
         num_processes: int,
@@ -167,6 +167,10 @@ class Trainer:
         save_interval: int,
         train_steps: int,
     ):
+        assert (eval_interval and eval_steps) or not (eval_interval or eval_steps), (
+            eval_steps,
+            eval_interval,
+        )
 
         if use_wandb:
             wandb.init(group=group, name=name)
@@ -210,15 +214,15 @@ class Trainer:
             eval_interval = 1
         if render or render_eval:
             ppo_args.update(ppo_epoch=0)
-            num_processes = 1
             cuda = False
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        set_seeds(seed)
-        if cuda and cuda_deterministic:
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.deterministic = True
+        # if cuda_deterministic:
+        #     torch.set_deterministic(True)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
 
         if cuda:
             device = torch.device("cuda")
@@ -271,57 +275,8 @@ class Trainer:
         for i in itertools.count():
             frames.update(so_far=frames_per_update)
             done = num_frames is not None and frames["so_far"] >= num_frames
-            if perform_eval and (
-                i == 0
-                or done
-                or (eval_interval and frames["since_eval"] > eval_interval)
-            ):
-                print("Evaluating...")
-                eval_report = EvalWrapper(EpisodeAggregator())
-                eval_infos = EvalWrapper(InfosAggregator())
-                frames["since_eval"] = 0
-
-                # self.envs.evaluate()
-                eval_masks = torch.zeros(num_processes, 1, device=device)
-                eval_envs = cls.make_vec_envs(
-                    log_dir=log_dir,
-                    failure_buffer=failure_buffer,
-                    curriculum_setting=curriculum_setting,
-                    evaluating=True,
-                    **env_args,
-                )
-                eval_envs.to(device)
-                with agent.evaluating(eval_envs.observation_space):
-                    eval_recurrent_hidden_states = torch.zeros(
-                        num_processes,
-                        agent.recurrent_hidden_state_size,
-                        device=device,
-                    )
-
-                    for output in run_epoch(
-                        obs=eval_envs.reset(),
-                        rnn_hxs=eval_recurrent_hidden_states,
-                        masks=eval_masks,
-                        envs=eval_envs,
-                        num_steps=eval_steps,
-                    ):
-                        eval_report.update(
-                            reward=output.reward.cpu().numpy(),
-                            dones=output.done,
-                        )
-                        eval_infos.update(*output.infos, dones=output.done)
-                    cls.report(
-                        **dict(eval_report.items()),
-                        **dict(eval_infos.items()),
-                        frames=frames["so_far"],
-                        log_dir=log_dir,
-                    )
-                    print("Done evaluating...")
-                eval_envs.close()
-                rollouts.obs[0].copy_(train_envs.reset())
-                rollouts.masks[0] = 1
-                rollouts.recurrent_hidden_states[0] = 0
             if done or i == 0 or frames["since_log"] > log_interval:
+
                 time_spent["logging"].tick()
                 frames["since_log"] = 0
                 report = dict(
@@ -333,6 +288,8 @@ class Trainer:
                     frames=frames["so_far"],
                     log_dir=log_dir,
                 )
+                if failure_buffer is not None:
+                    report.update({"failure buffer size": failure_buffer.qsize()})
                 cls.report(**report)
                 train_report.reset()
                 train_infos.reset()
@@ -342,6 +299,59 @@ class Trainer:
                 time_spent["dumping failure buffer"].tick()
                 cls.dump_failure_buffer(failure_buffer, log_dir)
                 time_spent["dumping failure buffer"].update()
+
+                if eval_interval and (
+                    i == 0 or done or frames["since_eval"] > eval_interval
+                ):
+                    print("Evaluating...")
+                    time_spent["evaluating"].tick()
+                    eval_report = EvalEpisodeAggregator()
+                    eval_infos = EvalInfosAggregator()
+                    frames["since_eval"] = 0
+
+                    # self.envs.evaluate()
+                    eval_masks = torch.zeros(num_processes, 1, device=device)
+                    eval_envs = cls.make_vec_envs(
+                        log_dir=log_dir,
+                        failure_buffer=failure_buffer,
+                        curriculum_setting=curriculum_setting,
+                        evaluating=True,
+                        **env_args,
+                    )
+                    eval_envs.to(device)
+                    with agent.evaluating(eval_envs.observation_space):
+                        eval_recurrent_hidden_states = torch.zeros(
+                            num_processes,
+                            agent.recurrent_hidden_state_size,
+                            device=device,
+                        )
+
+                        for output in run_epoch(
+                            obs=eval_envs.reset(),
+                            rnn_hxs=eval_recurrent_hidden_states,
+                            masks=eval_masks,
+                            envs=eval_envs,
+                            num_steps=eval_steps,
+                        ):
+                            eval_report.update(
+                                reward=output.reward.cpu().numpy(),
+                                dones=output.done,
+                            )
+                            eval_infos.update(*output.infos, dones=output.done)
+                        cls.report(
+                            **dict(eval_report.items()),
+                            **dict(eval_infos.items()),
+                            frames=frames["so_far"],
+                            log_dir=log_dir,
+                        )
+                        print("Done evaluating...")
+                    eval_envs.close()
+                    rollouts.obs[0].copy_(train_envs.reset())
+                    rollouts.masks[0] = 1
+                    rollouts.recurrent_hidden_states[0] = 0
+                    time_spent["evaluating"].update()
+                    train_report = EpisodeAggregator()
+                    train_infos = cls.build_infos_aggregator()
 
             if done or (save_interval and frames["since_save"] > save_interval):
                 time_spent["saving"].tick()
@@ -411,9 +421,7 @@ class Trainer:
         print(f"Saved parameters to {save_path}")
 
     @classmethod
-    def structure_config(
-        cls, cfg: DictConfig
-    ) -> DefaultDict[str, Dict[str, Union[bool, int, float]]]:
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
         cfg = DictConfig(dict(flatten(cfg)))
 
         if cfg.render:
@@ -423,10 +431,10 @@ class Trainer:
             for method in ms:
                 yield from inspect.signature(method).parameters
 
-        args = defaultdict(dict)
         args_to_methods = cls.args_to_methods()
+        args = {k: {} for k in args_to_methods}
         for k, v in cfg.items():
-            if k in ("_wandb", "wandb_version"):
+            if k in ("_wandb", "wandb_version", "eval_perform"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():

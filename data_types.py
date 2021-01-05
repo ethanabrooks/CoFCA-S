@@ -1,145 +1,83 @@
 import itertools
-import os
 import typing
-from abc import abstractmethod, ABC
+from abc import abstractmethod, ABC, ABCMeta
 from collections import Counter
-from dataclasses import dataclass, astuple, fields, replace
-from enum import unique, Enum, auto
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
+from dataclasses import dataclass, astuple, field, asdict
+from enum import unique, Enum, auto, EnumMeta
+from functools import lru_cache
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable
 
+import gym
 import numpy as np
 import torch
-from colored import fg
-from gym import Space
+from colored import fg, sys
+from gym import Space, spaces
 
-from utils import RESET, Discrete
+from utils import RESET, get_max_shape
 
-Coord = Tuple[int, int]
+CoordType = Tuple[int, int]
+IntGenerator = Generator[int, None, None]
+BoolGenerator = Generator[bool, None, None]
 
 WORLD_SIZE = None
+
+
+def move_from(origin: CoordType, toward: CoordType) -> CoordType:
+    origin = np.array(origin)
+    i, j = np.array(origin) + np.clip(
+        np.array(toward) - origin,
+        -1,
+        1,
+    )
+    return i, j
+
+
+""" abstract classes """
 
 
 class WorldObject:
     @property
     @abstractmethod
     def symbol(self):
-        return
+        pass
 
     @abstractmethod
     def __eq__(self, other):
         pass
 
 
-@unique
-class Worker(WorldObject, Enum):
-    A = auto()
-    B = auto()
-    C = auto()
-
-    @property
-    def symbol(self):
-        return self.value
-
-    def __eq__(self, other):
-        # noinspection PyArgumentList
-        return Enum.__eq__(self, other)
-
-    def __hash__(self):
-        # noinspection PyArgumentList
-        return Enum.__hash__(self)
-
-
-class Assignment:
-    @abstractmethod
-    def action(
-        self,
-        current_position: Coord,
-        positions: Dict[Union["Resource", Worker], Coord],
-        nexus_positions: List[Coord],
-    ) -> "WorkerAction":
-        raise NotImplementedError
-
-
-class Target:
-    @abstractmethod
-    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
-        raise NotImplementedError
-
-    @classmethod
-    def index(cls, item: "Target") -> int:
-        return [*cls].index(item)
-
-
-class WorkerAction:
+class ActionComponentMeta(type):
     pass
 
 
-@unique
-class Resource(WorldObject, Target, Assignment, Enum):
-    MINERALS = auto()
-    GAS = auto()
-
-    def __hash__(self):
-        return Enum.__hash__(self)
-
-    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
-        return self
-
-    def action(
-        self,
-        current_position: Coord,
-        positions: Dict[Union["Resource", Worker], Coord],
-        nexus_positions: List[Coord],
-    ) -> "Movement":
-        target_position = positions[self]
-        if current_position == target_position:
-            target_position = get_nearest(current_position, nexus_positions)
-        return Movement.from_(current_position, to=target_position)
-
-    @property
-    def symbol(self):
-        if self is Resource.GAS:
-            return fg("green") + "G" + RESET
-        if self is Resource.MINERALS:
-            return fg("blue") + "M" + RESET
-        raise RuntimeError
-
-    def __eq__(self, other):
-        return Enum.__eq__(self, other)
+class ActionComponentEnumMeta(ActionComponentMeta, EnumMeta):
+    pass
 
 
-@dataclass(frozen=True)
-class Resources:
-    minerals: int
-    gas: int
-
-    def as_dict(self) -> Dict[Resource, int]:
-        return {Resource.MINERALS: self.minerals, Resource.GAS: self.gas}
-
-    def as_counter(self) -> typing.Counter[Resource]:
-        return Counter(self.as_dict())
+class ActionComponentABCMeta(ActionComponentMeta, ABCMeta):
+    pass
 
 
-assert set(Resources(0, 0).__annotations__.keys()) == {
-    r.lower() for r in Resource.__members__
-}
-
-
-class Building(WorldObject, Target, WorkerAction, ABC):
-    def assignment(self, action3: Optional["IJAction"]) -> "Assignment":
-        assert isinstance(action3, IJAction)
-        return BuildOrder(building=self, location=(action3.i, action3.j))
-
-    @property
+class ActionComponent(metaclass=ActionComponentMeta):
+    @staticmethod
     @abstractmethod
-    def cost(self) -> Resources:
+    def parse(n: int) -> "ActionComponent":
         pass
 
-    @property
+    @staticmethod
     @abstractmethod
-    def symbol(self) -> str:
+    def space() -> spaces.Discrete:
         pass
 
+    @abstractmethod
+    def to_int(self) -> int:
+        pass
+
+
+ActionComponentGenerator = Generator[ActionComponent, None, None]
+
+
+class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMeta):
     def __eq__(self, other):
         return type(self) == type(other)
 
@@ -149,223 +87,287 @@ class Building(WorldObject, Target, WorkerAction, ABC):
     def __str__(self):
         return self.__class__.__name__
 
+    def __repr__(self):
+        return f"({Buildings.index(self)}) {str(self)}: {self.cost}"
 
-class Assimilator(Building):
     @property
-    def cost(self) -> Resources:
-        return Resources(minerals=1, gas=0)
+    @abstractmethod
+    def cost(self) -> "Resources":
+        pass
+
+    def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
+        return self == building_positions.get(coord)
+
+    @staticmethod
+    def parse(n: int) -> ActionComponent:
+        return Buildings[n]
+
+    @staticmethod
+    def space() -> spaces.Discrete:
+        return spaces.Discrete(len(Buildings))
+
+    @property
+    @abstractmethod
+    def symbol(self) -> str:
+        pass
+
+    def to_int(self) -> int:
+        return Buildings.index(self)
+
+
+class Assignment:
+    @abstractmethod
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> bool:
+        raise NotImplementedError
+
+
+""" world objects"""
+
+
+@unique
+class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMeta):
+    W1 = auto()
+    W2 = auto()
+    W3 = auto()
+    # W4 = auto()
+    # W5 = auto()
+    # W6 = auto()
+    # W7 = auto()
+    # W8 = auto()
+    # W9 = auto()
+    # W10 = auto()
+    # W11 = auto()
+    # W12 = auto()
+
+    def __eq__(self, other):
+        # noinspection PyArgumentList
+        return Enum.__eq__(self, other)
+
+    def __lt__(self, other):
+        assert isinstance(other, Worker)
+        # noinspection PyArgumentList
+        return self.value < other.value
+
+    def __hash__(self):
+        # noinspection PyArgumentList
+        return Enum.__hash__(self)
+
+    def on(
+        self,
+        coord: "CoordType",
+        positions: "Positions",
+    ) -> bool:
+        return positions[self] == coord
+
+    @staticmethod
+    def parse(n: int) -> "ActionComponent":
+        return Worker(n)
+
+    @staticmethod
+    def space() -> spaces.Discrete:
+        return spaces.Discrete(len(Worker))  # binary: in or out
 
     @property
     def symbol(self) -> str:
-        return "a"
+        return str(self.value)
+
+    def to_int(self) -> int:
+        return 0
 
 
-class CyberneticsCore(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
-
-    @property
-    def symbol(self) -> str:
-        return "C"
+WorkerGenerator = Generator[Worker, None, None]
 
 
-class DarkShrine(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+@unique
+class Resource(WorldObject, Assignment, Enum):
+    MINERALS = auto()
+    GAS = auto()
 
-    @property
-    def symbol(self) -> str:
-        return "D"
+    def __hash__(self):
+        return Enum.__hash__(self)
 
+    def __eq__(self, other):
+        return Enum.__eq__(self, other)
 
-class Forge(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> bool:
+        worker_pos = positions[worker]
 
-    @property
-    def symbol(self) -> str:
-        return "f"
+        if carrying[worker] is None:
+            resource_pos = positions[self]
+            positions[worker] = move_from(worker_pos, toward=resource_pos)
+            worker_pos = positions[worker]
+            if worker_pos == resource_pos:
+                if self is Resource.GAS and not isinstance(
+                    building_positions.get(positions[worker]), Assimilator
+                ):
+                    return True  # no op on gas unless Assimilator
+                carrying[worker] = self
+        else:
+            nexus_positions: List[CoordType] = [
+                p for p, b in building_positions.items() if isinstance(b, Nexus)
+            ]
+            nexus = get_nearest(nexus_positions, to=worker_pos)
+            positions[worker] = move_from(
+                worker_pos,
+                toward=nexus,
+            )
+            if positions[worker] == nexus:
+                resource = carrying[worker]
+                assert isinstance(resource, Resource)
+                resources[resource] += 100
+                carrying[worker] = None
+        return True
 
-
-class FleetBeacon(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=3, gas=2)
-
-    @property
-    def symbol(self) -> str:
-        return "b"
-
-
-class Gateway(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
-
-    @property
-    def symbol(self) -> str:
-        return "g"
-
-
-class Nexus(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=4, gas=0)
-
-    @property
-    def symbol(self) -> str:
-        return "n"
-
-
-class PhotonCannon(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=0)
+    def on(
+        self,
+        coord: "CoordType",
+        positions: "Positions",
+    ) -> bool:
+        return positions[self] == coord
 
     @property
     def symbol(self) -> str:
-        return "c"
+        if self is Resource.GAS:
+            return fg("green") + "g" + RESET
+        if self is Resource.MINERALS:
+            return fg("blue") + "m" + RESET
+        raise RuntimeError
 
 
-class Pylon(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=1, gas=0)
+@dataclass(frozen=True)
+class Resources:
+    minerals: int
+    gas: int
 
-    @property
-    def symbol(self) -> str:
-        return "p"
-
-
-class RoboticsBay(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
-
-    @property
-    def symbol(self) -> str:
-        return "B"
+    def __iter__(self):
+        yield from [Resource.MINERALS] * self.minerals
+        yield from [Resource.GAS] * self.gas
 
 
-class RoboticsFacility(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=1)
+assert set(Resources(0, 0).__annotations__.keys()) == {
+    r.lower() for r in Resource.__members__
+}
 
-    @property
-    def symbol(self) -> str:
-        return "F"
+""" action components """
 
 
-class StarGate(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+@dataclass
+class Coord(ActionComponent):
+    i: int
+    j: int
 
-    @property
-    def symbol(self) -> str:
-        return "S"
+    @staticmethod
+    def parse(n: int) -> "ActionComponent":
+        assert isinstance(WORLD_SIZE, int)
+        ij = np.unravel_index(n, (WORLD_SIZE, WORLD_SIZE))
+        return Coord(*ij)
 
+    @staticmethod
+    def space() -> spaces.Discrete:
+        assert isinstance(WORLD_SIZE, int)
+        return spaces.Discrete(WORLD_SIZE ** 2)
 
-class TemplarArchives(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=2)
+    def to_int(self) -> int:
+        return int(np.ravel_multi_index((self.i, self.j), (WORLD_SIZE, WORLD_SIZE)))
 
-    @property
-    def symbol(self) -> str:
-        return "A"
-
-
-class TwilightCouncil(Building):
-    @property
-    def cost(self) -> Resources:
-        return Resources(minerals=2, gas=1)
-
-    @property
-    def symbol(self) -> str:
-        return "T"
+    @staticmethod
+    def zeros() -> IntGenerator:
+        yield 0
+        yield 0
 
 
-Buildings: List[Building] = [
-    Assimilator(),
-    CyberneticsCore(),
-    DarkShrine(),
-    FleetBeacon(),
-    Forge(),
-    # Gateway(),
-    Nexus(),
-    PhotonCannon(),
-    Pylon(),
-    RoboticsBay(),
-    RoboticsFacility(),
-    StarGate(),
-    # TemplarArchives(),
-    TwilightCouncil(),
-]
-
-Targets = [*Resource, *Buildings]
-
-
-def get_nearest(current_position: Coord, candidate_positions: List[Coord]) -> Coord:
-    nearest = np.argmin(
-        np.max(
-            np.abs(
-                np.expand_dims(np.array(current_position), 0)
-                - np.stack(candidate_positions),
-            ),
-            axis=-1,
-        )
-    )
-    return candidate_positions[int(nearest)]
+BuildingPositions = Dict[CoordType, Building]
+Positions = Dict[Union[Resource, Worker], CoordType]
+Carrying = Dict[Worker, Optional[Resource]]
+Assignments = Dict[Worker, Assignment]
 
 
 @dataclass(frozen=True)
 class BuildOrder(Assignment):
     building: Building
-    location: Tuple[int, int] = None
+    coord: CoordType
 
-    def action(self, current_position: Coord, *args, **kwargs) -> "WorkerAction":
-        if current_position == self.location:
-            return self.building
-        return Movement.from_(current_position, to=self.location)
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> bool:
+        if positions[worker] == self.coord:
+            remaining = required - Counter(building_positions.values())
+            building_positions[self.coord] = self.building
+            if self.building not in remaining:
+                return False
+            assignments[worker] = DoNothing()
+            return True
+        else:
+            if self.coord not in pending_positions:
+                pending_positions[self.coord] = self.building
+                resources.subtract(self.building.cost)
+            return GoTo(self.coord).execute(
+                positions=positions,
+                worker=worker,
+                assignments=assignments,
+                building_positions=building_positions,
+                pending_positions=pending_positions,
+                required=required,
+                resources=resources,
+                carrying=carrying,
+            )
 
 
-Assignment = Union[BuildOrder, Resource]
+@dataclass(frozen=True)
+class GoTo(Assignment):
+    coord: CoordType
+
+    def execute(
+        self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
+    ) -> bool:
+        positions[worker] = move_from(positions[worker], toward=self.coord)
+        return True
 
 
-class MovementType(type):
-    def __iter__(self):
-        for i in range(-1, 2):
-            for j in range(-1, 2):
-                yield Movement(i, j)
+class DoNothing(Assignment):
+    def execute(self, *args, **kwargs) -> bool:
+        return True
 
 
-@dataclass(eq=True, frozen=True)
-class Movement(WorkerAction, metaclass=MovementType):
-    x: int
-    y: int
+Command = Union[BuildOrder, Resource]
 
-    @classmethod
-    def from_(cls, origin, to):
-        return cls(*np.clip(np.array(to) - np.array(origin), -1, 1))
-
-
-WorkerActions = [*Buildings, *Movement]
-
-O = typing.TypeVar("O", Space, torch.Tensor, np.ndarray)
+O = typing.TypeVar("O", torch.Tensor, np.ndarray, int, gym.Space)
 
 
 @dataclass(frozen=True)
 class Obs(typing.Generic[O]):
     action_mask: O
-    can_open_gate: O
+    gate_openers: O
     line_mask: O
     lines: O
-    next_actions: O
     obs: O
     partial_action: O
     ptr: O
@@ -375,209 +377,424 @@ class Obs(typing.Generic[O]):
 X = typing.TypeVar("X")
 
 
-class ActionType(type):
-    pass
-
-
 @dataclass(frozen=True)
-class Action(metaclass=ActionType):
-    @classmethod
-    def parse(cls, a) -> "Action":
-        assert 0 <= a < cls.size_a()
-        # noinspection PyArgumentList
-        return cls(*np.unravel_index(int(a), astuple(cls.num_values())))
+class RawAction:
+    delta: Union[np.ndarray, torch.Tensor, X]
+    dg: Union[np.ndarray, torch.Tensor, X]
+    ptr: Union[np.ndarray, torch.Tensor, X]
+    a: Union[np.ndarray, torch.Tensor, X]
 
-    @classmethod
-    def size_a(cls) -> int:
-        return int(np.prod(astuple(cls.num_values())))
+    @staticmethod
+    def parse(*xs) -> "RawAction":
+        delta, dg, ptr, *a = xs
+        if a == [None]:
+            a = None
+        return RawAction(delta, dg, ptr, a)
 
-    @classmethod
-    def mask(cls, size):
-        for i in range(size):
-            yield i >= cls.size_a()
-
-    @classmethod
-    def can_open_gate(cls, size) -> Generator[bool, None, None]:
-        for i in range(size):
-            try:
-                yield cls.parse(i).reset()
-            except AssertionError:
-                yield False
-
-    @classmethod
-    @abstractmethod
-    def num_values(cls) -> "Action":
-        raise NotImplementedError
-
-    @abstractmethod
-    def reset(self) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_ints(self) -> Generator[int, None, None]:
-        yield from map(int, astuple(self))
-
-    def next(self) -> ActionType:
-        if self.reset():
-            return next(CompoundAction.classes())
-        return self.next_if_not_reset()
-
-    @abstractmethod
-    def next_if_not_reset(self) -> ActionType:
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class IsOpAction(Action):
-    is_op: X
-
-    def to_ints(self) -> Generator[int, None, None]:
-        yield int(self.is_op)
-
-    @classmethod
-    def num_values(cls) -> "IsOpAction":
-        return cls(2)
-
-    def reset(self):
-        return not self.is_op
-
-    def next_if_not_reset(self) -> ActionType:
-        return WorkerTargetAction
-
-
-@dataclass(frozen=True)
-class WorkerTargetAction(Action):
-    worker: X
-    target: X
-
-    @classmethod
-    def parse(cls, a) -> "Action":
-        ints = super().parse(a)
-        assert isinstance(ints, cls)
-        return cls(worker=Worker(ints.worker + 1), target=Targets[ints.target])
-
-    @classmethod
-    def num_values(cls) -> "WorkerTargetAction":
-        return cls(worker=len(Worker), target=len(Targets))
-
-    def reset(self):
-        return isinstance(self.target, Resource)
-
-    def next_if_not_reset(self) -> ActionType:
-        return IJAction
-
-    def to_ints(self) -> Generator[int, None, None]:
-        if isinstance(self.worker, Worker):
-            yield self.worker.value
-        else:
-            yield int(self.worker)
-        if isinstance(self.target, Target):
-            yield Targets.index(self.target)
-        else:
-            yield int(self.target)
-
-
-@dataclass(frozen=True)
-class IJAction(Action):
-    i: X
-    j: X
-
-    def to_ints(self) -> Generator[int, None, None]:
-        yield self.i
-        yield self.j
-
-    @classmethod
-    def num_values(cls) -> "IJAction":
-        return cls(i=WORLD_SIZE, j=WORLD_SIZE)
-
-    def reset(self):
-        return True
-
-    def next_if_not_reset(self) -> ActionType:
-        raise NotImplementedError
-
-
-@dataclass(frozen=True)
-class RecurringActions(typing.Generic[X]):
-    delta: X
-    dg: X
-    ptr: X
-
-
-@dataclass(frozen=True)
-class RawAction(RecurringActions):
-    a: X
+    def flatten(self) -> Generator[any, None, None]:
+        yield from astuple(self)
 
 
 @dataclass(frozen=True)
 class CompoundAction:
-    action1: WorkerTargetAction = None
-    action2: IJAction = None
-    ptr: int = 0
-    active: ActionType = WorkerTargetAction
+    @classmethod
+    @abstractmethod
+    def _building_active(cls) -> bool:
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def _gate_openers() -> Generator[List[int], None, None]:
+        pass
 
     @classmethod
-    def classes(cls):
-        for f in fields(cls):
-            if issubclass(f.type, Action):
-                yield f.type
+    @abstractmethod
+    def _coord_active(cls) -> bool:
+        pass
 
-    def actions(self):
-        for f in fields(self):
-            if issubclass(f.type, Action):
-                yield getattr(self, f.name)
+    def _get_building(self) -> Optional[Building]:
+        try:
+            # noinspection PyUnresolvedReferences
+            return self.building
+        except AttributeError:
+            return None
 
-    def partial_actions(self):
-        index = [*self.classes()].index(self.active)
-        actions = [*self.actions()][:index]
-        for cls, action in itertools.zip_longest(self.classes(), actions):
-            if isinstance(action, Action):
-                yield from action.to_ints()
-            elif issubclass(cls, Action):
-                assert action is None
-                yield from [0 for _ in astuple(cls.num_values())]
-            else:
-                raise RuntimeError
+    def _get_coord(self) -> Optional[Coord]:
+        try:
+            # noinspection PyUnresolvedReferences
+            return self.coord
+        except AttributeError:
+            return None
 
-    def update(self, action: Union[RawAction, "CompoundAction"]):
-        if isinstance(action, CompoundAction):
-            return action
-        ptr = action.ptr
-        assert issubclass(self.active, Action)
-        action = self.active.parse(action.a)
-        index = [*self.classes()].index(self.active)
-        new_keys = (f.name for f in fields(self))
-        new_actions = [*[*self.actions()][:index], action]
-        assert None not in new_actions
-        kwargs = dict(itertools.zip_longest(new_keys, new_actions))
-        kwargs.update(active=action.next(), ptr=ptr)
-        # noinspection PyTypeChecker
-        return replace(self, **kwargs)
+    @classmethod
+    def mask(cls) -> np.ndarray:
+        def unpadded_generator() -> Generator[List[bool], None, None]:
+            for _ in Worker:
+                yield [
+                    cls._worker_active(),  # worker active: mask no-op
+                    *[not cls._worker_active() for _ in range(2)],
+                ]
+            yield [
+                False,  # always allowed to cancel
+                *[not cls._coord_active() for _ in range(Coord.space().n)],
+                *[not cls._building_active() for _ in range(Building.space().n)],
+            ]
 
-    def can_open_gate(self, size):
-        assert issubclass(self.active, Action)
-        return self.active.can_open_gate(size)
+        unpadded = [*unpadded_generator()]
+        size = max([len(m) for m in unpadded])
+        padded = [
+            np.pad(
+                m, pad_width=[(0, size - len(m))], mode="constant", constant_values=True
+            )
+            for m in unpadded
+        ]
+        return np.stack(padded)
 
-    def mask(self, size):
-        assert issubclass(self.active, Action)
-        return self.active.mask(size)
+    @staticmethod
+    @abstractmethod
+    def _parse_string(s: str) -> ActionComponentGenerator:
+        pass
 
-    def is_op(self):
-        return self.active is next(self.classes())
+    @staticmethod
+    @abstractmethod
+    def _prompt() -> str:
+        pass
 
-    def worker(self) -> Worker:
-        assert self.action1.worker is not None
-        return self.action1.worker
+    def to_ints(self) -> IntGenerator:
+        workers = {*self.get_workers()}
+        for w in Worker:
+            yield int(w in workers)
+        building = self._get_building()
+        coord = self._get_coord()
+        yield 0 if building is None else building.to_int()
+        yield 0 if coord is None else coord.to_int()
 
-    def assignment(self) -> Assignment:
-        assert isinstance(self.action1.target, Target)
-        return self.action1.target.assignment(self.action2)
+    @staticmethod
+    @abstractmethod
+    def _update(a: ActionComponent) -> "CompoundAction":
+        pass
+
+    @classmethod
+    @abstractmethod
+    def _worker_active(cls) -> bool:
+        pass
+
+    @abstractmethod
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        pass
+
+    @staticmethod
+    def subclasses():
+        yield NoWorkersAction
+        yield WorkersAction
+        yield BuildingAction
+        yield CoordAction
+        yield BuildingCoordAction
+
+    @classmethod
+    @lru_cache
+    def gate_openers(cls) -> List[List[int]]:
+        def contextualize(partial_opener) -> IntGenerator:
+            opener_iter = iter(partial_opener)
+
+            for _ in Worker:
+                yield 1 + next(opener_iter) if cls._worker_active() else 0
+            yield (
+                (1 + next(opener_iter))
+                if cls._building_active() or cls._coord_active()
+                else 0
+            )
+
+        return [list(contextualize(o)) for o in cls._gate_openers()]
+
+    def from_input(self) -> ActionComponentGenerator:
+        while True:
+            try:
+                return self._parse_string(input(self._prompt() + "\n"))
+            except ValueError as e:
+                print(e)
+
+    def get_workers(self) -> WorkerGenerator:
+        try:
+            # noinspection PyUnresolvedReferences
+            yield from self.workers
+        except AttributeError:
+            pass
+
+    @classmethod
+    def input_space(cls) -> spaces.MultiDiscrete:
+        def sizes_gen():
+            for _ in Worker:
+                yield 3  # no-op, choose, don't choose
+            yield Coord.space().n + len(Buildings) + 1  # +1 for no-op
+
+        sizes = [*sizes_gen()]
+        return spaces.MultiDiscrete([max(sizes)] * len(sizes))
+
+    @classmethod
+    def representation_space(cls) -> spaces.MultiDiscrete:
+        return spaces.MultiDiscrete(
+            [*(2 for _ in Worker), len(Buildings), Coord.space().n]
+        )
+
+    def update(
+        self, *components: Union[np.ndarray, Iterable[Optional[ActionComponent]]]
+    ) -> "CompoundAction":
+        if not components or None in [*components]:
+            return NoWorkersAction()
+        if any(isinstance(c, ActionComponent) for c in components):
+            return self._update(*components)
+        *worker_component, n = np.array(components) - 1  # -1 to remove no-op
+        if self._worker_active():
+            return self._update(
+                *[Worker.parse(i) for i, w in enumerate(worker_component, 1) if w]
+            )
+        if self._coord_active() and Coord.space().contains(n):
+            return self._update(Coord.parse(n))
+        n -= Coord.space().n
+        if self._building_active() and Building.space().contains(n):
+            return self._update(Building.parse(n))
+        assert not (Coord.space().contains(n) or Building.space().contains(n))
+        return NoWorkersAction()
+
+    @abstractmethod
+    def valid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        pending_positions: BuildingPositions,
+        positions: Positions,
+    ) -> bool:
+        pass
+
+
+class WorkerActive(CompoundAction, ABC):
+    @classmethod
+    def _building_active(cls) -> bool:
+        return False
+
+    @classmethod
+    def _coord_active(cls) -> bool:
+        return False
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return True
+
+
+class BuildingCoordActive(CompoundAction, ABC):
+    @classmethod
+    def _building_active(cls) -> bool:
+        return True
+
+    @classmethod
+    def _coord_active(cls) -> bool:
+        return True
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return False
+
+
+class CoordActive(CompoundAction, ABC):
+    @classmethod
+    def _building_active(cls) -> bool:
+        return False
+
+    @classmethod
+    def _coord_active(cls) -> bool:
+        return True
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return False
+
+
+class CoordCanOpenGate(CompoundAction, ABC):
+    @staticmethod
+    def _gate_openers() -> Generator[List[int], None, None]:
+        assert isinstance(WORLD_SIZE, int)
+        coords = [*zip(*itertools.product(range(WORLD_SIZE), range(WORLD_SIZE)))]
+        for index in np.ravel_multi_index(coords, (WORLD_SIZE, WORLD_SIZE)):
+            yield [index]
 
 
 @dataclass(frozen=True)
-class Command:
-    worker: Worker
-    assignment: Assignment
+class NoWorkersAction(WorkerActive):
+    @staticmethod
+    def _gate_openers() -> Generator[List[int], None, None]:
+        # selecting no workers is a no-op that allows gate to open
+        yield [0] * len(Worker)
+
+    @staticmethod
+    def _parse_string(s: str) -> ActionComponentGenerator:
+        for i in s.split():
+            yield Worker(int(i))
+
+    @staticmethod
+    def _prompt() -> str:
+        return "Workers:"
+
+    def _update(
+        self, *workers: ActionComponent
+    ) -> Union["WorkersAction", "NoWorkersAction"]:
+        workers = [*workers]
+        if not workers:
+            return NoWorkersAction()
+        return WorkersAction(workers)
+
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        return DoNothing()
+
+    def valid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        pending_positions: BuildingPositions,
+        positions: Positions,
+    ) -> bool:
+        return True
+
+
+def parse_coord(s):
+    i, j = map(int, s.split())
+    assert 0 <= i < WORLD_SIZE
+    assert 0 <= j < WORLD_SIZE
+    return Coord(i, j)
+
+
+@dataclass(frozen=True)
+class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
+    workers: List[Worker]
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return False
+
+    @staticmethod
+    def _parse_string(s: str) -> ActionComponentGenerator:
+        try:
+            yield Buildings[int(s)]
+        except ValueError:
+            try:
+                yield parse_coord(s)
+            except ValueError:
+                yield
+
+    @staticmethod
+    def _prompt() -> str:
+        return "\n".join(
+            [f"({i}) {b}" for i, b in enumerate(Buildings)] + ["Coord or Building"]
+        )
+
+    def _update(self, *a: ActionComponent) -> "CompoundAction":
+        (a,) = a  # accepts only one argument
+        if isinstance(a, Coord):
+            return CoordAction(workers=self.workers, coord=a)
+        elif isinstance(a, Building):
+            return BuildingAction(workers=self.workers, building=a)
+        else:
+            raise RuntimeError
+
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        return None
+
+    def valid(self, *args, **kwargs) -> bool:
+        return True
+
+
+@dataclass(frozen=True)
+class CoordAction(NoWorkersAction):
+    workers: List[Worker]
+    coord: Coord
+
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        i, j = astuple(self.coord)
+        for resource in Resource:
+            if resource.on((i, j), positions):
+                return resource
+        return GoTo((i, j))
+
+    def valid(self, *args, **kwargs) -> bool:
+        return True
+
+
+@dataclass(frozen=True)
+class BuildingAction(CoordActive, CoordCanOpenGate):
+    workers: List[Worker]
+    building: Building
+
+    @staticmethod
+    def _parse_string(s: str) -> ActionComponentGenerator:
+        i, j = map(int, s.split())
+        yield Coord.parse(int(np.ravel_multi_index((i, j), (WORLD_SIZE, WORLD_SIZE))))
+
+    @staticmethod
+    def _prompt() -> str:
+        return "Coord"
+
+    def _update(self, *a: ActionComponent) -> "CompoundAction":
+        (a,) = a
+        assert isinstance(a, Coord)
+        return BuildingCoordAction(
+            workers=self.workers, building=self.building, coord=a
+        )
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return False
+
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        return None
+
+    def valid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        *args,
+        **kwargs,
+    ) -> bool:
+        dependency = dependencies[self.building]
+        dependency_met = dependency in [*building_positions.values(), None]
+        insufficient_resources = Counter(self.building.cost) - resources
+        return dependency_met and not insufficient_resources
+
+
+@dataclass(frozen=True)
+class BuildingCoordAction(NoWorkersAction):
+    workers: List[Worker]
+    building: Building
+    coord: Coord
+
+    def assignment(self, positions: Positions) -> Assignment:
+        i, j = astuple(self.coord)
+        on_gas = Resource.GAS.on((i, j), positions)
+        assimilator = isinstance(self.building, Assimilator)
+        assert (on_gas and assimilator) or (not on_gas and not assimilator)
+        assert not Resource.MINERALS.on((i, j), positions)
+        return BuildOrder(self.building, (i, j))
+
+    def valid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        pending_positions: BuildingPositions,
+        positions: Positions,
+    ) -> bool:
+        coord = astuple(self.coord)
+        if coord in {**building_positions, **pending_positions}:
+            return False
+        if isinstance(self.building, Assimilator):
+            return coord == positions[Resource.GAS]
+        else:
+            return coord not in (
+                positions[Resource.GAS],
+                positions[Resource.MINERALS],
+            )
 
 
 # Check that fields are alphabetical. Necessary because of the way
@@ -595,16 +812,13 @@ class Line:
 @dataclass
 class State:
     action: CompoundAction
-    building_positions: Dict[Coord, Building]
-    next_action: Dict[Worker, WorkerAction]
+    building_positions: Dict[CoordType, Building]
     pointer: int
-    positions: Dict[Union[Resource, Worker], Coord]
+    positions: Dict[Union[Resource, Worker], CoordType]
     resources: typing.Counter[Resource]
     success: bool
     time_remaining: int
-
-
-WorldObjects = list(Buildings) + list(Resource) + list(Worker)
+    valid: bool
 
 
 @dataclass
@@ -626,21 +840,175 @@ class ParsedInput(Generic[X]):
     actions: X
 
 
-@dataclass
-class CurriculumSetting:
-    max_build_tree_depth: int
-    max_lines: int
-    n_lines_space: Discrete
-    level: int
+def get_nearest(
+    candidate_positions: List[CoordType],
+    to: CoordType,
+) -> CoordType:
+    nearest = np.argmin(
+        np.max(
+            np.abs(
+                np.expand_dims(np.array(to), 0) - np.stack(candidate_positions),
+            ),
+            axis=-1,
+        )
+    )
+    return candidate_positions[int(nearest)]
 
-    def increment_max_lines(self) -> "CurriculumSetting":
-        low = self.n_lines_space.low
-        high = min(self.n_lines_space.high + 1, self.max_lines)
-        n_lines_space = Discrete(low=low, high=high)
-        return replace(self, n_lines_space=n_lines_space)
 
-    def increment_build_tree_depth(self) -> "CurriculumSetting":
-        return replace(self, max_build_tree_depth=self.max_build_tree_depth + 1)
+class Assimilator(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=75, gas=0)
 
-    def increment_level(self) -> "CurriculumSetting":
-        return replace(self, level=self.level + 1)
+    @property
+    def symbol(self) -> str:
+        return "A"
+
+
+class CyberneticsCore(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "CC"
+
+
+class DarkShrine(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)  # 150)
+
+    @property
+    def symbol(self) -> str:
+        return "DS"
+
+
+class FleetBeacon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=300, gas=0)  # 200)
+
+    @property
+    def symbol(self) -> str:
+        return "FB"
+
+
+class Forge(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "f"
+
+
+class Gateway(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "GW"
+
+
+class Nexus(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=400, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "N"
+
+
+class PhotonCannon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "PC"
+
+
+class Pylon(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=100, gas=0)
+
+    @property
+    def symbol(self) -> str:
+        return "P"
+
+
+class RoboticsBay(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=200, gas=0)  # 200)
+
+    @property
+    def symbol(self) -> str:
+        return "RB"
+
+
+class RoboticsFacility(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=200, gas=0)  # 100)
+
+    @property
+    def symbol(self) -> str:
+        return "RF"
+
+
+class StarGate(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)  # 150)
+
+    @property
+    def symbol(self) -> str:
+        return "SG"
+
+
+class TemplarArchives(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)  # 200)
+
+    @property
+    def symbol(self) -> str:
+        return "TA"
+
+
+class TwilightCouncil(Building):
+    @property
+    def cost(self) -> Resources:
+        return Resources(minerals=150, gas=0)  # 100)
+
+    @property
+    def symbol(self) -> str:
+        return "TC"
+
+
+Buildings: List[Building] = [
+    # Assimilator(),
+    CyberneticsCore(),
+    DarkShrine(),
+    FleetBeacon(),
+    Forge(),
+    Gateway(),
+    Nexus(),
+    PhotonCannon(),
+    Pylon(),
+    RoboticsBay(),
+    RoboticsFacility(),
+    StarGate(),
+    TemplarArchives(),
+    TwilightCouncil(),
+]
+WorldObjects = list(Buildings) + list(Resource) + list(Worker)

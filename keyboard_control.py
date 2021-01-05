@@ -12,14 +12,10 @@ def cli():
 
 
 def run(env, action_fn):
-    s = env.reset()
+    env.reset()
     while True:
         env.render(pause=False)
-        action = None
-        while action is None:
-            action = action_fn(input("act:"))
-
-        s, r, t, i = env.step(action)
+        s, r, t, i = env.step(action_fn())
         print("reward", r)
         if t:
             env.render(pause=False)

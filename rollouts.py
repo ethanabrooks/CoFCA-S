@@ -6,7 +6,7 @@ from gym import spaces
 import numpy as np
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from common.vec_env.util import space_shape
+from utils import space_shape
 
 
 def _flatten_helper(T, N, _tensor):

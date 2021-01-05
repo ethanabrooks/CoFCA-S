@@ -1,69 +1,61 @@
-import multiprocessing
 import pickle
 import sys
 from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
+from pprint import pprint
 from queue import Empty, Full
-from typing import Optional
+from typing import Optional, Dict
 
 import hydra
-import numpy as np
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import data_types
-import debug_env as _debug_env
 import env
 import osx_queue
 import our_agent
 import trainer
-from aggregator import InfosAggregator
-from common.vec_env import VecEnv
 from config import BaseConfig
-from data_types import CurriculumSetting
-from utils import Discrete
 from wrappers import VecPyTorch
 
 
 @dataclass
 class OurConfig(BaseConfig, env.EnvConfig):
-    curriculum_level: int = 0
-    curriculum_setting_load_path: Optional[str] = None
-    curriculum_threshold: float = 0.9
-    debug_env: bool = False
-    failure_buffer_load_path: Optional[str] = None
-    failure_buffer_size: int = 10000
-    max_eval_lines: int = 25
-    min_eval_lines: int = 1
     conv_hidden_size: int = 100
     debug: bool = False
+    failure_buffer_load_path: Optional[str] = None
+    failure_buffer_size: int = 10000
     gate_coef: float = 0.01
-    resources_hidden_size: int = 128
+    globalized_m: bool = False
     kernel_size: int = 2
     lower_embed_size: int = 75
-    max_curriculum_level: int = 10
-    max_lines: int = 10
-    min_lines: int = 1
+    max_eval_lines: int = 13
+    min_eval_lines: int = 1
     num_edges: int = 1
     no_pointer: bool = False
     no_roll: bool = False
     no_scan: bool = False
     olsk: bool = False
+    resources_hidden_size: int = 128
     stride: int = 1
     task_embed_size: int = 128
     transformer: bool = False
+    use_zeta: bool = True
+    z_in_G: bool = False
+    zeta_activation: bool = False
 
 
 class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
+        mapping["agent_args"] += [our_agent.Agent.__init__]
         mapping["env_args"] += [
             env.Env.__init__,
             trainer.Trainer.make_vec_envs,
         ]
-        mapping["agent_args"] += [our_agent.Agent.__init__]
+        mapping["run_args"] += [trainer.Trainer.run]
         return mapping
 
     @staticmethod
@@ -110,128 +102,63 @@ class Trainer(trainer.Trainer):
             buffer_list = [*gen()]
             pickle.dump(buffer_list, f)
 
-    @classmethod
-    def initialize_curriculum(
-        cls,
-        curriculum_level: int,
-        curriculum_setting_load_path: Path,
-        log_dir: Path,
-        max_curriculum_level: int,
-        max_lines: int,
-        min_lines: int,
-        curriculum_threshold: float,
-    ):
-        mean_successes = 0.5
-
-        assert min_lines >= 1
-        assert max_lines >= min_lines
-        if curriculum_setting_load_path:
-            with open(curriculum_setting_load_path, "rb") as f:
-                curriculum_setting = pickle.load(f)
-                print(
-                    f"Loaded curriculum setting {curriculum_setting} "
-                    f"from {curriculum_setting_load_path}"
-                )
-        else:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=1000,
-                max_lines=max_lines,
-                n_lines_space=Discrete(min_lines, max_lines),
-                level=0,
-            )
-
-        def curriculum_generator(setting: CurriculumSetting):
-            while True:
-                if setting.level == max_curriculum_level:
-                    yield setting
-                    continue
-                if setting.n_lines_space.high < setting.max_lines:
-                    setting = setting.increment_max_lines().increment_level()
-                    yield setting
-                setting = setting.increment_build_tree_depth().increment_level()
-                yield setting
-
-        curriculum_iterator = curriculum_generator(curriculum_setting)
-
-        for _ in range(curriculum_level - curriculum_setting.level):
-            curriculum_setting = next(curriculum_iterator)
-
-        print(f"starting at curriculum: {curriculum_setting}")
-        with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
-            pickle.dump(curriculum_setting, f)
-
-        while True:
-            infos: InfosAggregator
-            venv: VecEnv
-            venv, infos = yield curriculum_setting
-
-            try:
-                mean_successes += (
-                    0.1 * np.mean(infos.complete_episodes["success"])
-                    - 0.9 * mean_successes
-                )
-            except KeyError:
-                pass
-            if mean_successes >= curriculum_threshold:
-                mean_successes = 0.5
-                curriculum_setting = next(curriculum_iterator)
-
-                venv.set_curriculum(curriculum_setting)
-                with Path(log_dir, "curriculum_setting.pkl").open("wb") as f:
-                    pickle.dump(curriculum_setting, f)
-
     @staticmethod
     def make_env(
         rank: int,
         seed: int,
-        debug_env=False,
         env_id=None,
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        if debug_env:
-            return _debug_env.Env(**kwargs)
-        else:
-            return env.Env(**kwargs)
+        return env.Env(**kwargs)
 
     # noinspection PyMethodOverriding
     @classmethod
     def make_vec_envs(
         cls,
-        curriculum_setting: CurriculumSetting,
+        curriculum_setting,
         evaluating: bool,
         failure_buffer: Queue,
         max_eval_lines: int,
         min_eval_lines: int,
+        max_lines: int,
+        min_lines: int,
         world_size: int,
         **kwargs,
     ):
         if evaluating:
-            curriculum_setting = CurriculumSetting(
-                max_build_tree_depth=100,
-                max_lines=max_eval_lines,
-                n_lines_space=Discrete(min_eval_lines, max_eval_lines),
-                level=0,
-            )
+            min_lines = min_eval_lines
+            max_lines = max_eval_lines
         data_types.WORLD_SIZE = world_size
+        mp_kwargs = dict()
         return super().make_vec_envs(
-            non_pickle_args=dict(failure_buffer=failure_buffer),
-            curriculum_setting=curriculum_setting,
+            mp_kwargs=mp_kwargs,
+            min_lines=min_lines,
+            max_lines=max_lines,
             evaluating=evaluating,
             world_size=world_size,
+            failure_buffer=failure_buffer,
             **kwargs,
         )
+
+    @classmethod
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
+        if cfg.eval.interval:
+            cfg.eval.steps = 5 * cfg.max_eval_lines
+        return super().structure_config(cfg)
 
 
 @hydra.main(config_name="config")
 def app(cfg: DictConfig) -> None:
+    pprint(dict(**cfg))
     Trainer.main(cfg)
 
 
-if __name__ == "__main__":
-    if sys.platform == "darwin":
-        multiprocessing.set_start_method("fork")  # needed for osx_queue.Queue
-
+def main(_app):
     cs = ConfigStore.instance()
     cs.store(name="config", node=OurConfig)
-    app()
+    _app()
+
+
+if __name__ == "__main__":
+    main(app)
