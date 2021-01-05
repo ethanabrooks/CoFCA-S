@@ -1,0 +1,5 @@
+#!/usr/bin/env zsh
+
+config=$(${0:a:h}/search $1 config.yaml)
+config_dir="$(pwd)/$(dirname $(dirname $config))"
+cat $config | yq e 'del(._wandb)' - | yq e 'del(.wandb_version)' - | yq e '.[] |= .value' - 
