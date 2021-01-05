@@ -275,9 +275,11 @@ class Env(gym.Env):
             )
 
     @staticmethod
-    def dump_state(state: State, path: Path) -> None:
+    def dump(name: str, x) -> Path:
+        path = Path(f"{name}.pkl")
         with path.open("wb") as f:
-            pickle.dump(state, f)
+            pickle.dump(x, f)
+        return path.absolute()
 
     def failure_buffer_wrapper(self, iterator):
         use_failure_buf = False
@@ -407,8 +409,8 @@ class Env(gym.Env):
             elapsed_time += 1
 
     @staticmethod
-    def load_state(path: Path) -> State:
-        with path.open("rb") as f:
+    def load(path: str) -> State:
+        with Path(path).open("rb") as f:
             return pickle.load(f)
 
     def main(self):
@@ -643,7 +645,9 @@ class Env(gym.Env):
         self,
     ) -> Generator[Tuple[any, float, bool, dict], Optional[RawAction], None]:
         dependencies = dict(self.build_dependencies())
+        # dependencies = self.load("/tmp/deps.pkl")
         lines = self.build_lines(dependencies)
+        # lines = self.load("/tmp/lines.pkl")
         obs_iterator = self.obs_generator(*lines)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
