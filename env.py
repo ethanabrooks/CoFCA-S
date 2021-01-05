@@ -751,9 +751,9 @@ class Env(gym.Env):
                 time_remaining=time_remaining,
                 valid=valid,
             )
-            if ptr == 4 != old_ptr:
-                import ipdb; ipdb.set_trace()
-                resources[Resource.MINERALS] = lines[4].building.cost.minerals
+            for l in (4, 8):
+                if ptr == l != old_ptr:
+                    resources[Resource.MINERALS] = lines[l].building.cost.minerals
 
             a: Optional[RawAction]
             # noinspection PyTypeChecker

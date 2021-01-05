@@ -396,8 +396,9 @@ class Agent(NNBase):
 
         if action.ptr is None:
             action = replace(action, ptr=p + delta)
-            zero_out = action.ptr.item() == 4 and p.item() < 4
-            rnn_hxs = rnn_hxs * (not zero_out)
+            for l in (4, 8):
+                zero_out = (action.ptr == l) * (p < l)
+                rnn_hxs = rnn_hxs * ~zero_out.unsqueeze(-1)
 
         def compute_metric(raw: RawAction):
             raw = astuple(replace(raw, a=raw.a.sum(1)))
