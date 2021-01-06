@@ -1,0 +1,3 @@
+#!/usr/bin/env zsh
+
+cat $(${0:a:h}/search $1 config.yaml) | ${0:a:h}/config-to-seeds
