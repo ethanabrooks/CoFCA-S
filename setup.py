@@ -15,8 +15,9 @@ setup(
     author_email="ethanabrooks@gmail.com",
     packages=find_packages(),
     scripts=[
-        "bin/search",
         "bin/load",
+        "bin/search",
         "bin/seeds",
+        "bin/sweep",
     ],
 )
