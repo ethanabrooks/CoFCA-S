@@ -390,9 +390,8 @@ class RawAction:
     a: Union[np.ndarray, torch.Tensor, X]
 
     @staticmethod
-    def parse(*xs) -> "RawAction":
-        delta, dg, ptr, *a = xs
-        if a == [None]:
+    def parse(delta=None, dg=None, ptr=None, *a) -> "RawAction":
+        if not a:
             a = None
         return RawAction(delta, dg, ptr, a)
 

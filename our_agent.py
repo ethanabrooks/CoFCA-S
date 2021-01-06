@@ -270,9 +270,9 @@ class Agent(NNBase):
     ):
         N, dim = inputs.shape
 
-        dists = RawAction.parse(None, None, None, None)
+        dists = RawAction.parse()
         if action is None:
-            action = RawAction.parse(None, None, None, None)
+            action = RawAction.parse()
         else:
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, a=torch.stack(action.a, dim=-1))
