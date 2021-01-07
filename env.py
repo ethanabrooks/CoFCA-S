@@ -72,7 +72,7 @@ class EnvConfig:
     num_initial_buildings: Optional[int] = None
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
-    world_size: int = 3
+    world_size: int = 4
 
 
 # noinspection PyAttributeOutsideInit

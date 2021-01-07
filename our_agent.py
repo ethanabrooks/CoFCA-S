@@ -220,7 +220,6 @@ class Agent(NNBase):
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
         B = B.view(N, 2 * self.nl, self.num_edges)
-        # B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
 
         last = torch.zeros(2 * self.nl, device=p.device)
         last[-1] = 1
@@ -271,9 +270,9 @@ class Agent(NNBase):
     ):
         N, dim = inputs.shape
 
-        dists = RawAction.parse()
+        dists = RawAction.parse(None, None, None, None)
         if action is None:
-            action = RawAction.parse()
+            action = RawAction.parse(None, None, None, None)
         else:
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, a=torch.stack(action.a, dim=-1))
