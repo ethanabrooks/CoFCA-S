@@ -720,20 +720,20 @@ class Env(gym.Env):
         destroy = []
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
-        valid = True
+        error_msg = None
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
-            pprint(action if valid else new_action)
+            pprint(action if error_msg is None else new_action)
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
                 print(fg("red"), "Destroyed:", sep="")
                 print(*destroy, sep="\n", end=RESET + "\n")
-            if not valid:
-                print(fg("red"), "Action not valid.", RESET, sep="")
+            if error_msg is not None:
+                print(fg("red"), error_msg, RESET, sep="")
 
         self.render_thunk = render
 
@@ -749,7 +749,7 @@ class Env(gym.Env):
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
-                valid=valid,
+                valid=error_msg is None,
             )
 
             a: Optional[RawAction]
@@ -760,14 +760,14 @@ class Env(gym.Env):
             if isinstance(a, RawAction):
                 a, ptr = a.a, a.ptr
             new_action = action.update(*a)
-            valid = new_action.valid(
+            error_msg = new_action.invalid(
                 resources=resources,
                 dependencies=dependencies,
                 building_positions=building_positions,
                 pending_positions=pending_positions,
                 positions=positions,
             )
-            if not valid:
+            if error_msg is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
@@ -788,7 +788,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                valid &= assignment.execute(
+                error_msg = assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
