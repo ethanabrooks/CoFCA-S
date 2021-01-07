@@ -72,7 +72,7 @@ class EnvConfig:
     num_initial_buildings: Optional[int] = None
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
-    world_size: int = 3
+    world_size: int = 4
 
 
 # noinspection PyAttributeOutsideInit
@@ -532,57 +532,29 @@ class Env(gym.Env):
             np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
         )
 
-        if self.num_initial_buildings is not None:
-            if self.num_initial_buildings == 0:
-                return
-
-            while True:
-                initial_pos = self.random.choice(
-                    self.world_size, size=(self.num_initial_buildings, 2)
-                )
-                initial_in_occupied = (
-                    np.equal(
-                        np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1)
-                    )
-                    .all(axis=-1)
-                    .any()
-                )
-                if not initial_in_occupied:
-                    initial_buildings = self.random.choice(
-                        Buildings, size=self.num_initial_buildings
-                    )
-                    for b, p in zip(initial_buildings, initial_pos):
-                        yield b, gas if isinstance(b, Assimilator) else p
-                    return
-
-        else:
-            max_initial_buildings = max(
-                0, (self.world_size ** 2 - len(occupied) - len(lines))
+        num_initial_buildings = len(lines)
+        try:
+            initial_index = self.random.choice(
+                self.world_size ** 2 - len(occupied),
+                size=num_initial_buildings,
+                replace=False,
             )
-            if max_initial_buildings > 0:
-                num_initial_buildings = self.random.randint(max_initial_buildings + 1)
-                num_initial_buildings = len(lines)  # TODO
-                initial_index = self.random.choice(
-                    self.world_size ** 2 - len(occupied),
-                    size=num_initial_buildings,
-                    replace=False,
-                )
-                for i in occupied_indices:
-                    initial_index[initial_index >= i] += 1
-                initial_pos = np.stack(
-                    np.unravel_index(initial_index, self.world_shape), axis=-1
-                )
-                initial_buildings = self.random.choice(
-                    Buildings,
-                    size=num_initial_buildings,
-                )
-                initial_buildings = [l.building for l in lines]  # TODO
-                self.random.shuffle(initial_buildings)  # TODO
+        except ValueError:
+            import ipdb
 
-                for b, p in zip(initial_buildings, initial_pos):
-                    # assert not any(np.array_equal(p, p_) for p_ in occupied)
-                    # occupied += [p]
-                    yield b, gas if isinstance(b, Assimilator) else p
+            ipdb.set_trace()
+        for i in occupied_indices:
+            initial_index[initial_index >= i] += 1
+        initial_pos = np.stack(
+            np.unravel_index(initial_index, self.world_shape), axis=-1
+        )
+        initial_buildings = [l.building for l in lines]  # TODO
+        self.random.shuffle(initial_buildings)  # TODO
+
+        for b, p in zip(initial_buildings, initial_pos):
+            # assert not any(np.array_equal(p, p_) for p_ in occupied)
+            # occupied += [p]
+            yield b, gas if isinstance(b, Assimilator) else p
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
@@ -718,28 +690,28 @@ class Env(gym.Env):
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
-        old_ptr = ptr = len(lines) - 1  # 0
+        ptr = len(lines) - 1  # 0
         destroy = []
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
-        valid = True
+        invalid_error = None
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
-            pprint(action if valid else new_action)
+            pprint(action if invalid_error is None else new_action)
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
                 print(fg("red"), "Destroyed:", sep="")
                 print(*destroy, sep="\n", end=RESET + "\n")
-            if not valid:
-                print(fg("red"), "Action not valid.", RESET, sep="")
+            if invalid_error is not None:
+                print(fg("red"), invalid_error, RESET, sep="")
 
         self.render_thunk = render
 
-        self.attack(building_positions)  # TODO
+        destroy = self.attack(building_positions)  # TODO
         assert self.attack_prob == 0  # TODO
 
         while True:
@@ -754,30 +726,54 @@ class Env(gym.Env):
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
-                valid=valid,
+                valid=invalid_error is None,
             )
 
             a: Optional[RawAction]
             # noinspection PyTypeChecker
             a = yield state, render
-            if a is None:
-                a: List[ActionComponent] = [*action.from_input()]
-            if isinstance(a, RawAction):
-                old_ptr = ptr
-                a, ptr = a.a, a.ptr
-            new_action = action.update(*a)
-            valid = new_action.valid(
-                resources=resources,
-                dependencies=dependencies,
-                building_positions=building_positions,
-                pending_positions=pending_positions,
-                positions=positions,
+
+            free_coord = next(
+                (
+                    coord
+                    for coord in itertools.product(
+                        range(self.world_size), range(self.world_size)
+                    )
+                    if coord not in [*building_positions.keys(), *positions.values()]
+                ),
+                None,
             )
-            if not valid:
+            if free_coord is None:
+                invalid_error = "No free coordinates"
+            else:
+                if a is None:
+                    # a: List[ActionComponent] = [*action.from_input()]
+                    (building,) = action.from_input()
+
+                elif isinstance(a, RawAction):
+                    (a,), ptr = a.a, a.ptr
+                    building = Buildings[a]
+                else:
+                    raise RuntimeError
+
+                # new_action = action.update(*a)
+                assert isinstance(building, Building)
+                new_action = data_types.BuildingCoordAction(
+                    [Worker.W1], building, data_types.Coord(*free_coord)
+                )  # TODO
+                invalid_error = new_action.invalid(
+                    resources=resources,
+                    dependencies=dependencies,
+                    building_positions=building_positions,
+                    pending_positions=pending_positions,
+                    positions=positions,
+                )
+                if invalid_error is None:
+                    action = new_action
+            if invalid_error is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
-            action = new_action
             assignment = action.assignment(positions)
             is_op = assignment is not None
             if is_op:
@@ -794,7 +790,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                valid &= assignment.execute(
+                invalid_error = assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
@@ -807,7 +803,7 @@ class Env(gym.Env):
 
             destroy = []
             if self.random.random() < self.attack_prob:
-                self.attack(building_positions)
+                destroy = self.attack(building_positions)
 
     def attack(self, building_positions):
         num_destroyed = self.random.randint(len(building_positions))
@@ -816,6 +812,7 @@ class Env(gym.Env):
         destroy = destroy[:num_destroyed]
         for coord in destroy:
             del building_positions[coord]
+        return destroy
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):

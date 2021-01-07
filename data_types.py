@@ -2,7 +2,7 @@ import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
 from collections import Counter
-from dataclasses import dataclass, astuple, field, asdict
+from dataclasses import dataclass, astuple
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
 from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable
@@ -10,10 +10,10 @@ from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Itera
 import gym
 import numpy as np
 import torch
-from colored import fg, sys
-from gym import Space, spaces
+from colored import fg
+from gym import spaces
 
-from utils import RESET, get_max_shape
+from utils import RESET
 
 CoordType = Tuple[int, int]
 IntGenerator = Generator[int, None, None]
@@ -30,6 +30,10 @@ def move_from(origin: CoordType, toward: CoordType) -> CoordType:
         1,
     )
     return i, j
+
+
+class NotValidException(Exception):
+    pass
 
 
 """ abstract classes """
@@ -127,7 +131,7 @@ class Assignment:
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> bool:
+    ) -> Optional[str]:
         raise NotImplementedError
 
 
@@ -209,7 +213,7 @@ class Resource(WorldObject, Assignment, Enum):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> bool:
+    ) -> Optional[str]:
         worker_pos = positions[worker]
 
         if carrying[worker] is None:
@@ -220,7 +224,7 @@ class Resource(WorldObject, Assignment, Enum):
                 if self is Resource.GAS and not isinstance(
                     building_positions.get(positions[worker]), Assimilator
                 ):
-                    return True  # no op on gas unless Assimilator
+                    return None  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -236,7 +240,7 @@ class Resource(WorldObject, Assignment, Enum):
                 assert isinstance(resource, Resource)
                 resources[resource] += 100
                 carrying[worker] = None
-        return True
+        return None
 
     def on(
         self,
@@ -317,14 +321,15 @@ class BuildOrder(Assignment):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> bool:
-        if positions[worker] == self.coord:
+    ) -> Optional[str]:
+        # if positions[worker] == self.coord:
+        if True:
             remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
             if self.building not in remaining:
-                return False
+                return "Build unnecessary building"
             assignments[worker] = DoNothing()
-            return True
+            return
         else:
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
@@ -347,14 +352,14 @@ class GoTo(Assignment):
 
     def execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
-    ) -> bool:
+    ) -> Optional[str]:
         positions[worker] = move_from(positions[worker], toward=self.coord)
-        return True
+        return
 
 
 class DoNothing(Assignment):
-    def execute(self, *args, **kwargs) -> bool:
-        return True
+    def execute(self, *args, **kwargs) -> Optional[str]:
+        return
 
 
 Command = Union[BuildOrder, Resource]
@@ -429,14 +434,14 @@ class CompoundAction:
     @classmethod
     def mask(cls) -> np.ndarray:
         def unpadded_generator() -> Generator[List[bool], None, None]:
-            for _ in Worker:
-                yield [
-                    cls._worker_active(),  # worker active: mask no-op
-                    *[not cls._worker_active() for _ in range(2)],
-                ]
+            # for _ in Worker:
+            #     yield [
+            #         cls._worker_active(),  # worker active: mask no-op
+            #         *[not cls._worker_active() for _ in range(2)],
+            #     ]
             yield [
-                False,  # always allowed to cancel
-                *[not cls._coord_active() for _ in range(Coord.space().n)],
+                # False,  # always allowed to cancel
+                # *[not cls._coord_active() for _ in range(Coord.space().n)],
                 *[not cls._building_active() for _ in range(Building.space().n)],
             ]
 
@@ -509,10 +514,12 @@ class CompoundAction:
 
     def from_input(self) -> ActionComponentGenerator:
         while True:
+            string = input(self._prompt() + "\n")
             try:
-                return self._parse_string(input(self._prompt() + "\n"))
-            except ValueError as e:
-                print(e)
+                yield from [*self._parse_string(string)]
+                return
+            except NotValidException:
+                pass
 
     def get_workers(self) -> WorkerGenerator:
         try:
@@ -524,12 +531,21 @@ class CompoundAction:
     @classmethod
     def input_space(cls) -> spaces.MultiDiscrete:
         def sizes_gen():
-            for _ in Worker:
-                yield 3  # no-op, choose, don't choose
-            yield Coord.space().n + len(Buildings) + 1  # +1 for no-op
+            # for _ in Worker: yield 3  # no-op, choose, don't choose
+            yield len(Buildings)  # +1 for no-op
 
         sizes = [*sizes_gen()]
         return spaces.MultiDiscrete([max(sizes)] * len(sizes))
+
+    def invalid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        pending_positions: BuildingPositions,
+        positions: Positions,
+    ) -> Optional[str]:
+        return
 
     @classmethod
     def representation_space(cls) -> spaces.MultiDiscrete:
@@ -556,17 +572,6 @@ class CompoundAction:
             return self._update(Building.parse(n))
         assert not (Coord.space().contains(n) or Building.space().contains(n))
         return NoWorkersAction()
-
-    @abstractmethod
-    def valid(
-        self,
-        resources: typing.Counter[Resource],
-        dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
-        pending_positions: BuildingPositions,
-        positions: Positions,
-    ) -> bool:
-        pass
 
 
 class WorkerActive(CompoundAction, ABC):
@@ -629,12 +634,16 @@ class NoWorkersAction(WorkerActive):
 
     @staticmethod
     def _parse_string(s: str) -> ActionComponentGenerator:
-        for i in s.split():
-            yield Worker(int(i))
+        try:
+            yield Buildings[int(s)]
+        except ValueError:
+            raise NotValidException()
+        # for i in s.split():
+        #     yield Worker(int(i))
 
     @staticmethod
     def _prompt() -> str:
-        return "Workers:"
+        return "Building index:"
 
     def _update(
         self, *workers: ActionComponent
@@ -646,16 +655,6 @@ class NoWorkersAction(WorkerActive):
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
-
-    def valid(
-        self,
-        resources: typing.Counter[Resource],
-        dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
-        pending_positions: BuildingPositions,
-        positions: Positions,
-    ) -> bool:
-        return True
 
 
 def parse_coord(s):
@@ -681,7 +680,7 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
             try:
                 yield parse_coord(s)
             except ValueError:
-                yield
+                raise NotValidException
 
     @staticmethod
     def _prompt() -> str:
@@ -701,9 +700,6 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
 
-    def valid(self, *args, **kwargs) -> bool:
-        return True
-
 
 @dataclass(frozen=True)
 class CoordAction(NoWorkersAction):
@@ -717,9 +713,6 @@ class CoordAction(NoWorkersAction):
                 return resource
         return GoTo((i, j))
 
-    def valid(self, *args, **kwargs) -> bool:
-        return True
-
 
 @dataclass(frozen=True)
 class BuildingAction(CoordActive, CoordCanOpenGate):
@@ -728,7 +721,10 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
 
     @staticmethod
     def _parse_string(s: str) -> ActionComponentGenerator:
-        i, j = map(int, s.split())
+        try:
+            i, j = map(int, s.split())
+        except ValueError:
+            raise NotValidException
         yield Coord.parse(int(np.ravel_multi_index((i, j), (WORLD_SIZE, WORLD_SIZE))))
 
     @staticmethod
@@ -749,18 +745,22 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
 
-    def valid(
+    def invalid(
         self,
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
         *args,
         **kwargs,
-    ) -> bool:
+    ) -> Optional[str]:
         dependency = dependencies[self.building]
         dependency_met = dependency in [*building_positions.values(), None]
         insufficient_resources = Counter(self.building.cost) - resources
-        return dependency_met and not insufficient_resources
+        if not dependency_met:
+            return f"Dependency ({dependency}) not met"
+        if insufficient_resources:
+            return "Insufficient resources"
+        return None
 
 
 @dataclass(frozen=True)
@@ -777,23 +777,35 @@ class BuildingCoordAction(NoWorkersAction):
         assert not Resource.MINERALS.on((i, j), positions)
         return BuildOrder(self.building, (i, j))
 
-    def valid(
+    def invalid(
         self,
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
         pending_positions: BuildingPositions,
         positions: Positions,
-    ) -> bool:
+    ) -> Optional[str]:
+        if not dependencies[self.building] in [*building_positions.values(), None]:
+            return "dependency not met"
         coord = astuple(self.coord)
-        if coord in {**building_positions, **pending_positions}:
-            return False
+        all_positions = {**building_positions, **pending_positions}
+        if coord in all_positions:
+            return f"coord occupied by {all_positions[coord]}"
         if isinstance(self.building, Assimilator):
-            return coord == positions[Resource.GAS]
+            return (
+                None
+                if coord == positions[Resource.GAS]
+                else f"Assimilator not built on gas"
+            )
         else:
-            return coord not in (
-                positions[Resource.GAS],
-                positions[Resource.MINERALS],
+            return (
+                "Building built on resource"
+                if coord
+                in (
+                    positions[Resource.GAS],
+                    positions[Resource.MINERALS],
+                )
+                else None
             )
 
 
