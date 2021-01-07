@@ -756,9 +756,6 @@ class Env(gym.Env):
                 time_remaining=time_remaining,
                 valid=valid,
             )
-            for l in (4, 8):
-                if ptr == l != old_ptr:
-                    resources[Resource.MINERALS] = lines[l].building.cost.minerals
 
             a: Optional[RawAction]
             # noinspection PyTypeChecker
