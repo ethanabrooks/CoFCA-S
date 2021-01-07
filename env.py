@@ -69,7 +69,6 @@ class EnvConfig:
     attack_prob: float = 0
     max_lines: int = 10
     min_lines: int = 1
-    num_initial_buildings: Optional[int] = None
     time_per_line: int = 4
     tgt_success_rate: float = 0.75
     world_size: int = 4
@@ -85,7 +84,6 @@ class Env(gym.Env):
     failure_buffer: Queue
     max_lines: int
     min_lines: int
-    num_initial_buildings: Optional[int]
     rank: int
     random_seed: int
     tgt_success_rate: float
@@ -517,53 +515,27 @@ class Env(gym.Env):
             np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
         )
 
-        if self.num_initial_buildings is not None:
-            if self.num_initial_buildings == 0:
-                return
-
-            while True:
-                initial_pos = self.random.choice(
-                    self.world_size, size=(self.num_initial_buildings, 2)
-                )
-                initial_in_occupied = (
-                    np.equal(
-                        np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1)
-                    )
-                    .all(axis=-1)
-                    .any()
-                )
-                if not initial_in_occupied:
-                    initial_buildings = self.random.choice(
-                        Buildings, size=self.num_initial_buildings
-                    )
-                    for b, p in zip(initial_buildings, initial_pos):
-                        yield b, gas if isinstance(b, Assimilator) else p
-                    return
-
-        else:
-            max_initial_buildings = max(
-                0, (self.world_size ** 2 - len(occupied) - n_lines)
+        max_initial_buildings = max(0, (self.world_size ** 2 - len(occupied) - n_lines))
+        if max_initial_buildings > 0:
+            num_initial_buildings = self.random.randint(max_initial_buildings + 1)
+            initial_index = self.random.choice(
+                self.world_size ** 2 - len(occupied),
+                size=num_initial_buildings,
+                replace=False,
             )
-            if max_initial_buildings > 0:
-                num_initial_buildings = self.random.randint(max_initial_buildings + 1)
-                initial_index = self.random.choice(
-                    self.world_size ** 2 - len(occupied),
-                    size=num_initial_buildings,
-                    replace=False,
-                )
-                for i in occupied_indices:
-                    initial_index[initial_index >= i] += 1
-                initial_pos = np.stack(
-                    np.unravel_index(initial_index, self.world_shape), axis=-1
-                )
-                initial_buildings = self.random.choice(
-                    Buildings,
-                    size=num_initial_buildings,
-                )
-                for b, p in zip(initial_buildings, initial_pos):
-                    # assert not any(np.array_equal(p, p_) for p_ in occupied)
-                    # occupied += [p]
-                    yield b, gas if isinstance(b, Assimilator) else p
+            for i in occupied_indices:
+                initial_index[initial_index >= i] += 1
+            initial_pos = np.stack(
+                np.unravel_index(initial_index, self.world_shape), axis=-1
+            )
+            initial_buildings = self.random.choice(
+                Buildings,
+                size=num_initial_buildings,
+            )
+            for b, p in zip(initial_buildings, initial_pos):
+                # assert not any(np.array_equal(p, p_) for p_ in occupied)
+                # occupied += [p]
+                yield b, gas if isinstance(b, Assimilator) else p
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
