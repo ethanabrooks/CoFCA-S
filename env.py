@@ -723,6 +723,9 @@ class Env(gym.Env):
         self.render_thunk = render
 
         while True:
+            resources = resources & Counter(
+                {Resource.MINERALS: 500, Resource.GAS: 500}
+            )  # cap resources
             remaining = required - Counter(building_positions.values())
             success = not remaining
 
