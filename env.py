@@ -181,12 +181,8 @@ class Env(gym.Env):
         dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
         dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
-        # yield Assimilator(), None
-        # yield from itertools.zip_longest(buildings, dependencies)
-        dependency = None
-        for building in buildings:
-            yield building, dependency
-            dependency = building
+        yield Assimilator(), None
+        yield from itertools.zip_longest(buildings, dependencies)
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
