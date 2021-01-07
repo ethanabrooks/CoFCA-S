@@ -15,6 +15,7 @@ setup(
     author_email="ethanabrooks@gmail.com",
     packages=find_packages(),
     scripts=[
+        "bin/fix_config",
         "bin/load",
         "bin/search",
         "bin/seeds",

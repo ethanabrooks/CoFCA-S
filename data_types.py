@@ -2,7 +2,7 @@ import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
 from collections import Counter
-from dataclasses import dataclass, astuple, field, asdict
+from dataclasses import dataclass, astuple
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
 from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable
@@ -10,10 +10,10 @@ from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Itera
 import gym
 import numpy as np
 import torch
-from colored import fg, sys
-from gym import Space, spaces
+from colored import fg
+from gym import spaces
 
-from utils import RESET, get_max_shape
+from utils import RESET
 
 CoordType = Tuple[int, int]
 IntGenerator = Generator[int, None, None]
@@ -30,6 +30,10 @@ def move_from(origin: CoordType, toward: CoordType) -> CoordType:
         1,
     )
     return i, j
+
+
+class NotValidException(Exception):
+    pass
 
 
 """ abstract classes """
@@ -513,10 +517,12 @@ class CompoundAction:
 
     def from_input(self) -> ActionComponentGenerator:
         while True:
+            string = input(self._prompt() + "\n")
             try:
-                return self._parse_string(input(self._prompt() + "\n"))
-            except ValueError as e:
-                print(e)
+                yield from [*self._parse_string(string)]
+                return
+            except NotValidException:
+                pass
 
     def get_workers(self) -> WorkerGenerator:
         try:
@@ -685,7 +691,7 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
             try:
                 yield parse_coord(s)
             except ValueError:
-                yield
+                raise NotValidException
 
     @staticmethod
     def _prompt() -> str:
@@ -732,7 +738,10 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
 
     @staticmethod
     def _parse_string(s: str) -> ActionComponentGenerator:
-        i, j = map(int, s.split())
+        try:
+            i, j = map(int, s.split())
+        except ValueError:
+            raise NotValidException
         yield Coord.parse(int(np.ravel_multi_index((i, j), (WORLD_SIZE, WORLD_SIZE))))
 
     @staticmethod
