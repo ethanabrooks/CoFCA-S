@@ -228,7 +228,7 @@ class Resource(WorldObject, Assignment, Enum):
                 if self is Resource.GAS and not isinstance(
                     building_positions.get(positions[worker]), Assimilator
                 ):
-                    return None  # no op on gas unless Assimilator
+                    return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -329,8 +329,6 @@ class BuildOrder(Assignment):
         if positions[worker] == self.coord:
             remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
-            if self.building not in remaining:
-                return "Build unnecessary building"
             assignments[worker] = DoNothing()
             return
         else:
@@ -788,7 +786,7 @@ class BuildingCoordAction(NoWorkersAction):
         positions: Positions,
     ) -> Optional[str]:
         if not dependencies[self.building] in [*building_positions.values(), None]:
-            return "dependency not met"
+            return "Dependency not met"
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
         if coord in all_positions:
