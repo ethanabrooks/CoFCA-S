@@ -31,7 +31,6 @@ class AgentConfig:
     task_embed_size: int = 128
     transformer: bool = False
     use_zeta: bool = True
-    zG: str = "cat"
     zeta_activation: bool = False
 
 
@@ -100,7 +99,6 @@ class Agent(NNBase):
     task_embed_size: int
     transformer: bool
     use_zeta: bool
-    zG: str
     zeta_activation: bool
     inf: float = 1e5
 
@@ -109,7 +107,6 @@ class Agent(NNBase):
 
     def __post_init__(self):
         nn.Module.__init__(self)
-        self.zG = ZG[self.zG]
         self.activation = eval(f"nn.{self.activation_name}()")
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_nvec = RawAction.parse(*self.action_space.nvec)
@@ -129,19 +126,8 @@ class Agent(NNBase):
         self.gru.reset_parameters()
 
         zeta_input_size = self.z1_size + self.task_embed_size
-        if self.zG == ZG.multiply:
-            self.eta = nn.Sequential(
-                self.init_(
-                    nn.Linear(
-                        self.z1_size,
-                        self.task_embed_size,
-                    )
-                ),
-            )
         task_encoder_in_size = self.task_embed_size
-        print(task_encoder_in_size, self.z1_size)
-        if self.zG == ZG.cat:
-            task_encoder_in_size += self.z1_size
+        task_encoder_in_size += self.z1_size
 
         self.task_encoder = nn.GRU(
             task_encoder_in_size,
@@ -341,12 +327,8 @@ class Agent(NNBase):
         h, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
         z1 = torch.cat([x, resources, embedded_lower, h], dim=-1)
 
-        if self.zG == ZG.multiply:
-            _z = self.eta(z1)
-            rolled = rolled * _z.unsqueeze(1)
-        elif self.zG == ZG.cat:
-            _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
-            rolled = torch.cat([rolled, _z], dim=-1)
+        _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
+        rolled = torch.cat([rolled, _z], dim=-1)
 
         G, _ = self.task_encoder(rolled)
 
