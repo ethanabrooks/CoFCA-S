@@ -149,7 +149,7 @@ class Agent(NNBase):
             embedding_dim=self.lower_embed_size,
         )
         self.embed_action = MultiEmbeddingBag(
-            self.action_space.nvec,
+            self.action_space.nvec[:3],
             embedding_dim=self.lower_embed_size,
         )
 
@@ -473,7 +473,7 @@ class Agent(NNBase):
         )
 
         if self.feed_action_to_critic:
-            zc = torch.cat([zc, self.embed_action(action)], dim=-1)
+            zc = torch.cat([zc, self.embed_action(action[:, :3])], dim=-1)
         value = self.critic(zc)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
