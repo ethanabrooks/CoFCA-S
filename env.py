@@ -730,23 +730,48 @@ class Env(gym.Env):
             a: Optional[RawAction]
             # noinspection PyTypeChecker
             a = yield state, render
-            if a is None:
-                a: List[ActionComponent] = [*action.from_input()]
-            if isinstance(a, RawAction):
-                a, ptr = a.a, a.ptr
-            new_action = action.update(*a)
-            error_msg = new_action.invalid(
-                resources=resources,
-                dependencies=dependencies,
-                building_positions=building_positions,
-                pending_positions=pending_positions,
-                positions=positions,
+
+            free_coord = next(
+                (
+                    coord
+                    for coord in itertools.product(
+                        range(self.world_size), range(self.world_size)
+                    )
+                    if coord not in [*building_positions.keys(), *positions.values()]
+                ),
+                None,
             )
-            if error_msg is not None:
+            if free_coord is None:
+                invalid_error = "No free coordinates"
+            else:
+                if a is None:
+                    # a: List[ActionComponent] = [*action.from_input()]
+                    (building,) = action.from_input()
+
+                elif isinstance(a, RawAction):
+                    (a,), ptr = a.a, a.ptr
+                    building = Buildings[int(a)]
+                else:
+                    raise RuntimeError
+
+                # new_action = action.update(*a)
+                assert isinstance(building, Building)
+                new_action = data_types.BuildingCoordAction(
+                    [Worker.W1], building, data_types.Coord(*free_coord)
+                )  # TODO
+                invalid_error = new_action.invalid(
+                    resources=resources,
+                    dependencies=dependencies,
+                    building_positions=building_positions,
+                    pending_positions=pending_positions,
+                    positions=positions,
+                )
+                if invalid_error is None:
+                    action = new_action
+            if invalid_error is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
-            action = new_action
             assignment = action.assignment(positions)
             is_op = assignment is not None
             if is_op:
