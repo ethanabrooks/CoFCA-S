@@ -688,24 +688,24 @@ class Env(gym.Env):
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
-        ptr = 0
+        ptr: int = 0
         destroy = []
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
-        invalid_error = None
+        error_msg = None
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
-            pprint(action if invalid_error is None else new_action)
+            pprint(action if error_msg is None else new_action)
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
                 print(fg("red"), "Destroyed:", sep="")
                 print(*destroy, sep="\n", end=RESET + "\n")
-            if invalid_error is not None:
-                print(fg("red"), invalid_error, RESET, sep="")
+            if error_msg is not None:
+                print(fg("red"), error_msg, RESET, sep="")
 
         self.render_thunk = render
 
@@ -724,7 +724,7 @@ class Env(gym.Env):
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
-                valid=invalid_error is None,
+                valid=error_msg is None,
             )
 
             a: Optional[RawAction]
@@ -735,14 +735,14 @@ class Env(gym.Env):
             if isinstance(a, RawAction):
                 a, ptr = a.a, a.ptr
             new_action = action.update(*a)
-            invalid_error = new_action.invalid(
+            error_msg = new_action.invalid(
                 resources=resources,
                 dependencies=dependencies,
                 building_positions=building_positions,
                 pending_positions=pending_positions,
                 positions=positions,
             )
-            if invalid_error is not None:
+            if error_msg is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
@@ -763,7 +763,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                invalid_error = assignment.execute(
+                error_msg = assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,

@@ -32,7 +32,7 @@ def move_from(origin: CoordType, toward: CoordType) -> CoordType:
     return i, j
 
 
-class NotValidException(Exception):
+class InvalidInput(Exception):
     pass
 
 
@@ -224,7 +224,7 @@ class Resource(WorldObject, Assignment, Enum):
                 if self is Resource.GAS and not isinstance(
                     building_positions.get(positions[worker]), Assimilator
                 ):
-                    return None  # no op on gas unless Assimilator
+                    return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -512,13 +512,12 @@ class CompoundAction:
 
         return [list(contextualize(o)) for o in cls._gate_openers()]
 
-    def from_input(self) -> ActionComponentGenerator:
+    def from_input(self) -> List[ActionComponent]:
         while True:
             string = input(self._prompt() + "\n")
             try:
-                yield from [*self._parse_string(string)]
-                return
-            except NotValidException:
+                return [*self._parse_string(string)]
+            except InvalidInput:
                 pass
 
     def get_workers(self) -> WorkerGenerator:
@@ -637,7 +636,7 @@ class NoWorkersAction(WorkerActive):
         try:
             yield Buildings[int(s)]
         except ValueError:
-            raise NotValidException()
+            raise InvalidInput()
         # for i in s.split():
         #     yield Worker(int(i))
 
@@ -680,7 +679,7 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
             try:
                 yield parse_coord(s)
             except ValueError:
-                raise NotValidException
+                raise InvalidInput
 
     @staticmethod
     def _prompt() -> str:
@@ -724,7 +723,7 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
         try:
             i, j = map(int, s.split())
         except ValueError:
-            raise NotValidException
+            raise InvalidInput
         yield Coord.parse(int(np.ravel_multi_index((i, j), (WORLD_SIZE, WORLD_SIZE))))
 
     @staticmethod
@@ -786,7 +785,7 @@ class BuildingCoordAction(NoWorkersAction):
         positions: Positions,
     ) -> Optional[str]:
         if not dependencies[self.building] in [*building_positions.values(), None]:
-            return "dependency not met"
+            return "Dependency not met"
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
         if coord in all_positions:
