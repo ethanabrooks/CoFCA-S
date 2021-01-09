@@ -141,7 +141,7 @@ class Agent(NNBase):
             embedding_dim=self.lower_embed_size,
         )
         self.embed_action = MultiEmbeddingBag(
-            self.action_space.nvec,
+            np.array([self.action_nvec.dg, 2 * self.max_eval_lines]),
             embedding_dim=self.lower_embed_size,
         )
 
@@ -380,7 +380,7 @@ class Agent(NNBase):
         #     try:
         #         action = replace(
         #             action,
-        #             a=float(input("a:")) * torch.ones_like(R),
+        #             a=float(input("a:")) * torch.ones_like(action.a),
         #         )
         #         break
         #     except ValueError:
@@ -404,7 +404,8 @@ class Agent(NNBase):
             #     while True:
             #         try:
             #             action = replace(
-            #                 action, dg=float(input("dg:")) * torch.ones_like(R)
+            #                 action,
+            #                 dg=float(input("dg:")) * torch.ones_like(action.dg),
             #             )
             #             break
             #         except ValueError:
@@ -426,7 +427,9 @@ class Agent(NNBase):
             #         try:
             #             print(self.nl)
             #             action = replace(
-            #                 action, delta=float(input("delta:")) * torch.ones_like(R)
+            #                 action,
+            #                 delta=(float(input("delta:")) + self.nl)
+            #                 * torch.ones_like(action.delta),
             #             )
             #             break
             #         except ValueError:
@@ -444,7 +447,7 @@ class Agent(NNBase):
 
         action_log_probs = RawAction(
             *[
-                None if dist is None else dist.log_prob(x)  # .unsqueeze(-1)
+                None if dist is None else dist.log_prob(x)
                 for dist, x in zip(astuple(dists), astuple(action))
             ],
         )
@@ -452,6 +455,12 @@ class Agent(NNBase):
             *[None if dist is None else dist.entropy() for dist in astuple(dists)]
         )
         aux_loss = -self.entropy_coef * compute_metric(entropy).mean()
+        if self.feed_action_to_critic:
+            embedded_action = self.embed_action(
+                torch.stack([action.dg, action.delta], dim=-1).long()
+            )
+            zc = torch.cat([zc, embedded_action], dim=-1)
+        value = self.critic(zc)
         action = torch.cat(
             astuple(
                 replace(
@@ -464,9 +473,6 @@ class Agent(NNBase):
             dim=-1,
         )
 
-        if self.feed_action_to_critic:
-            zc = torch.cat([zc, self.embed_action(action)], dim=-1)
-        value = self.critic(zc)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,

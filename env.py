@@ -146,7 +146,7 @@ class Env(gym.Env):
         gate_openers = [np.array(o) for o in gate_openers()]
         self.gate_opener_shape = get_max_shape(*gate_openers)
         padded = np.stack([self.pad_gate_openers(o) for o in gate_openers])
-        assert np.all(np.min(padded, axis=0) == 0)
+        # assert np.all(np.min(padded, axis=0) == 0)
         gate_opener_space = spaces.MultiDiscrete(
             np.max(padded, axis=0) + 1
         )  # +1 because upper bound is not inclusive
@@ -483,7 +483,7 @@ class Env(gym.Env):
                         action_mask=state.action.mask().ravel(),
                         gate_openers=gate_openers,
                         partial_action=partial_action,
-                        ptr=state.pointer,
+                        ptr=int(state.pointer),
                     )
                 )
             )

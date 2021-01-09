@@ -466,13 +466,13 @@ class CompoundAction:
         pass
 
     def to_ints(self) -> IntGenerator:
-        workers = {*self.get_workers()}
-        for w in Worker:
-            yield int(w in workers)
+        # workers = {*self.get_workers()}
+        # for w in Worker:
+        #     yield int(w in workers)
         building = self._get_building()
-        coord = self._get_coord()
-        yield 0 if building is None else building.to_int()
-        yield 0 if coord is None else coord.to_int()
+        # coord = self._get_coord()
+        yield 0 if building is None else 1 + building.to_int()
+        # yield 0 if coord is None else 1 + coord.to_int()
 
     @staticmethod
     @abstractmethod
@@ -491,26 +491,15 @@ class CompoundAction:
     @staticmethod
     def subclasses():
         yield NoWorkersAction
-        yield WorkersAction
-        yield BuildingAction
-        yield CoordAction
-        yield BuildingCoordAction
+        # yield WorkersAction
+        # yield BuildingAction
+        # yield CoordAction
+        # yield BuildingCoordAction
 
     @classmethod
     @lru_cache
     def gate_openers(cls) -> List[List[int]]:
-        def contextualize(partial_opener) -> IntGenerator:
-            opener_iter = iter(partial_opener)
-
-            for _ in Worker:
-                yield 1 + next(opener_iter) if cls._worker_active() else 0
-            yield (
-                (1 + next(opener_iter))
-                if cls._building_active() or cls._coord_active()
-                else 0
-            )
-
-        return [list(contextualize(o)) for o in cls._gate_openers()]
+        return [[i] for i in range(len(Buildings))]
 
     def from_input(self) -> List[ActionComponent]:
         while True:
@@ -549,7 +538,8 @@ class CompoundAction:
     @classmethod
     def representation_space(cls) -> spaces.MultiDiscrete:
         return spaces.MultiDiscrete(
-            [*(2 for _ in Worker), len(Buildings), Coord.space().n]
+            [1 + len(Buildings)]
+            #     [*(3 for _ in Worker), 1 + len(Buildings), 1 + Coord.space().n]
         )
 
     def update(
@@ -625,11 +615,25 @@ class CoordCanOpenGate(CompoundAction, ABC):
 
 
 @dataclass(frozen=True)
+# class NoWorkersAction(WorkerActive): TODO
 class NoWorkersAction(WorkerActive):
+    @classmethod
+    def _building_active(cls) -> bool:
+        return True
+
+    @classmethod
+    def _coord_active(cls) -> bool:
+        return False
+
+    @classmethod
+    def _worker_active(cls) -> bool:
+        return False
+
     @staticmethod
     def _gate_openers() -> Generator[List[int], None, None]:
         # selecting no workers is a no-op that allows gate to open
-        yield [0] * len(Worker)
+        # yield [0] * len(Worker)
+        yield [*range(len(Buildings))]
 
     @staticmethod
     def _parse_string(s: str) -> ActionComponentGenerator:
@@ -757,8 +761,8 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
         insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
             return f"Dependency ({dependency}) not met"
-        if insufficient_resources:
-            return "Insufficient resources"
+        # if insufficient_resources:
+        #     return "Insufficient resources"
         return None
 
 
