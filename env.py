@@ -506,7 +506,7 @@ class Env(gym.Env):
         return np.pad(gate_openers, [(0, pad_amount), (0, 0)], mode="edge")
 
     def place_objects(
-        self, lines: List[Line]
+        self, n_lines: int
     ) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
         nexus = self.random.choice(self.world_size, size=2)
         yield Nexus(), nexus
@@ -532,29 +532,53 @@ class Env(gym.Env):
             np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
         )
 
-        num_initial_buildings = len(lines)
-        try:
-            initial_index = self.random.choice(
-                self.world_size ** 2 - len(occupied),
-                size=num_initial_buildings,
-                replace=False,
+        if self.num_initial_buildings is not None:
+            if self.num_initial_buildings == 0:
+                return
+
+            while True:
+                initial_pos = self.random.choice(
+                    self.world_size, size=(self.num_initial_buildings, 2)
+                )
+                initial_in_occupied = (
+                    np.equal(
+                        np.expand_dims(occupied, 0), np.expand_dims(initial_pos, 1)
+                    )
+                    .all(axis=-1)
+                    .any()
+                )
+                if not initial_in_occupied:
+                    initial_buildings = self.random.choice(
+                        Buildings, size=self.num_initial_buildings
+                    )
+                    for b, p in zip(initial_buildings, initial_pos):
+                        yield b, gas if isinstance(b, Assimilator) else p
+                    return
+
+        else:
+            max_initial_buildings = max(
+                0, (self.world_size ** 2 - len(occupied) - n_lines)
             )
-        except ValueError:
-            import ipdb
-
-            ipdb.set_trace()
-        for i in occupied_indices:
-            initial_index[initial_index >= i] += 1
-        initial_pos = np.stack(
-            np.unravel_index(initial_index, self.world_shape), axis=-1
-        )
-        initial_buildings = [l.building for l in lines]  # TODO
-        self.random.shuffle(initial_buildings)  # TODO
-
-        for b, p in zip(initial_buildings, initial_pos):
-            # assert not any(np.array_equal(p, p_) for p_ in occupied)
-            # occupied += [p]
-            yield b, gas if isinstance(b, Assimilator) else p
+            if max_initial_buildings > 0:
+                num_initial_buildings = self.random.randint(max_initial_buildings + 1)
+                initial_index = self.random.choice(
+                    self.world_size ** 2 - len(occupied),
+                    size=num_initial_buildings,
+                    replace=False,
+                )
+                for i in occupied_indices:
+                    initial_index[initial_index >= i] += 1
+                initial_pos = np.stack(
+                    np.unravel_index(initial_index, self.world_shape), axis=-1
+                )
+                initial_buildings = self.random.choice(
+                    Buildings,
+                    size=num_initial_buildings,
+                )
+                for b, p in zip(initial_buildings, initial_pos):
+                    # assert not any(np.array_equal(p, p_) for p_ in occupied)
+                    # occupied += [p]
+                    yield b, gas if isinstance(b, Assimilator) else p
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
@@ -674,7 +698,9 @@ class Env(gym.Env):
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
     ) -> Generator[State, Optional[RawAction], None]:
-        positions: List[Tuple[WorldObject, np.ndarray]] = [*self.place_objects(lines)]
+        positions: List[Tuple[WorldObject, np.ndarray]] = [
+            *self.place_objects(len(lines))
+        ]
         building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
@@ -690,7 +716,7 @@ class Env(gym.Env):
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
-        ptr = len(lines) - 1  # 0
+        ptr = 0
         destroy = []
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
@@ -711,9 +737,6 @@ class Env(gym.Env):
 
         self.render_thunk = render
 
-        destroy = self.attack(building_positions)  # TODO
-        assert self.attack_prob == 0  # TODO
-
         while True:
             remaining = required - Counter(building_positions.values())
             success = not remaining
@@ -732,48 +755,23 @@ class Env(gym.Env):
             a: Optional[RawAction]
             # noinspection PyTypeChecker
             a = yield state, render
-
-            free_coord = next(
-                (
-                    coord
-                    for coord in itertools.product(
-                        range(self.world_size), range(self.world_size)
-                    )
-                    if coord not in [*building_positions.keys(), *positions.values()]
-                ),
-                None,
+            if a is None:
+                a: List[ActionComponent] = [*action.from_input()]
+            if isinstance(a, RawAction):
+                a, ptr = a.a, a.ptr
+            new_action = action.update(*a)
+            invalid_error = new_action.invalid(
+                resources=resources,
+                dependencies=dependencies,
+                building_positions=building_positions,
+                pending_positions=pending_positions,
+                positions=positions,
             )
-            if free_coord is None:
-                invalid_error = "No free coordinates"
-            else:
-                if a is None:
-                    # a: List[ActionComponent] = [*action.from_input()]
-                    (building,) = action.from_input()
-
-                elif isinstance(a, RawAction):
-                    (a,), ptr = a.a, a.ptr
-                    building = Buildings[a]
-                else:
-                    raise RuntimeError
-
-                # new_action = action.update(*a)
-                assert isinstance(building, Building)
-                new_action = data_types.BuildingCoordAction(
-                    [Worker.W1], building, data_types.Coord(*free_coord)
-                )  # TODO
-                invalid_error = new_action.invalid(
-                    resources=resources,
-                    dependencies=dependencies,
-                    building_positions=building_positions,
-                    pending_positions=pending_positions,
-                    positions=positions,
-                )
-                if invalid_error is None:
-                    action = new_action
             if invalid_error is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
+            action = new_action
             assignment = action.assignment(positions)
             is_op = assignment is not None
             if is_op:
@@ -803,16 +801,14 @@ class Env(gym.Env):
 
             destroy = []
             if self.random.random() < self.attack_prob:
-                destroy = self.attack(building_positions)
-
-    def attack(self, building_positions):
-        num_destroyed = self.random.randint(len(building_positions))
-        destroy = [c for c, b in building_positions.items() if not isinstance(b, Nexus)]
-        self.random.shuffle(destroy)
-        destroy = destroy[:num_destroyed]
-        for coord in destroy:
-            del building_positions[coord]
-        return destroy
+                num_destroyed = self.random.randint(len(building_positions))
+                destroy = [
+                    c for c, b in building_positions.items() if not isinstance(b, Nexus)
+                ]
+                self.random.shuffle(destroy)
+                destroy = destroy[:num_destroyed]
+                for coord in destroy:
+                    del building_positions[coord]
 
     def step(self, action: Union[np.ndarray, CompoundAction]):
         if isinstance(action, np.ndarray):

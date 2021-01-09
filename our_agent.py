@@ -220,6 +220,7 @@ class Agent(NNBase):
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
         B = B.view(N, 2 * self.nl, self.num_edges)
+        # B = (1 - self.last).flip(-2) * B  # this ensures the first B is 0
 
         last = torch.zeros(2 * self.nl, device=p.device)
         last[-1] = 1
