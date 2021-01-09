@@ -16,24 +16,6 @@ from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
 
 
-@dataclass
-class AgentConfig:
-    conv_hidden_size: int = 100
-    gate_coef: float = 0.01
-    kernel_size: int = 2
-    num_edges: int = 1
-    no_pointer: bool = False
-    no_roll: bool = False
-    no_scan: bool = False
-    olsk: bool = False
-    resources_hidden_size: int = 128
-    stride: int = 1
-    task_embed_size: int = 128
-    transformer: bool = False
-    use_zeta: bool = True
-    zeta_activation: bool = False
-
-
 class Categorical(torch.distributions.Categorical):
     def log_prob(self, value: torch.Tensor):
         if self._validate_args:
@@ -76,13 +58,36 @@ class ZG(Enum):
 
 
 @dataclass
+class AgentConfig:
+    add_layer: bool = True
+    conv_hidden_size: int = 100
+    feed_action_to_critic: bool = False
+    gate_coef: float = 0.01
+    globalized_critic: bool = False
+    kernel_size: int = 2
+    num_edges: int = 1
+    no_pointer: bool = False
+    no_roll: bool = False
+    no_scan: bool = False
+    olsk: bool = False
+    resources_hidden_size: int = 128
+    stride: int = 1
+    task_embed_size: int = 128
+    transformer: bool = False
+    zeta_activation: bool = False
+
+
+@dataclass
 class Agent(NNBase):
     activation_name: str
+    add_layer: bool
     entropy_coef: float
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
+    feed_action_to_critic: bool
     gate_coef: float
+    globalized_critic: bool
     hidden_size: int
     kernel_size: int
     lower_embed_size: int
@@ -98,7 +103,6 @@ class Agent(NNBase):
     stride: int
     task_embed_size: int
     transformer: bool
-    use_zeta: bool
     zeta_activation: bool
     inf: float = 1e5
 
@@ -144,6 +148,10 @@ class Agent(NNBase):
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.lower_embed_size,
         )
+        self.embed_action = MultiEmbeddingBag(
+            self.action_space.nvec,
+            embedding_dim=self.lower_embed_size,
+        )
 
         extrinsic_nvec = self.action_nvec.a
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
@@ -162,7 +170,7 @@ class Agent(NNBase):
             ),
             self.activation,
         )
-        self.z_size = self.hidden_size if self.use_zeta else zeta_input_size
+        self.z_size = self.hidden_size if self.add_layer else zeta_input_size
 
         self.zeta = nn.Sequential(
             self.init_(
@@ -198,7 +206,26 @@ class Agent(NNBase):
             self.conv = nn.Sequential(nn.BatchNorm2d(d), self.conv)
 
         self.actor = self.init_(nn.Linear(self.z_size, num_actor_logits))
-        self.critic = self.init_(nn.Linear(self.z_size, 1))
+
+        critic_in_size = self.z_size
+
+        if self.globalized_critic:
+            critic_in_size = self.z1_size + 2 * self.task_embed_size
+            if self.add_layer:
+                self.eta = nn.Sequential(
+                    self.init_(
+                        nn.Linear(
+                            critic_in_size,
+                            self.hidden_size,
+                        )
+                    ),
+                    self.activation,
+                )
+                critic_in_size = self.hidden_size
+        if self.feed_action_to_critic:
+            critic_in_size += self.lower_embed_size
+
+        self.critic = self.init_(nn.Linear(critic_in_size, 1))
 
         self.state_sizes = RecurrentState(
             a=1,
@@ -336,11 +363,15 @@ class Agent(NNBase):
         P = self.build_P(p, G, R)
         m = self.build_m(M, R, p)
         z = torch.cat([z1, m], dim=-1)
-        if self.use_zeta:
+        if self.add_layer:
             z = self.zeta(z)
-        self.print("p", p)
+        zc = z
+        if self.globalized_critic:
+            zc = torch.cat([z1, G[R, p]], dim=-1)
+            if self.add_layer:
+                zc = self.eta(zc)
 
-        value = self.critic(z)
+        self.print("p", p)
 
         a_logits = self.actor(z).view(-1, *self.actor_logits_shape)
         mask = state.action_mask.view(-1, *self.actor_logits_shape)
@@ -440,6 +471,10 @@ class Agent(NNBase):
             ),
             dim=-1,
         )
+
+        if self.feed_action_to_critic:
+            zc = torch.cat([zc, self.embed_action(action)], dim=-1)
+        value = self.critic(zc)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,
