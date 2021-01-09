@@ -15,6 +15,24 @@ from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
 
 
+@dataclass
+class AgentConfig:
+    conv_hidden_size: int = 100
+    gate_coef: float = 0.01
+    kernel_size: int = 2
+    num_edges: int = 1
+    no_pointer: bool = False
+    no_roll: bool = False
+    no_scan: bool = False
+    olsk: bool = False
+    resources_hidden_size: int = 128
+    stride: int = 1
+    task_embed_size: int = 128
+    transformer: bool = False
+    use_zeta: bool = True
+    zeta_activation: bool = False
+
+
 class Categorical(torch.distributions.Categorical):
     def log_prob(self, value: torch.Tensor):
         if self._validate_args:
@@ -57,7 +75,6 @@ class Agent(NNBase):
     conv_hidden_size: int
     debug: bool
     gate_coef: float
-    globalized_m: bool
     hidden_size: int
     kernel_size: int
     lower_embed_size: int
@@ -74,7 +91,6 @@ class Agent(NNBase):
     task_embed_size: int
     transformer: bool
     use_zeta: bool
-    z_in_G: bool
     zeta_activation: bool
     inf: float = 1e5
 
@@ -101,13 +117,9 @@ class Agent(NNBase):
 
         self.gru.reset_parameters()
 
-        zeta_input_size = self.z1_size + self.task_embed_size * (
-            2 if self.globalized_m else 1
-        )
+        zeta_input_size = self.z1_size + self.task_embed_size
         task_encoder_in_size = self.task_embed_size
-        print(task_encoder_in_size, self.z1_size)
-        if self.z_in_G:
-            task_encoder_in_size += self.z1_size
+        task_encoder_in_size += self.z1_size
 
         self.task_encoder = nn.GRU(
             task_encoder_in_size,
@@ -307,15 +319,14 @@ class Agent(NNBase):
         h, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
         z1 = torch.cat([x, resources, embedded_lower, h], dim=-1)
 
-        if self.z_in_G:
-            _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
-            rolled = torch.cat([rolled, _z], dim=-1)
+        _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
+        rolled = torch.cat([rolled, _z], dim=-1)
 
         G, _ = self.task_encoder(rolled)
 
         ones = self.ones.expand_as(R)
         P = self.build_P(p, G, R)
-        m = self.build_m(G if self.globalized_m else M, R, p)
+        m = self.build_m(M, R, p)
         z = torch.cat([z1, m], dim=-1)
         if self.use_zeta:
             z = self.zeta(z)

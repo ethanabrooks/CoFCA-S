@@ -21,29 +21,13 @@ from wrappers import VecPyTorch
 
 
 @dataclass
-class OurConfig(BaseConfig, env.EnvConfig):
-    conv_hidden_size: int = 100
+class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
     debug: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    gate_coef: float = 0.01
-    globalized_m: bool = False
-    kernel_size: int = 2
     lower_embed_size: int = 75
     max_eval_lines: int = 13
     min_eval_lines: int = 1
-    num_edges: int = 1
-    no_pointer: bool = False
-    no_roll: bool = False
-    no_scan: bool = False
-    olsk: bool = False
-    resources_hidden_size: int = 128
-    stride: int = 1
-    task_embed_size: int = 128
-    transformer: bool = False
-    use_zeta: bool = True
-    z_in_G: bool = False
-    zeta_activation: bool = False
 
 
 class Trainer(trainer.Trainer):
