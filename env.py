@@ -268,7 +268,7 @@ class Env(gym.Env):
         while True:
             # noinspection PyTypeChecker
             state = (
-                yield state.success or not state.time_remaining,
+                yield state.success or not state.time_remaining or not state.valid,
                 lambda: None,
             )
 
