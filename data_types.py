@@ -440,7 +440,7 @@ class CompoundAction:
             #         *[not cls._worker_active() for _ in range(2)],
             #     ]
             yield [
-                # False,  # always allowed to cancel
+                False,  # always allowed to cancel
                 # *[not cls._coord_active() for _ in range(Coord.space().n)],
                 *[not cls._building_active() for _ in range(Building.space().n)],
             ]
@@ -499,7 +499,7 @@ class CompoundAction:
     @classmethod
     @lru_cache
     def gate_openers(cls) -> List[List[int]]:
-        return [[i] for i in range(len(Buildings))]
+        return [[0], *([i + 1] for i in range(len(Buildings)))]
 
     def from_input(self) -> List[ActionComponent]:
         while True:
@@ -520,7 +520,7 @@ class CompoundAction:
     def input_space(cls) -> spaces.MultiDiscrete:
         def sizes_gen():
             # for _ in Worker: yield 3  # no-op, choose, don't choose
-            yield len(Buildings)  # +1 for no-op
+            yield len(Buildings) + 1  # for no-op
 
         sizes = [*sizes_gen()]
         return spaces.MultiDiscrete([max(sizes)] * len(sizes))

@@ -750,9 +750,14 @@ class Env(gym.Env):
 
                 elif isinstance(a, RawAction):
                     (a,), ptr = a.a, a.ptr
-                    building = Buildings[int(a)]
+                    a = int(a)
                 else:
                     raise RuntimeError
+                if a == 0:
+                    time_remaining -= 1  # penalize agent for no_op
+                    continue
+
+                building = Buildings[int(a) - 1]
 
                 # new_action = action.update(*a)
                 assert isinstance(building, Building)
