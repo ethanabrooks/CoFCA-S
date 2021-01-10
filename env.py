@@ -1,4 +1,5 @@
 import itertools
+import pickle
 import re
 import sys
 import typing
@@ -6,11 +7,10 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from multiprocessing import Queue
+from pathlib import Path
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
-from pathlib import Path
-import pickle
 
 import gym
 import hydra
@@ -31,7 +31,6 @@ from data_types import (
     BuildingPositions,
     Assignment,
     Positions,
-    ActionComponent,
     CompoundAction,
     Obs,
     Resource,
@@ -47,7 +46,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete, get_max_shape
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -170,8 +169,12 @@ class Env(gym.Env):
         dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
         dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
-        yield Assimilator(), None
-        yield from itertools.zip_longest(buildings, dependencies)
+        # yield Assimilator(), None
+        # yield from itertools.zip_longest(buildings, dependencies)
+        dependency = None
+        for building in buildings:
+            yield building, dependency
+            dependency = building
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
@@ -214,7 +217,18 @@ class Env(gym.Env):
         instructions = [*random_instructions_under(n_lines)]
         required = [i.building for i in instructions if i.required]
         assert required.count(Assimilator()) <= 1
-        return instructions
+
+        def reverse_instructions():
+            building = None
+            for building in dependencies.keys():
+                if building not in dependencies.values():
+                    break
+
+            while building is not None:
+                yield Line(building=building, required=True)
+                building = dependencies[building]
+
+        return [*reversed([*reverse_instructions()])][:n_lines]
 
     @staticmethod
     def build_trees(dependencies: Dependencies) -> typing.Set[Tree]:
@@ -244,7 +258,7 @@ class Env(gym.Env):
         while True:
             # noinspection PyTypeChecker
             state = (
-                yield state.success or not state.time_remaining,
+                yield state.success or not state.time_remaining or not state.valid,
                 lambda: None,
             )
 
@@ -714,7 +728,7 @@ class Env(gym.Env):
             if raw_action is None:
                 new_action = action.from_input()
             elif isinstance(raw_action, RawAction):
-                a, ptr = raw_action.a, raw_action.ptr
+                a, ptr = raw_action.a, int(raw_action.ptr)
                 new_action = action.update(*a)
             else:
                 raise RuntimeError

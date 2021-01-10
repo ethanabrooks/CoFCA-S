@@ -82,7 +82,25 @@ class ActionComponent(metaclass=ActionComponentMeta):
 ActionComponentGenerator = Generator[ActionComponent, None, None]
 
 
-class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMeta):
+class Assignment:
+    @abstractmethod
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        raise NotImplementedError
+
+
+class Building(
+    WorldObject, ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta
+):
     def __eq__(self, other):
         return type(self) == type(other)
 
@@ -99,6 +117,32 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     @abstractmethod
     def cost(self) -> "Resources":
         pass
+
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        def free_coord() -> Optional[CoordType]:
+            occupied = {*building_positions.keys(), *[positions[r] for r in Resource]}
+            for i, j in Coord.possible_values():
+                if (i, j) not in occupied:
+                    return i, j
+
+        free_coord = free_coord()
+        if free_coord is None:
+            return "Out of space"
+        # insufficient_resources = Counter(self.cost) - resources
+        # if insufficient_resources:
+        #     return "Insufficient resources"
+        building_positions[free_coord] = self
+        return None
 
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
         return self == building_positions.get(coord)
@@ -118,22 +162,6 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
     def to_int(self) -> int:
         return Buildings.index(self)
-
-
-class Assignment:
-    @abstractmethod
-    def execute(
-        self,
-        positions: "Positions",
-        worker: "Worker",
-        assignments: "Assignments",
-        building_positions: "BuildingPositions",
-        pending_positions: "BuildingPositions",
-        required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
-        carrying: "Carrying",
-    ) -> Optional[str]:
-        raise NotImplementedError
 
 
 """ world objects"""
@@ -413,9 +441,7 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
-    workers: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
     building: OB = None
-    coord: OC = None
 
     @staticmethod
     def _worker_values() -> List[Ob]:
@@ -423,64 +449,24 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete(
-            [
-                *[len(cls._worker_values()) for _ in Worker],
-                1 + Coord.space().n + Building.space().n,
-            ]
-        )
+        return spaces.MultiDiscrete([1 + Building.space().n])
 
     @classmethod
     def parse(cls, *values: int):
-        *workers, building_or_coord = values
-        workers = [cls._worker_values()[w] for w in workers]
-        if building_or_coord == 0:
-            coord = building = None
-        else:
-            building_or_coord -= 1
-            if Coord.space().contains(building_or_coord):
-                coord = Coord.parse(building_or_coord)
-                building = None
-            else:
-                building_or_coord -= Coord.space().n
-                if Building.space().contains(building_or_coord):
-                    coord = None
-                    building = Building.parse(building_or_coord)
-                else:
-                    raise RuntimeError
-
-        return CompoundAction(workers=workers, coord=coord, building=building)
+        (b,) = values
+        b = int(b)
+        if b == 0:
+            return CompoundAction
+        return CompoundAction(Buildings[b - 1])
 
     @classmethod
     def representation_space(cls):
-        assert isinstance(WORLD_SIZE, int)
-        return spaces.MultiDiscrete(
-            [
-                *[len(cls._worker_values()) for _ in Worker],
-                1 + WORLD_SIZE,
-                1 + WORLD_SIZE,
-                1 + len(Buildings),
-            ]
-        )
+        return spaces.MultiDiscrete([1 + len(Buildings)])
 
     def to_input_int(self) -> IntGenerator:
-        for w in self.workers:
-            yield self._worker_values().index(w)
-        if (self.coord, self.building) == (None, None):
-            yield 0
-        elif self.building is None:
-            yield 1 + self.coord.to_int()
-        elif self.coord is None:
-            yield 1 + Coord.space().n + self.building.to_int()
-        else:
-            raise NotImplementedError("self.coord or self.building must be None.")
+        yield 0 if self.building is None else 1 + self.building.to_int()
 
     def to_representation_ints(self) -> IntGenerator:
-        for w in self.workers:
-            yield self._worker_values().index(w)
-        yield from (
-            (0, 0) if self.coord is None else (1 + c for c in astuple(self.coord))
-        )
         yield 0 if self.building is None else 1 + self.building.to_int()
 
 
@@ -493,10 +479,10 @@ class ActionStage:
     def _children() -> List[type]:
         return [
             NoWorkersAction,
-            WorkersAction,
+            # WorkersAction,
             BuildingAction,
-            CoordAction,
-            BuildingCoordAction,
+            # CoordAction,
+            # BuildingCoordAction,
         ]
 
     @staticmethod
@@ -603,21 +589,27 @@ class NoWorkersAction(ActionStage):
     @staticmethod
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
-        yield CompoundAction(workers=[False for _ in Worker])
+        yield CompoundAction(None)
+        for building in Buildings:
+            yield CompoundAction(building)
 
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
         try:
-            worker_idxs = {int(c) for c in s.split()}
+            b = int(s)
         except ValueError:
             raise InvalidInput
-        workers = [w.value in worker_idxs for w in Worker]
-        return CompoundAction(workers=workers)
+        try:
+            building = Buildings[b]
+        except IndexError:
+            raise InvalidInput
+        return CompoundAction(building)
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
-        for workers in itertools.product([True, False], repeat=len(Worker)):
-            yield CompoundAction(workers=[*workers])
+        yield CompoundAction()
+        for building in Buildings:
+            yield CompoundAction(building)
 
     @staticmethod
     def _prompt() -> str:
@@ -626,16 +618,17 @@ class NoWorkersAction(ActionStage):
     def _update(
         self, action: CompoundAction
     ) -> Union["WorkersAction", "NoWorkersAction"]:
-        workers = [w for b, w in zip(action.workers, Worker) if b]
-        if not workers:
-            return NoWorkersAction()
-        return WorkersAction(workers)
+        return (
+            NoWorkersAction()
+            if action.building is None
+            else BuildingAction(action.building)
+        )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
-        yield from ()
+        yield Worker.W1
 
     def action_components(self) -> CompoundAction:
         return CompoundAction()
@@ -720,39 +713,14 @@ class CoordAction(HasWorkers, NoWorkersAction):
 
 
 @dataclass(frozen=True)
-class BuildingAction(HasWorkers, CoordCanOpenGate):
+class BuildingAction(NoWorkersAction, CoordCanOpenGate):
     building: Building
 
-    @staticmethod
-    def _parse_string(s: str) -> CompoundAction:
-        try:
-            i, j = map(int, s.split())
-        except ValueError:
-            raise InvalidInput
-        return CompoundAction(coord=Coord(i, j))
-
-    @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
-        for i, j in Coord.possible_values():
-            yield CompoundAction(coord=Coord(i, j))
-
-    @staticmethod
-    def _prompt() -> str:
-        return "Coord"
-
-    def _update(self, action: CompoundAction) -> "ActionStage":
-        assert not any([*action.workers, action.building])
-        if action.coord is None:
-            return NoWorkersAction()
-        return BuildingCoordAction(
-            workers=self.workers, building=self.building, coord=action.coord
-        )
-
     def action_components(self) -> CompoundAction:
-        return replace(HasWorkers.action_components(self), building=self.building)
+        return CompoundAction(self.building)
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
-        return None
+        return self.building
 
     def invalid(
         self,
@@ -767,8 +735,8 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
             return f"Dependency ({dependency}) not met"
-        if insufficient_resources:
-            return "Insufficient resources"
+        # if insufficient_resources:
+        #     return "Insufficient resources"
         return None
 
 
@@ -1021,7 +989,7 @@ class TwilightCouncil(Building):
 
 
 Buildings: List[Building] = [
-    Assimilator(),
+    # Assimilator(),
     CyberneticsCore(),
     DarkShrine(),
     FleetBeacon(),
