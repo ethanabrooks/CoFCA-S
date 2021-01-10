@@ -550,16 +550,6 @@ class ActionStage:
     def gate_openers(cls) -> np.ndarray:
         return np.array([list(o.to_input_int()) for o in cls._gate_openers()])
 
-    def invalid(
-        self,
-        resources: typing.Counter[Resource],
-        dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
-        pending_positions: BuildingPositions,
-        positions: Positions,
-    ) -> Optional[str]:
-        return
-
     @classmethod
     def gate_opener_max_size(cls):
         def opener_size():

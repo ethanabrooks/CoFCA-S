@@ -469,7 +469,7 @@ class Env(gym.Env):
                         action_mask=state.action.mask().ravel(),
                         gate_openers=gate_openers.ravel(),
                         partial_action=partial_action,
-                        ptr=int(state.pointer),
+                        ptr=state.pointer,
                     )
                 )
             )
@@ -730,6 +730,7 @@ class Env(gym.Env):
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
+            action = new_action
             assignment = action.assignment(positions)
             is_op = assignment is not None
             if is_op:

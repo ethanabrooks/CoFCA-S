@@ -78,26 +78,6 @@ class AgentConfig:
 
 
 @dataclass
-class AgentConfig:
-    add_layer: bool = True
-    conv_hidden_size: int = 100
-    feed_action_to_critic: bool = False
-    gate_coef: float = 0.01
-    globalized_critic: bool = False
-    kernel_size: int = 2
-    num_edges: int = 1
-    no_pointer: bool = False
-    no_roll: bool = False
-    no_scan: bool = False
-    olsk: bool = False
-    resources_hidden_size: int = 128
-    stride: int = 1
-    task_embed_size: int = 128
-    transformer: bool = False
-    zeta_activation: bool = False
-
-
-@dataclass
 class Agent(NNBase):
     activation_name: str
     add_layer: bool
