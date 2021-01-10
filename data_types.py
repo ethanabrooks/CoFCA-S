@@ -133,6 +133,9 @@ class Building(
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
     ) -> Optional[str]:
+        if self not in required - Counter(building_positions.values()):
+            return "Built non-required"
+
         def free_coord() -> Optional[CoordType]:
             occupied = {*building_positions.keys(), *[positions[r] for r in Resource]}
             for i, j in Coord.possible_values():
