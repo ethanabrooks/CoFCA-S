@@ -1,6 +1,7 @@
 from collections import Hashable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from enum import Enum, auto, unique
 
 import numpy as np
 import torch
@@ -9,7 +10,7 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import AgentOutputs, NNBase
-from data_types import RecurrentState, RawAction
+from data_types import RecurrentState, RawAction, CompoundAction
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
@@ -47,6 +48,33 @@ def get_obs_sections(obs_spaces):
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
     return Categorical(probs=g * new + (1 - g) * old)
+
+
+@unique
+class ZG(Enum):
+    cat = auto()
+    multiply = auto()
+    no_z = auto()
+
+
+@dataclass
+class AgentConfig:
+    add_layer: bool = True
+    conv_hidden_size: int = 100
+    feed_action_to_critic: bool = False
+    gate_coef: float = 0.01
+    globalized_critic: bool = False
+    kernel_size: int = 2
+    num_edges: int = 1
+    no_pointer: bool = False
+    no_roll: bool = False
+    no_scan: bool = False
+    olsk: bool = False
+    resources_hidden_size: int = 128
+    stride: int = 1
+    task_embed_size: int = 128
+    transformer: bool = False
+    zeta_activation: bool = False
 
 
 @dataclass
@@ -149,6 +177,12 @@ class Agent(NNBase):
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+
+        compound_action_size = CompoundAction.input_space().nvec.size
+        self.gate_openers_shape = (
+            self.obs_spaces.gate_openers.nvec.size // compound_action_size,
+            compound_action_size,
+        )
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -386,12 +420,12 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        gate_openers_shape = self.obs_spaces.gate_openers.nvec.shape
-        gate_openers = state.gate_openers.view(-1, *gate_openers_shape)[R]
+        gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
         matches = gate_openers == action.a.unsqueeze(1)
         assert isinstance(matches, torch.Tensor)
         # noinspection PyArgumentList
-        can_open_gate = matches.all(-1).any(-1) * ((1 - line_mask[p, R]).sum(-1) > 1)
+        more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
+        can_open_gate = matches.all(-1).any(-1) * more_than_1_line
         dg, dg_dist = self.get_dg(
             can_open_gate=can_open_gate,
             ones=ones,
@@ -489,7 +523,7 @@ class Agent(NNBase):
         return M[R, p]
 
     def get_delta(self, P, dg, line_mask, ones, z):
-        u = self.upsilon(z).softmax(dim=-1)  # TODO: try z
+        u = self.upsilon(z).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
@@ -506,7 +540,7 @@ class Agent(NNBase):
         return delta, delta_dist
 
     def get_dg(self, can_open_gate, ones, z):
-        d_logits = self.d_gate(z)  # TODO: try z
+        d_logits = self.d_gate(z)
         dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = can_open_gate.long().unsqueeze(-1)
         dg_dist = gate(can_open_gate, dg_probs, ones * 0)
