@@ -625,7 +625,7 @@ class NoWorkersAction(ActionStage):
 
     @staticmethod
     def _prompt() -> str:
-        return "Workers:"
+        return "Building index:"
 
     def _update(
         self, action: CompoundAction
