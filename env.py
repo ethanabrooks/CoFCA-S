@@ -32,6 +32,7 @@ from data_types import (
     Assignment,
     Positions,
     ActionComponent,
+    CompoundAction,
     Obs,
     Resource,
     Building,
@@ -40,7 +41,7 @@ from data_types import (
     Worker,
     State,
     Line,
-    CompoundAction,
+    ActionStage,
     RawAction,
     Buildings,
     Assimilator,
@@ -104,7 +105,7 @@ class Env(gym.Env):
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
-        action_space = CompoundAction.input_space()
+        action_components_space = CompoundAction.input_space()
         self.action_space = spaces.MultiDiscrete(
             [
                 x
@@ -113,7 +114,7 @@ class Env(gym.Env):
                         delta=[2 * self.max_lines],
                         dg=[2],
                         ptr=[self.max_lines],
-                        a=CompoundAction.input_space().nvec,
+                        a=action_components_space.nvec,
                     )
                 )
                 for x in field
@@ -137,36 +138,26 @@ class Env(gym.Env):
         )
         resources_space = spaces.MultiDiscrete([sys.maxsize] * 2)
         pointer_space = spaces.Discrete(self.max_lines)
-
-        # noinspection PyTypeChecker
-        def gate_openers():
-            for subclass in CompoundAction.subclasses():
-                yield subclass.gate_openers()
-
-        gate_openers = [np.array(o) for o in gate_openers()]
-        self.gate_opener_shape = get_max_shape(*gate_openers)
-        padded = np.stack([self.pad_gate_openers(o) for o in gate_openers])
-        assert np.all(np.min(padded, axis=0) == 0)
-        gate_opener_space = spaces.MultiDiscrete(
-            np.max(padded, axis=0) + 1
-        )  # +1 because upper bound is not inclusive
         action_mask_space = spaces.MultiBinary(
-            action_space.nvec.max() * action_space.nvec.size
+            action_components_space.nvec.max() * action_components_space.nvec.size
         )
-        self.observation_space = spaces.Dict(
-            asdict(
-                Obs(
-                    action_mask=action_mask_space,
-                    gate_openers=gate_opener_space,
-                    lines=lines_space,
-                    line_mask=line_mask_space,
-                    obs=obs_space,
-                    partial_action=CompoundAction.representation_space(),
-                    resources=resources_space,
-                    ptr=pointer_space,
-                )
-            )
+        gate_opener_space = spaces.MultiDiscrete(
+            np.array(
+                [CompoundAction.input_space().nvec + 1]
+                * ActionStage.gate_opener_max_size()
+            ).flatten()
         )
+        self.obs_spaces = Obs(
+            action_mask=action_mask_space,
+            gate_openers=gate_opener_space,
+            lines=lines_space,
+            line_mask=line_mask_space,
+            obs=obs_space,
+            partial_action=CompoundAction.representation_space(),
+            resources=resources_space,
+            ptr=pointer_space,
+        )
+        self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
     def build_dependencies(
         self, max_depth: int = None
@@ -403,16 +394,19 @@ class Env(gym.Env):
         state: State
         state = yield
 
-        padded: List[Optional[Line]] = [*lines, *[None] * (self.max_lines - len(lines))]
-        line_mask = np.array([p is None for p in padded])
+        gate_openers: List[Optional[Line]] = [
+            *lines,
+            *[None] * (self.max_lines - len(lines)),
+        ]
+        line_mask = np.array([p is None for p in gate_openers])
 
         def render():
             def requirement_for():
-                depender = None
+                depending = None
                 for l in reversed(lines):
                     if l.required:
-                        depender = l.building
-                    yield depender
+                        depending = l.building
+                    yield depending
 
             def required_iterator():
                 buildings = [*state.building_positions.values()]
@@ -442,7 +436,7 @@ class Env(gym.Env):
             for string in self.room_strings(array):
                 print(string, end="")
 
-        preprocessed = np.array([*map(self.preprocess_line, padded)])
+        preprocessed = np.array([*map(self.preprocess_line, gate_openers)])
 
         def coords():
             yield from state.positions.items()
@@ -455,8 +449,15 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            assert isinstance(state.action, CompoundAction)
-            gate_openers = self.pad_gate_openers(np.array(state.action.gate_openers()))
+            assert isinstance(state.action, ActionStage)
+
+            gate_openers: np.ndarray = self.obs_spaces.gate_openers.nvec.copy().reshape(
+                -1, CompoundAction.input_space().nvec.size
+            )
+            gate_openers -= 1
+            unpadded_gate_openers = state.action.gate_openers()
+            gate_openers[: len(unpadded_gate_openers)] = unpadded_gate_openers
+
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
@@ -466,7 +467,7 @@ class Env(gym.Env):
                         line_mask=line_mask,
                         lines=preprocessed,
                         action_mask=state.action.mask().ravel(),
-                        gate_openers=gate_openers,
+                        gate_openers=gate_openers.ravel(),
                         partial_action=partial_action,
                         ptr=state.pointer,
                     )
@@ -482,11 +483,6 @@ class Env(gym.Env):
                     space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
-
-    def pad_gate_openers(self, gate_openers):
-        pad_amount, too_short = self.gate_opener_shape - np.array(gate_openers.shape)
-        assert not too_short
-        return np.pad(gate_openers, [(0, pad_amount), (0, 0)], mode="edge")
 
     def place_objects(
         self, n_lines: int
@@ -712,14 +708,17 @@ class Env(gym.Env):
                 valid=error_msg is None,
             )
 
-            a: Optional[RawAction]
+            raw_action: Optional[RawAction]
             # noinspection PyTypeChecker
-            a = yield state, render
-            if a is None:
-                a: List[ActionComponent] = [*action.from_input()]
-            if isinstance(a, RawAction):
-                a, ptr = a.a, a.ptr
-            new_action = action.update(*a)
+            raw_action = yield state, render
+            if raw_action is None:
+                new_action = action.from_input()
+            elif isinstance(raw_action, RawAction):
+                a, ptr = raw_action.a, raw_action.ptr
+                new_action = action.update(*a)
+            else:
+                raise RuntimeError
+
             error_msg = new_action.invalid(
                 resources=resources,
                 dependencies=dependencies,
@@ -770,7 +769,7 @@ class Env(gym.Env):
                 for coord in destroy:
                     del building_positions[coord]
 
-    def step(self, action: Union[np.ndarray, CompoundAction]):
+    def step(self, action: Union[np.ndarray, ActionStage]):
         if isinstance(action, np.ndarray):
             action = RawAction.parse(*action)
         return self.iterator.send(action)
