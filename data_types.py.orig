@@ -86,10 +86,6 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def __eq__(self, other):
         return type(self) == type(other)
 
-    def __lt__(self, other):
-        # noinspection PyArgumentList
-        return self.value < other.value
-
     def __hash__(self):
         return hash(type)
 
@@ -104,6 +100,38 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def cost(self) -> "Resources":
         pass
 
+<<<<<<< HEAD
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        if self not in required - Counter(building_positions.values()):
+            return "Built non-required"
+
+        def free_coord() -> Optional[CoordType]:
+            occupied = {*building_positions.keys(), *[positions[r] for r in Resource]}
+            for i, j in Coord.possible_values():
+                if (i, j) not in occupied:
+                    return i, j
+
+        free_coord = free_coord()
+        if free_coord is None:
+            return "Out of space"
+        # insufficient_resources = Counter(self.cost) - resources
+        # if insufficient_resources:
+        #     return "Insufficient resources"
+        building_positions[free_coord] = self
+        return None
+
+=======
+>>>>>>> require selection of coords
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
         return self == building_positions.get(coord)
 
@@ -336,13 +364,12 @@ class BuildOrder(Assignment):
         carrying: "Carrying",
     ) -> Optional[str]:
         # if positions[worker] == self.coord:
-        remaining = required - Counter(building_positions.values())
-        if self.building in remaining:
+        if True:
+            remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
             return
         else:
-            return "Built unnecessary building."
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
