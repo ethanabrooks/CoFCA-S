@@ -262,7 +262,7 @@ class Agent(NNBase):
             self.conv_hidden_size
             + self.resources_hidden_size
             + self.lower_embed_size
-            + self.hidden_size
+            # + self.hidden_size
         )
 
     def build_P(self, p, G, R):
@@ -357,8 +357,8 @@ class Agent(NNBase):
         embedded_lower = self.embed_lower(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        h, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
-        z1 = torch.cat([x, resources, embedded_lower, h], dim=-1)
+        # h, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
+        z1 = torch.cat([x, resources, embedded_lower], dim=-1)
 
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
         rolled = torch.cat([rolled, _z], dim=-1)
