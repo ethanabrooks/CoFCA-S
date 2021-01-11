@@ -583,8 +583,6 @@ class NoWorkersAction(ActionStage):
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
         yield CompoundAction(None)
-        for building in Buildings:
-            yield CompoundAction(building)
 
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
