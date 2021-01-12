@@ -424,7 +424,7 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete([1 + Coord.space().n, 1 + Building.space().n])
+        return spaces.MultiDiscrete([1 + Building.space().n, 1 + Coord.space().n])
 
     @classmethod
     def parse(cls, b: int, c: int) -> "CompoundAction":
@@ -570,6 +570,9 @@ class NoWorkersAction(ActionStage):
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
         yield CompoundAction()
+        for i, j in Coord.possible_values():
+            for building in Buildings:
+                yield CompoundAction(building=building, coord=Coord(i, j))
 
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
