@@ -140,15 +140,8 @@ class Env(gym.Env):
         action_mask_space = spaces.MultiBinary(
             action_components_space.nvec.max() * action_components_space.nvec.size
         )
-        gate_opener_space = spaces.MultiDiscrete(
-            np.array(
-                [CompoundAction.input_space().nvec + 1]
-                * ActionStage.gate_opener_max_size()
-            ).flatten()
-        )
         self.obs_spaces = Obs(
             action_mask=action_mask_space,
-            gate_openers=gate_opener_space,
             lines=lines_space,
             line_mask=line_mask_space,
             obs=obs_space,
@@ -408,11 +401,11 @@ class Env(gym.Env):
         state: State
         state = yield
 
-        gate_openers: List[Optional[Line]] = [
+        padded: List[Optional[Line]] = [
             *lines,
             *[None] * (self.max_lines - len(lines)),
         ]
-        line_mask = np.array([p is None for p in gate_openers])
+        line_mask = np.array([p is None for p in padded])
 
         def render():
             def requirement_for():
@@ -450,7 +443,7 @@ class Env(gym.Env):
             for string in self.room_strings(array):
                 print(string, end="")
 
-        preprocessed = np.array([*map(self.preprocess_line, gate_openers)])
+        preprocessed = np.array([*map(self.preprocess_line, padded)])
 
         def coords():
             yield from state.positions.items()
@@ -465,13 +458,6 @@ class Env(gym.Env):
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, ActionStage)
 
-            gate_openers: np.ndarray = self.obs_spaces.gate_openers.nvec.copy().reshape(
-                -1, CompoundAction.input_space().nvec.size
-            )
-            gate_openers -= 1
-            unpadded_gate_openers = state.action.gate_openers()
-            gate_openers[: len(unpadded_gate_openers)] = unpadded_gate_openers
-
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
@@ -481,7 +467,6 @@ class Env(gym.Env):
                         line_mask=line_mask,
                         lines=preprocessed,
                         action_mask=state.action.mask().ravel(),
-                        gate_openers=gate_openers.ravel(),
                         partial_action=partial_action,
                         ptr=state.pointer,
                     )

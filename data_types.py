@@ -382,7 +382,6 @@ O = typing.TypeVar("O", torch.Tensor, np.ndarray, int, gym.Space)
 @dataclass(frozen=True)
 class Obs(typing.Generic[O]):
     action_mask: O
-    gate_openers: O
     line_mask: O
     lines: O
     obs: O
