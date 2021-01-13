@@ -507,6 +507,7 @@ class Agent(NNBase):
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
+        d_probs = F.relu(d_probs)
         unmask = 1 - line_mask
         masked = d_probs * unmask
         masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
