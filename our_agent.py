@@ -28,19 +28,7 @@ class Categorical(torch.distributions.Categorical):
         # gather = log_pmf.gather(-1, value).squeeze(-1)
         R = torch.arange(value.size(0))
         log_pmf = log_pmf.view(-1, log_pmf.size(-1))
-        if torch.any(value < 0):
-            print(value)
-            import ipdb
-
-            ipdb.set_trace()
-        try:
-            log_prob = log_pmf[R, value.squeeze(-1)]  # deterministic
-        except RuntimeError:
-            print(value)
-            import ipdb
-
-            ipdb.set_trace()
-
+        log_prob = log_pmf[R, value.squeeze(-1)]  # deterministic
         return log_prob.view(shape)
 
 
