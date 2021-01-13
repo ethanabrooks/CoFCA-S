@@ -2,7 +2,6 @@ from collections import namedtuple
 
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, DictConfig
-from torch import nn
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
@@ -14,30 +13,28 @@ from typing import Optional, Any, List
 def flatten(cfg: DictConfig):
     for k, v in cfg.items():
         if isinstance(v, DictConfig):
-            yield from flatten(v)
+            for k_, v_ in flatten(v):
+                yield f"{k}_{k_}", v_
         else:
             yield k, v
 
 
 @dataclass
 class Eval:
-    eval_interval: Optional[int] = MISSING
-    eval_steps: Optional[int] = MISSING
-    perform_eval: bool = MISSING
+    interval: Optional[int] = MISSING
+    steps: Optional[int] = MISSING
 
 
 @dataclass
 class NoEval(Eval):
-    eval_interval: Optional[int] = None
-    eval_steps: Optional[int] = None
-    perform_eval: bool = False
+    interval: Optional[int] = None
+    steps: Optional[int] = None
 
 
 @dataclass
 class YesEval(Eval):
-    eval_interval: Optional[int] = int(1e6)
-    eval_steps: Optional[int] = 500
-    perform_eval: bool = True
+    interval: Optional[int] = int(1e5)
+    steps: Optional[int] = 500
 
 
 @dataclass
@@ -52,7 +49,7 @@ class BaseConfig:
     hidden_size: int = 150
     learning_rate: float = 0.0025
     load_path: Optional[str] = None
-    log_interval: int = int(3e4)
+    log_interval: int = int(1e5)
     max_grad_norm: float = 0.5
     name: Optional[str] = None
     normalize: bool = False
@@ -65,7 +62,7 @@ class BaseConfig:
     num_frames: Optional[int] = None
     render: bool = False
     render_eval: bool = False
-    save_interval: int = int(3e4)
+    save_interval: int = int(1e5)
     seed: int = 0
     synchronous: bool = False
     tau: float = 0.95

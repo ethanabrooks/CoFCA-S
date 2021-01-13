@@ -100,6 +100,38 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def cost(self) -> "Resources":
         pass
 
+<<<<<<< HEAD
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        if self not in required - Counter(building_positions.values()):
+            return "Built non-required"
+
+        def free_coord() -> Optional[CoordType]:
+            occupied = {*building_positions.keys(), *[positions[r] for r in Resource]}
+            for i, j in Coord.possible_values():
+                if (i, j) not in occupied:
+                    return i, j
+
+        free_coord = free_coord()
+        if free_coord is None:
+            return "Out of space"
+        # insufficient_resources = Counter(self.cost) - resources
+        # if insufficient_resources:
+        #     return "Insufficient resources"
+        building_positions[free_coord] = self
+        return None
+
+=======
+>>>>>>> require selection of coords
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
         return self == building_positions.get(coord)
 
@@ -332,13 +364,12 @@ class BuildOrder(Assignment):
         carrying: "Carrying",
     ) -> Optional[str]:
         # if positions[worker] == self.coord:
-        remaining = required - Counter(building_positions.values())
-        if self.building in remaining:
+        if True:
+            remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
             return
         else:
-            return "Built unnecessary building."
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
@@ -424,22 +455,35 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete([1 + Coord.space().n, 1 + Building.space().n])
+        return spaces.MultiDiscrete([1 + Coord.space().n + Building.space().n])
 
     @classmethod
-    def parse(cls, b: int, c: int) -> "CompoundAction":
-        b, c = int(b), int(c)
-        if b == 0 and c == 0:
+    def parse(cls, *values: int) -> "CompoundAction":
+        (b,) = values
+        b = int(b)
+        if b == 0:
             return CompoundAction()
-        return CompoundAction(building=Building.parse(b - 1), coord=Coord.parse(c - 1))
+        b -= 1
+        if Coord.space().contains(b):
+            return CompoundAction(coord=Coord.parse(b))
+        b -= Coord.space().n
+        if Building.space().contains(b):
+            return CompoundAction(building=Building.parse(b))
+        raise RuntimeError
 
     @classmethod
     def representation_space(cls):
         return spaces.MultiDiscrete([1 + Coord.space().n, 1 + len(Buildings)])
 
     def to_input_int(self) -> IntGenerator:
-        yield 0 if self.coord is None else 1 + self.coord.to_int()
-        yield 0 if self.building is None else 1 + self.building.to_int()
+        if self.coord is None and self.building is None:
+            yield 0
+        elif self.coord is not None and self.building is None:
+            yield 1 + self.coord.to_int()
+        elif self.building is not None and self.coord is None:
+            yield 1 + Coord.space().n + self.building.to_int()
+        else:
+            raise RuntimeError
 
     def to_representation_ints(self) -> IntGenerator:
         yield 0 if self.coord is None else 1 + self.coord.to_int()
@@ -456,7 +500,7 @@ class ActionStage:
         return [
             NoWorkersAction,
             # WorkersAction,
-            # BuildingAction,
+            BuildingAction,
             # CoordAction,
             BuildingCoordAction,
         ]
@@ -565,32 +609,39 @@ class NoWorkersAction(ActionStage):
     @staticmethod
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
-        yield CompoundAction()
+        yield CompoundAction(None)
+        for building in Buildings:
+            yield CompoundAction(building)
 
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
         try:
-            b, i, j = map(int, s.split())
+            b = int(s)
         except ValueError:
             raise InvalidInput
-        return CompoundAction(building=Building.parse(b), coord=Coord(i, j))
+        try:
+            building = Buildings[b]
+        except IndexError:
+            raise InvalidInput
+        return CompoundAction(building)
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
         yield CompoundAction()
-        for i, j in Coord.possible_values():
-            for building in Buildings:
-                yield CompoundAction(building=building, coord=Coord(i, j))
+        for building in Buildings:
+            yield CompoundAction(building)
 
     @staticmethod
     def _prompt() -> str:
-        return "Building, coord:"
+        return "Building index:"
 
     def _update(
         self, action: CompoundAction
     ) -> Union["WorkersAction", "NoWorkersAction"]:
-        return BuildingCoordAction(
-            workers=[Worker.W1], building=action.building, coord=action.coord
+        return (
+            NoWorkersAction()
+            if action.building is None
+            else BuildingAction(workers=[Worker.W1], building=action.building)
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:

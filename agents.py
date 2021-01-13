@@ -1,7 +1,5 @@
-import math
 from collections import namedtuple
 from contextlib import contextmanager
-from typing import Union
 
 import torch
 from gym.spaces import Box, Discrete

@@ -1,4 +1,0 @@
-#!/usr/bin/env zsh
-cmd="$(${0:a:h}/lookup-command.zsh "$@" | ${0:a:h}/log-to-load.zsh | ${0:a:h}/single-process.zsh)"
-echo "$cmd\n"
-eval "$cmd"

@@ -4,8 +4,7 @@ import torch
 from gym import spaces
 from gym.spaces import Box
 
-from common.vec_env import VecEnvWrapper
-from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from stable_baselines3.common.vec_env import VecEnvWrapper
 
 
 class FlattenObs(gym.ObservationWrapper):
@@ -195,7 +194,7 @@ class VecPyTorch(VecEnvWrapper):
         obs = self.extract_numpy(self.venv.reset())
         return torch.from_numpy(obs).float().to(self.device)
 
-    def step_async(self, actions):
+    def step_async(self, actions: torch.Tensor):
         actions = actions.cpu().numpy()
         self.venv.step_async(actions)
 
@@ -208,15 +207,8 @@ class VecPyTorch(VecEnvWrapper):
 
     def to(self, device):
         self.device = device
-        self.venv.to(device)
         if self.action_bounds is not None:
             self.action_bounds = [t.to(device) for t in self.action_bounds]
-
-    def evaluate(self):
-        self.venv.evaluate()
-
-    def train(self):
-        self.venv.train()
 
     def preprocess(self, action):
         if self.action_bounds is not None:
@@ -225,31 +217,6 @@ class VecPyTorch(VecEnvWrapper):
         if isinstance(self.action_space, spaces.Discrete):
             action = action.squeeze(-1)
         return action
-
-    def set_curriculum(self, *args, **kwargs):
-        self.venv.set_curriculum(*args, **kwargs)
-
-
-class VecNormalize(VecNormalize_):
-    def __init__(self, *args, **kwargs):
-        super(VecNormalize, self).__init__(*args, **kwargs)
-        self.training = True
-
-    def _obfilt(self, obs):
-        if self.ob_rms:
-            if self.training:
-                self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
-                          -self.clipob, self.clipob)
-            return obs
-        else:
-            return obs
-
-    def train(self):
-        self.training = True
-
-    def eval(self):
-        self.training = False
 
 
 class VecPyTorchFrameStack(VecEnvWrapper):
@@ -288,33 +255,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def to(self, device):
         self.stacked_obs = self.stacked_obs.to(device)
-        self.venv.to(device)
-
-
-class OneHotWrapper(gym.Wrapper):
-    def wrap_observation(self, obs, observation_space=None):
-        if observation_space is None:
-            observation_space = self.observation_space
-        if isinstance(observation_space, spaces.Discrete):
-            return onehot(obs, observation_space.n)
-        if isinstance(observation_space, spaces.MultiDiscrete):
-            assert observation_space.contains(obs)
-
-            def one_hots():
-                nvec = observation_space.nvec
-                for o, n in zip(obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T):
-                    yield onehot(o, n)
-
-            return np.concatenate(list(one_hots()), axis=-1)
-
-
-def get_vec_normalize(venv):
-    if isinstance(venv, VecNormalize):
-        return venv
-    elif hasattr(venv, "venv"):
-        return get_vec_normalize(venv.venv)
-
-    return None
 
 
 class TupleActionWrapper(gym.ActionWrapper):

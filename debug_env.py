@@ -16,15 +16,15 @@ from data_types import (
 from data_types import (
     Resource,
     Building,
-    Coord,
+    CoordType,
     WorldObject,
     Movement,
     Worker,
     State,
     Line,
     BuildOrder,
-    CompoundAction,
-    Assignment,
+    ActionStage,
+    Command,
     Targets,
     WorkerAction,
     WORLD_SIZE,
@@ -93,7 +93,7 @@ class DebugAction2(DebugAction):
 
 
 @dataclass(frozen=True)
-class DebugCompoundAction(CompoundAction):
+class DebugCompoundAction(ActionStage):
     action1: DebugAction1 = None
     ptr: int = 0
     active: ActionType = DebugAction1
@@ -102,14 +102,14 @@ class DebugCompoundAction(CompoundAction):
     def classes(cls):
         yield DebugAction1
 
-    def actions(self):
+    def _component_classes(self):
         yield self.action1
 
     def worker(self) -> Worker:
         assert isinstance(self.action1.worker, Worker)
         return self.action1.worker
 
-    def assignment(self) -> Assignment:
+    def command(self) -> Command:
         if isinstance(self.action1.target, Building):
             assert isinstance(self.action2, DebugAction2)
         return self.action1.target.assignment(None)
@@ -121,10 +121,10 @@ class Env(env.Env):
         self,
         building: Building,
         dependency: Optional[Building],
-        building_positions: Dict[Coord, Building],
+        building_positions: Dict[CoordType, Building],
         insufficient_resources: bool,
-        positions: Dict[WorldObject, Coord],
-        assignment_location: Coord,
+        positions: Dict[WorldObject, CoordType],
+        assignment_location: CoordType,
     ) -> bool:
         built = self.get_buildings(building_positions)
         # print(fg("green"), building, dependency, built, RESET)
