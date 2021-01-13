@@ -243,7 +243,7 @@ class Agent(NNBase):
         )
 
     def get_gru_in_size(self):
-        return self.action_embed_size
+        return self.action_embed_size + self.instruction_embed_size
 
     def build_d_gate(self):
         return self.init_(nn.Linear(self.z_size, 2))
@@ -356,7 +356,10 @@ class Agent(NNBase):
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        h, rnn_hxs = self._forward_gru(embedded_action, rnn_hxs, masks)
+        m = self.build_m(M, R, p)
+        h, rnn_hxs = self._forward_gru(
+            torch.cat([embedded_action, m], dim=-1), rnn_hxs, masks
+        )
         z1 = torch.cat([x, resources, embedded_action, h], dim=-1)
 
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
@@ -366,7 +369,6 @@ class Agent(NNBase):
 
         ones = self.ones.expand_as(R)
         P = self.build_P(p, G, R)
-        m = self.build_m(M, R, p)
         z = torch.cat([z1, m], dim=-1)
         if self.add_layer:
             z = self.zeta(z)
