@@ -68,7 +68,6 @@ class AgentConfig:
     add_layer: bool = True
     conv_hidden_size: int = 100
     debug: bool = False
-    feed_action_to_critic: bool = False
     gate_coef: float = 0.01
     globalized_critic: bool = False
     instruction_embed_size: int = 128
@@ -92,7 +91,6 @@ class Agent(NNBase):
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
-    feed_action_to_critic: bool
     gate_coef: float
     globalized_critic: bool
     hidden_size: int
@@ -153,17 +151,11 @@ class Agent(NNBase):
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.action_embed_size,
         )
-        self.embed_action = MultiEmbeddingBag(
-            np.array([self.action_nvec.dg, 2 * self.max_eval_lines]),
-            embedding_dim=self.action_embed_size,
-        )
 
         extrinsic_nvec = self.action_nvec.a
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
-
-        compound_action_size = CompoundAction.input_space().nvec.size
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -229,8 +221,6 @@ class Agent(NNBase):
                     self.activation,
                 )
                 critic_in_size = self.hidden_size
-        if self.feed_action_to_critic:
-            critic_in_size += self.action_embed_size
 
         self.critic = self.init_(nn.Linear(critic_in_size, 1))
 
@@ -466,11 +456,6 @@ class Agent(NNBase):
             *[None if dist is None else dist.entropy() for dist in astuple(dists)]
         )
         aux_loss = -self.entropy_coef * compute_metric(entropy).mean()
-        if self.feed_action_to_critic:
-            embedded_action = self.embed_action(
-                torch.stack([action.dg, action.delta], dim=-1).long()
-            )
-            zc = torch.cat([zc, embedded_action], dim=-1)
         value = self.critic(zc)
         action = torch.cat(
             astuple(
