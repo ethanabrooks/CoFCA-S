@@ -35,4 +35,4 @@ class Agent(our_agent.Agent):
         return torch.ones_like(ones) * self.nl, None
 
     def get_gru_in_size(self):
-        return self.lower_embed_size + self.nl * self.task_embed_size
+        return self.action_embed_size + self.nl * self.instruction_embed_size
