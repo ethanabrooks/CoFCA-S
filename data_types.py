@@ -570,7 +570,11 @@ class NoWorkersAction(ActionStage):
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
         yield CompoundAction()
+        for building in Buildings:
+            yield CompoundAction(building=building)
+
         for i, j in Coord.possible_values():
+            yield CompoundAction(coord=Coord(i, j))
             for building in Buildings:
                 yield CompoundAction(building=building, coord=Coord(i, j))
 
@@ -596,6 +600,8 @@ class NoWorkersAction(ActionStage):
     def _update(
         self, action: CompoundAction
     ) -> Union["WorkersAction", "NoWorkersAction"]:
+        if None in (action.building, action.coord):
+            return NoWorkersAction()
         return BuildingCoordAction(
             workers=[Worker.W1], building=action.building, coord=action.coord
         )
