@@ -164,10 +164,6 @@ class Agent(NNBase):
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
         compound_action_size = CompoundAction.input_space().nvec.size
-        self.gate_openers_shape = (
-            self.obs_spaces.gate_openers.nvec.size // compound_action_size,
-            compound_action_size,
-        )
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -406,14 +402,9 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
-        matches = gate_openers == action.a.unsqueeze(1)
-        assert isinstance(matches, torch.Tensor)
-        # noinspection PyArgumentList
         more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
-        can_open_gate = matches.all(-1).any(-1) * more_than_1_line
         dg, dg_dist = self.get_dg(
-            can_open_gate=can_open_gate,
+            can_open_gate=more_than_1_line,
             ones=ones,
             z=z,
         )
