@@ -64,11 +64,14 @@ class ZG(Enum):
 
 @dataclass
 class AgentConfig:
+    action_embed_size: int = 75
     add_layer: bool = True
     conv_hidden_size: int = 100
+    debug: bool = False
     feed_action_to_critic: bool = False
     gate_coef: float = 0.01
     globalized_critic: bool = False
+    instruction_embed_size: int = 128
     kernel_size: int = 2
     num_edges: int = 1
     no_pointer: bool = False
@@ -77,7 +80,6 @@ class AgentConfig:
     olsk: bool = False
     resources_hidden_size: int = 128
     stride: int = 1
-    task_embed_size: int = 128
     transformer: bool = False
     zeta_activation: bool = False
 
@@ -95,7 +97,7 @@ class Agent(NNBase):
     globalized_critic: bool
     hidden_size: int
     kernel_size: int
-    lower_embed_size: int
+    action_embed_size: int
     max_eval_lines: int
     normalize: bool
     no_pointer: bool
@@ -106,7 +108,7 @@ class Agent(NNBase):
     olsk: bool
     resources_hidden_size: int
     stride: int
-    task_embed_size: int
+    instruction_embed_size: int
     transformer: bool
     zeta_activation: bool
     inf: float = 1e5
@@ -123,39 +125,38 @@ class Agent(NNBase):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
-        self.embed_task = MultiEmbeddingBag(
-            self.obs_spaces.lines.nvec[0], embedding_dim=self.task_embed_size
+        self.embed_instruction = MultiEmbeddingBag(
+            self.obs_spaces.lines.nvec[0], embedding_dim=self.instruction_embed_size
         )
-        gru_in_size = self.get_gru_in_size()
-        self.gru = nn.GRU(gru_in_size, self.hidden_size)
+        self.gru = nn.GRU(self.get_gru_in_size(), self.hidden_size)
         self.initial_hxs = nn.Parameter(
-            torch.randn(self.lower_embed_size), requires_grad=True
+            torch.randn(self.action_embed_size), requires_grad=True
         )
 
         self.gru.reset_parameters()
 
-        zeta_input_size = self.z1_size + self.task_embed_size
-        task_encoder_in_size = self.task_embed_size
-        task_encoder_in_size += self.z1_size
+        zeta_input_size = self.z1_size + self.instruction_embed_size
+        instruction_encoder_in_size = self.instruction_embed_size
+        instruction_encoder_in_size += self.z1_size
 
-        self.task_encoder = nn.GRU(
-            task_encoder_in_size,
-            self.task_embed_size,
+        self.encode_G = nn.GRU(
+            instruction_encoder_in_size,
+            self.instruction_embed_size,
             bidirectional=True,
             batch_first=True,
         )
-        self.initial_task_encoder_hxs = nn.Parameter(
-            torch.randn(self.task_embed_size), requires_grad=True
+        self.initial_instruction_encoder_hxs = nn.Parameter(
+            torch.randn(self.instruction_embed_size), requires_grad=True
         )
-        self.task_encoder.reset_parameters()
+        self.encode_G.reset_parameters()
 
-        self.embed_lower = MultiEmbeddingBag(
+        self.embed_action = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
-            embedding_dim=self.lower_embed_size,
+            embedding_dim=self.action_embed_size,
         )
         self.embed_action = MultiEmbeddingBag(
             np.array([self.action_nvec.dg, 2 * self.max_eval_lines]),
-            embedding_dim=self.lower_embed_size,
+            embedding_dim=self.action_embed_size,
         )
 
         extrinsic_nvec = self.action_nvec.a
@@ -221,7 +222,7 @@ class Agent(NNBase):
         critic_in_size = self.z_size
 
         if self.globalized_critic:
-            critic_in_size = self.z1_size + 2 * self.task_embed_size
+            critic_in_size = self.z1_size + 2 * self.instruction_embed_size
             if self.add_layer:
                 self.eta = nn.Sequential(
                     self.init_(
@@ -234,7 +235,7 @@ class Agent(NNBase):
                 )
                 critic_in_size = self.hidden_size
         if self.feed_action_to_critic:
-            critic_in_size += self.lower_embed_size
+            critic_in_size += self.action_embed_size
 
         self.critic = self.init_(nn.Linear(critic_in_size, 1))
 
@@ -251,13 +252,15 @@ class Agent(NNBase):
         )
 
     def get_gru_in_size(self):
-        return self.lower_embed_size
+        return self.action_embed_size
 
     def build_d_gate(self):
         return self.init_(nn.Linear(self.z_size, 2))
 
     def build_beta(self):
-        in_size = (2 if self.no_roll or self.no_scan else 1) * self.task_embed_size
+        in_size = (
+            2 if self.no_roll or self.no_scan else 1
+        ) * self.instruction_embed_size
         out_size = self.num_edges * self.d_space() if self.no_scan else self.num_edges
         return nn.Sequential(self.init_(nn.Linear(in_size, out_size)))
 
@@ -266,7 +269,7 @@ class Agent(NNBase):
         return (
             self.conv_hidden_size
             + self.resources_hidden_size
-            + self.lower_embed_size
+            + self.action_embed_size
             # + self.hidden_size
         )
 
@@ -348,9 +351,9 @@ class Agent(NNBase):
         # line_mask = line_mask.view(self.nl, N, 2, self.nl).transpose(2, 3).unsqueeze(-1)
 
         # build memory
-        M = self.embed_task(lines.view(-1, self.obs_spaces.lines.nvec[0].size)).view(
-            N, -1, self.task_embed_size
-        )
+        M = self.embed_instruction(
+            lines.view(-1, self.obs_spaces.lines.nvec[0].size)
+        ).view(N, -1, self.instruction_embed_size)
         p = state.ptr.long().flatten()
         R = torch.arange(N, device=p.device)
         rolled = torch.stack(
@@ -359,7 +362,7 @@ class Agent(NNBase):
 
         x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
-        embedded_lower = self.embed_lower(
+        embedded_lower = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
         # h, rnn_hxs = self._forward_gru(embedded_lower, rnn_hxs, masks)
@@ -368,7 +371,7 @@ class Agent(NNBase):
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
         rolled = torch.cat([rolled, _z], dim=-1)
 
-        G, _ = self.task_encoder(rolled)
+        G, _ = self.encode_G(rolled)
 
         ones = self.ones.expand_as(R)
         P = self.build_P(p, G, R)
