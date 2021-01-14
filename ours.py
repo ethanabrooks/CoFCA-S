@@ -25,7 +25,6 @@ class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
     debug: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    lower_embed_size: int = 75
     max_eval_lines: int = 13
     min_eval_lines: int = 1
 
