@@ -82,7 +82,25 @@ class ActionComponent(metaclass=ActionComponentMeta):
 ActionComponentGenerator = Generator[ActionComponent, None, None]
 
 
-class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMeta):
+class Assignment:
+    @abstractmethod
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        raise NotImplementedError
+
+
+class Building(
+    WorldObject, ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta
+):
     def __eq__(self, other):
         return type(self) == type(other)
 
@@ -100,11 +118,33 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def cost(self) -> "Resources":
         pass
 
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        remaining = required - Counter(building_positions.values())
+        if self not in remaining:
+            return f"Built unnecessary building ({self})."
+        for i, j in Coord.possible_values():
+            occupied = {*building_positions.keys(), positions.values()}
+            if (i, j) not in occupied:
+                building_positions[i, j] = self
+                assignments[worker] = DoNothing()
+                return
+        return "All coordinates occcupied."
+
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
         return self == building_positions.get(coord)
 
     @staticmethod
-    def parse(n: int) -> ActionComponent:
+    def parse(n: int) -> "Building":
         return Buildings[n]
 
     @staticmethod
@@ -118,22 +158,6 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
     def to_int(self) -> int:
         return Buildings.index(self)
-
-
-class Assignment:
-    @abstractmethod
-    def execute(
-        self,
-        positions: "Positions",
-        worker: "Worker",
-        assignments: "Assignments",
-        building_positions: "BuildingPositions",
-        pending_positions: "BuildingPositions",
-        required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
-        carrying: "Carrying",
-    ) -> Optional[str]:
-        raise NotImplementedError
 
 
 """ world objects"""
