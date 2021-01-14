@@ -307,7 +307,7 @@ class Coord(ActionComponent):
     j: int
 
     @staticmethod
-    def parse(n: int) -> "ActionComponent":
+    def parse(n: int) -> "Coord":
         assert isinstance(WORLD_SIZE, int)
         ij = np.unravel_index(n, (WORLD_SIZE, WORLD_SIZE))
         return Coord(*ij)
@@ -356,14 +356,13 @@ class BuildOrder(Assignment):
         carrying: "Carrying",
     ) -> Optional[str]:
         # if positions[worker] == self.coord:
-        if True:
-            remaining = required - Counter(building_positions.values())
+        remaining = required - Counter(building_positions.values())
+        if self.building in remaining:
             building_positions[self.coord] = self.building
-            if self.building not in remaining:
-                return "Build unnecessary building"
             assignments[worker] = DoNothing()
             return
         else:
+            return "Built unnecessary building."
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
