@@ -385,6 +385,14 @@ class Agent(NNBase):
         mask = mask * -self.inf
         dists = replace(dists, a=Categorical(logits=a_logits + mask))
 
+        def check_nan(dist):
+            if torch.any(torch.isnan(dist.probs)):
+                import ipdb
+
+                ipdb.set_trace()
+
+        check_nan(dists.a)
+
         self.print("a_probs", dists.a.probs)
 
         if action.a is None:
@@ -413,6 +421,7 @@ class Agent(NNBase):
             z=z,
         )
         dists = replace(dists, dg=dg_dist)
+        check_nan(dists.dg)
         if action.dg is None:
             action = replace(action, dg=dg)
             # if can_open_gate.item():
@@ -434,6 +443,7 @@ class Agent(NNBase):
             z=z,
         )
         dists = replace(dists, delta=delta_dist)
+        check_nan(dists.delta)
 
         if action.delta is None:
             action = replace(action, delta=delta)
