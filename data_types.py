@@ -336,8 +336,8 @@ class BuildOrder(Assignment):
         carrying: "Carrying",
     ) -> Optional[str]:
         # if positions[worker] == self.coord:
-        remaining = required - Counter(building_positions.values())
-        if self.building in remaining:
+        # remaining = required - Counter(building_positions.values())
+        if True:
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
             return
