@@ -23,7 +23,7 @@ from data_types import (
     State,
     Line,
     BuildOrder,
-    CompoundAction,
+    ActionStage,
     Command,
     Targets,
     WorkerAction,
@@ -93,7 +93,7 @@ class DebugAction2(DebugAction):
 
 
 @dataclass(frozen=True)
-class DebugCompoundAction(CompoundAction):
+class DebugActionStage(ActionStage):
     action1: DebugAction1 = None
     ptr: int = 0
     active: ActionType = DebugAction1

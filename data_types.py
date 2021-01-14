@@ -415,7 +415,7 @@ OC = Optional[Coord]
 
 
 @dataclass(frozen=True)
-class CompoundAction:
+class ActionStage:
     @classmethod
     @abstractmethod
     def _building_active(cls) -> bool:
@@ -490,7 +490,7 @@ class CompoundAction:
 
     @staticmethod
     @abstractmethod
-    def _update(a: ActionComponent) -> "CompoundAction":
+    def _update(a: ActionComponent) -> "ActionStage":
         pass
 
     @classmethod
@@ -558,7 +558,7 @@ class CompoundAction:
 
     def update(
         self, *components: Union[np.ndarray, Iterable[Optional[ActionComponent]]]
-    ) -> "CompoundAction":
+    ) -> "ActionStage":
         if not components or None in [*components]:
             return NoWorkersAction()
         if any(isinstance(c, ActionComponent) for c in components):
@@ -577,7 +577,7 @@ class CompoundAction:
         return NoWorkersAction()
 
 
-class WorkerActive(CompoundAction, ABC):
+class WorkerActive(ActionStage, ABC):
     @classmethod
     def _building_active(cls) -> bool:
         return False
@@ -591,7 +591,7 @@ class WorkerActive(CompoundAction, ABC):
         return True
 
 
-class BuildingCoordActive(CompoundAction, ABC):
+class BuildingCoordActive(ActionStage, ABC):
     @classmethod
     def _building_active(cls) -> bool:
         return True
@@ -605,7 +605,7 @@ class BuildingCoordActive(CompoundAction, ABC):
         return False
 
 
-class CoordActive(CompoundAction, ABC):
+class CoordActive(ActionStage, ABC):
     @classmethod
     def _building_active(cls) -> bool:
         return False
@@ -619,7 +619,7 @@ class CoordActive(CompoundAction, ABC):
         return False
 
 
-class CoordCanOpenGate(CompoundAction, ABC):
+class CoordCanOpenGate(ActionStage, ABC):
     @staticmethod
     def _gate_openers() -> Generator[List[int], None, None]:
         assert isinstance(WORLD_SIZE, int)
@@ -705,7 +705,7 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
             [f"({i}) {b}" for i, b in enumerate(Buildings)] + ["Coord or Building"]
         )
 
-    def _update(self, *a: ActionComponent) -> "CompoundAction":
+    def _update(self, *a: ActionComponent) -> "ActionStage":
         (a,) = a  # accepts only one argument
         if isinstance(a, Coord):
             return CoordAction(workers=self.workers, coord=a)
@@ -748,7 +748,7 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
     def _prompt() -> str:
         return "Coord"
 
-    def _update(self, *a: ActionComponent) -> "CompoundAction":
+    def _update(self, *a: ActionComponent) -> "ActionStage":
         (a,) = a
         assert isinstance(a, Coord)
         return BuildingCoordAction(
@@ -840,7 +840,7 @@ class Line:
 
 @dataclass
 class State:
-    action: CompoundAction
+    action: ActionStage
     building_positions: Dict[CoordType, Building]
     pointer: int
     positions: Dict[Union[Resource, Worker], CoordType]

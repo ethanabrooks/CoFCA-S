@@ -40,7 +40,7 @@ from data_types import (
     Worker,
     State,
     Line,
-    CompoundAction,
+    ActionStage,
     RawAction,
     Buildings,
     Assimilator,
@@ -104,7 +104,7 @@ class Env(gym.Env):
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
-        action_space = CompoundAction.input_space()
+        action_space = ActionStage.input_space()
         self.action_space = spaces.MultiDiscrete(
             [
                 x
@@ -113,7 +113,7 @@ class Env(gym.Env):
                         delta=[2 * self.max_lines],
                         dg=[2],
                         ptr=[self.max_lines],
-                        a=CompoundAction.input_space().nvec,
+                        a=ActionStage.input_space().nvec,
                     )
                 )
                 for x in field
@@ -140,7 +140,7 @@ class Env(gym.Env):
 
         # noinspection PyTypeChecker
         def gate_openers():
-            for subclass in CompoundAction.subclasses():
+            for subclass in ActionStage.subclasses():
                 yield subclass.gate_openers()
 
         gate_openers = [np.array(o) for o in gate_openers()]
@@ -161,7 +161,7 @@ class Env(gym.Env):
                     lines=lines_space,
                     line_mask=line_mask_space,
                     obs=obs_space,
-                    partial_action=CompoundAction.representation_space(),
+                    partial_action=ActionStage.representation_space(),
                     resources=resources_space,
                     ptr=pointer_space,
                 )
@@ -470,7 +470,7 @@ class Env(gym.Env):
                 world[(WorldObjects.index(o), *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
-            assert isinstance(state.action, CompoundAction)
+            assert isinstance(state.action, ActionStage)
             gate_openers = self.pad_gate_openers(np.array(state.action.gate_openers()))
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
@@ -815,7 +815,7 @@ class Env(gym.Env):
                 for coord in destroy:
                     del building_positions[coord]
 
-    def step(self, action: Union[np.ndarray, CompoundAction]):
+    def step(self, action: Union[np.ndarray, ActionStage]):
         if isinstance(action, np.ndarray):
             action = RawAction.parse(*action)
         return self.iterator.send(action)
