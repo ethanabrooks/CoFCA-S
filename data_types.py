@@ -2,10 +2,10 @@ import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
 from collections import Counter
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
 
 import gym
 import numpy as np
@@ -17,6 +17,7 @@ from utils import RESET
 
 CoordType = Tuple[int, int]
 IntGenerator = Generator[int, None, None]
+IntListGenerator = Generator[List[int], None, None]
 BoolGenerator = Generator[bool, None, None]
 
 WORLD_SIZE = None
@@ -143,6 +144,7 @@ class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMe
     W1 = auto()
     W2 = auto()
     W3 = auto()
+
     # W4 = auto()
     # W5 = auto()
     # W6 = auto()
@@ -174,7 +176,7 @@ class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMe
         return positions[self] == coord
 
     @staticmethod
-    def parse(n: int) -> "ActionComponent":
+    def parse(n: int) -> "Worker":
         return Worker(n)
 
     @staticmethod
@@ -285,6 +287,13 @@ class Coord(ActionComponent):
         assert isinstance(WORLD_SIZE, int)
         ij = np.unravel_index(n, (WORLD_SIZE, WORLD_SIZE))
         return Coord(*ij)
+
+    @staticmethod
+    def possible_values():
+        assert isinstance(WORLD_SIZE, int)
+        for i in range(WORLD_SIZE):
+            for j in range(WORLD_SIZE):
+                yield i, j
 
     @staticmethod
     def space() -> spaces.Discrete:
@@ -398,6 +407,11 @@ class RawAction:
 
     def flatten(self) -> Generator[any, None, None]:
         yield from astuple(self)
+
+
+Ob = Optional[bool]
+OB = Optional[Building]
+OC = Optional[Coord]
 
 
 @dataclass(frozen=True)
