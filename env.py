@@ -737,9 +737,6 @@ class Env(gym.Env):
                     new_action = action.update(2, 1, 1, a, c)
                 else:
                     raise RuntimeError
-                if a == 0:
-                    time_remaining -= 1  # penalize agent for no_op
-                    continue
 
                 invalid_error = new_action.invalid(
                     resources=resources,
