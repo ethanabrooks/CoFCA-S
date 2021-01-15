@@ -714,9 +714,7 @@ class Env(gym.Env):
             free_coord = next(
                 (
                     coord
-                    for coord in itertools.product(
-                        range(self.world_size), range(self.world_size)
-                    )
+                    for coord in data_types.Coord.possible_values()
                     if coord not in [*building_positions.keys(), *positions.values()]
                 ),
                 None,
@@ -726,7 +724,7 @@ class Env(gym.Env):
             else:
                 if a is None:
                     # a: List[ActionComponent] = [*action.from_input()]
-                    (building,) = action.from_input()
+                    new_action = action.from_input()
 
                 elif isinstance(a, RawAction):
                     (a,), ptr = a.a, a.ptr
