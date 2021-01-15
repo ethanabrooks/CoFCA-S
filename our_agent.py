@@ -16,6 +16,13 @@ from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
 
 
+def check_nan(x):
+    if torch.any(torch.isnan(x)):
+        import ipdb
+
+        ipdb.set_trace()
+
+
 class Categorical(torch.distributions.Categorical):
     def log_prob(self, value: torch.Tensor):
         if self._validate_args:
@@ -385,13 +392,7 @@ class Agent(NNBase):
         mask = mask * -self.inf
         dists = replace(dists, a=Categorical(logits=a_logits + mask))
 
-        def check_nan(dist):
-            if torch.any(torch.isnan(dist.probs)):
-                import ipdb
-
-                ipdb.set_trace()
-
-        check_nan(dists.a)
+        check_nan(dists.a.probs)
 
         self.print("a_probs", dists.a.probs)
 
@@ -421,7 +422,7 @@ class Agent(NNBase):
             z=z,
         )
         dists = replace(dists, dg=dg_dist)
-        check_nan(dists.dg)
+        check_nan(dists.dg.probs)
         if action.dg is None:
             action = replace(action, dg=dg)
             # if can_open_gate.item():
@@ -443,7 +444,7 @@ class Agent(NNBase):
             z=z,
         )
         dists = replace(dists, delta=delta_dist)
-        check_nan(dists.delta)
+        check_nan(dists.delta.probs)
 
         if action.delta is None:
             action = replace(action, delta=delta)
@@ -514,11 +515,38 @@ class Agent(NNBase):
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
         d_probs = F.relu(d_probs)
+        check_nan(d_probs)
+        if torch.any(d_probs < 0):
+            import ipdb
+
+            ipdb.set_trace()
         unmask = 1 - line_mask
         masked = d_probs * unmask
+        check_nan(masked)
+        if torch.any(masked < 0):
+            import ipdb
+
+            ipdb.set_trace()
         masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
+        check_nan(masked)
+        if torch.any(masked < 0):
+            import ipdb
+
+            ipdb.set_trace()
         self.print("masked", masked.view(masked.size(0), 2, -1))
-        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+
+        old = ones * self.nl
+        new = masked
+        g = dg.unsqueeze(-1)
+        old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
+        probs = g * new + (1 - g) * old
+        check_nan(probs)
+        if torch.any(probs < 0):
+            import ipdb
+
+            ipdb.set_trace()
+        delta_dist = Categorical(probs=probs)
+        # delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
