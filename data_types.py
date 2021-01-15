@@ -1,11 +1,10 @@
 import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
-from collections import Counter
 from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import gym
 import numpy as np
@@ -335,14 +334,11 @@ class BuildOrder(Assignment):
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
     ) -> Optional[str]:
-        # if positions[worker] == self.coord:
-        # remaining = required - Counter(building_positions.values())
-        if True:
+        if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
             return
         else:
-            return "Built unnecessary building."
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
