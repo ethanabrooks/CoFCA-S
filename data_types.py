@@ -82,7 +82,25 @@ class ActionComponent(metaclass=ActionComponentMeta):
 ActionComponentGenerator = Generator[ActionComponent, None, None]
 
 
-class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMeta):
+class Assignment:
+    @abstractmethod
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        raise NotImplementedError
+
+
+class Building(
+    WorldObject, ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta
+):
     def __eq__(self, other):
         return type(self) == type(other)
 
@@ -99,6 +117,28 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     @abstractmethod
     def cost(self) -> "Resources":
         pass
+
+    def execute(
+        self,
+        positions: "Positions",
+        worker: "Worker",
+        assignments: "Assignments",
+        building_positions: "BuildingPositions",
+        pending_positions: "BuildingPositions",
+        required: typing.Counter["Building"],
+        resources: typing.Counter["Resource"],
+        carrying: "Carrying",
+    ) -> Optional[str]:
+        remaining = required - Counter(building_positions.values())
+        if self not in remaining:
+            return f"Built unnecessary building ({self})."
+        for i, j in Coord.possible_values():
+            occupied = {*building_positions.keys(), positions.values()}
+            if (i, j) not in occupied:
+                building_positions[i, j] = self
+                assignments[worker] = DoNothing()
+                return
+        return "All coordinates occcupied."
 
     def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
         return self == building_positions.get(coord)
@@ -627,18 +667,16 @@ class NoWorkersAction(ActionStage):
 
     def _update(
         self, action: CompoundAction
-    ) -> Union["WorkersAction", "NoWorkersAction"]:
-        if None in (action.building, action.coord):
-            return NoWorkersAction()
+    ) -> Union["BuildingCoordAction", "NoWorkersAction"]:
         return BuildingCoordAction(
-            workers=[*action.workers()], building=action.building, coord=action.coord
+            workers=[Worker.W1], building=action.building, coord=action.coord
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
-        yield from ()
+        yield Worker.W1
 
     def action_components(self) -> CompoundAction:
         return CompoundAction()
@@ -649,7 +687,8 @@ class HasWorkers(ActionStage, ABC):
     workers: List[Worker]
 
     def action_components(self) -> CompoundAction:
-        return CompoundAction(worker_values=[w in self.workers for w in Worker])
+        return CompoundAction()
+        # return CompoundAction(workers=[w in self.workers for w in Worker])
 
     def get_workers(self) -> WorkerGenerator:
         yield from self.workers
