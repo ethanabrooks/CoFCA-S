@@ -483,13 +483,13 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 class ActionStage:
     def __update(self, action: CompoundAction) -> "ActionStage":
         if None in [*action.worker_values, action.building, action.coord]:
-            return NoWorkersAction()
+            return DoNothingAction()
         return self._update(action)
 
     @staticmethod
     def _children() -> List[type]:
         return [
-            NoWorkersAction,
+            DoNothingAction,
             # WorkersAction,
             # BuildingAction,
             # CoordAction,
@@ -596,7 +596,7 @@ class CoordCanOpenGate(ActionStage, ABC):
 
 
 @dataclass(frozen=True)
-class NoWorkersAction(ActionStage):
+class DoNothingAction(ActionStage):
     @staticmethod
     def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
@@ -634,9 +634,9 @@ class NoWorkersAction(ActionStage):
 
     def _update(
         self, action: CompoundAction
-    ) -> Union["WorkersAction", "NoWorkersAction"]:
+    ) -> Union["WorkersAction", "DoNothingAction"]:
         if None in (action.building, action.coord):
-            return NoWorkersAction()
+            return DoNothingAction()
         return BuildingCoordAction(
             workers=[*action.workers()], building=action.building, coord=action.coord
         )
@@ -696,7 +696,7 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
     def _update(self, action: CompoundAction) -> "ActionStage":
         if (action.coord, action.building) == (None, None):
             assert not any(action.workers)
-            return NoWorkersAction()
+            return DoNothingAction()
         if action.coord is not None:
             assert not any([*action.workers, action.building])
             return CoordAction(workers=self.workers, coord=action.coord)
@@ -710,7 +710,7 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
 
 
 @dataclass(frozen=True)
-class CoordAction(HasWorkers, NoWorkersAction):
+class CoordAction(HasWorkers, DoNothingAction):
     coord: Coord
 
     @staticmethod
@@ -753,7 +753,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
     def _update(self, action: CompoundAction) -> "ActionStage":
         assert action.building is None
         if action.coord is None:
-            return NoWorkersAction()
+            return DoNothingAction()
         return BuildingCoordAction(
             workers=self.workers, building=self.building, coord=action.coord
         )
@@ -783,7 +783,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
 
 
 @dataclass(frozen=True)
-class BuildingCoordAction(HasWorkers, NoWorkersAction):
+class BuildingCoordAction(HasWorkers, DoNothingAction):
     building: Building
     coord: Coord
 

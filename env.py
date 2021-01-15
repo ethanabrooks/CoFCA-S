@@ -26,7 +26,7 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
-    NoWorkersAction,
+    DoNothingAction,
     Carrying,
     BuildingPositions,
     Assignment,
@@ -670,7 +670,7 @@ class Env(gym.Env):
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
         destroy = []
-        action = NoWorkersAction()
+        action = DoNothingAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
 
