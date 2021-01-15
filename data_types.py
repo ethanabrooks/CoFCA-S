@@ -610,7 +610,7 @@ class ActionStage:
         return
 
     @classmethod
-    def mask(cls) -> np.ndarray:
+    def _mask(cls) -> np.ndarray:
         def unpadded_generator() -> Generator[List[bool], None, None]:
             # for _ in Worker:
             #     yield [
@@ -635,7 +635,7 @@ class ActionStage:
 
     @classmethod
     @lru_cache
-    def _mask(cls) -> np.ndarray:
+    def mask(cls) -> np.ndarray:
         nvec = CompoundAction.input_space().nvec
         mask = np.ones((len(nvec), max(nvec)))
         R = np.arange(len(nvec))
