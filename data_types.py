@@ -437,7 +437,59 @@ OC = Optional[Coord]
 
 
 @dataclass(frozen=True)
+class CompoundAction:
+    building: OB = None
+    # coord: OC = None
+
+    @staticmethod
+    def _worker_values() -> List[Ob]:
+        return [None, False, True]
+
+    @classmethod
+    def input_space(cls):
+        return spaces.MultiDiscrete([1 + Building.space().n])  # , 1 + Coord.space().n])
+
+    @classmethod
+    def parse(cls, b: int) -> "CompoundAction":
+        b = int(b)
+        if b == 0:
+            return CompoundAction()
+        return CompoundAction(
+            building=Building.parse(b - 1)
+        )  # , coord=Coord.parse(c - 1))
+
+    @classmethod
+    def representation_space(cls):
+        return spaces.MultiDiscrete([1 + len(Buildings)])  # , 1 + Coord.space().n])
+
+    def to_input_int(self) -> IntGenerator:
+        for attr in [self.building]:  # , self.coord]:
+            yield 0 if attr is None else 1 + attr.to_int()
+
+    def to_representation_ints(self) -> IntGenerator:
+        yield from self.to_input_int()
+
+
+CompoundActionGenerator = Generator[CompoundAction, None, None]
+
+
+@dataclass(frozen=True)
 class ActionStage:
+    def __update(self, action: CompoundAction) -> "ActionStage":
+        if action.building is None:
+            return NoWorkersAction()
+        return self._update(action)
+
+    @staticmethod
+    def _children() -> List[type]:
+        return [
+            NoWorkersAction,
+            # WorkersAction,
+            BuildingAction,
+            # CoordAction,
+            # BuildingCoordAction,
+        ]
+
     @classmethod
     @abstractmethod
     def _building_active(cls) -> bool:
@@ -445,7 +497,7 @@ class ActionStage:
 
     @staticmethod
     @abstractmethod
-    def _gate_openers() -> Generator[List[int], None, None]:
+    def _gate_openers() -> CompoundActionGenerator:
         pass
 
     @classmethod
@@ -467,33 +519,14 @@ class ActionStage:
         except AttributeError:
             return None
 
-    @classmethod
-    def mask(cls) -> np.ndarray:
-        def unpadded_generator() -> Generator[List[bool], None, None]:
-            # for _ in Worker:
-            #     yield [
-            #         cls._worker_active(),  # worker active: mask no-op
-            #         *[not cls._worker_active() for _ in range(2)],
-            #     ]
-            yield [
-                False,  # always allowed to cancel
-                # *[not cls._coord_active() for _ in range(Coord.space().n)],
-                *[not cls._building_active() for _ in range(Building.space().n)],
-            ]
-
-        unpadded = [*unpadded_generator()]
-        size = max([len(m) for m in unpadded])
-        padded = [
-            np.pad(
-                m, pad_width=[(0, size - len(m))], mode="constant", constant_values=True
-            )
-            for m in unpadded
-        ]
-        return np.stack(padded)
+    @staticmethod
+    @abstractmethod
+    def _parse_string(s: str) -> CompoundAction:
+        pass
 
     @staticmethod
     @abstractmethod
-    def _parse_string(s: str) -> ActionComponentGenerator:
+    def _permitted_values() -> CompoundActionGenerator:
         pass
 
     @staticmethod
@@ -537,13 +570,18 @@ class ActionStage:
     def gate_openers(cls) -> List[List[int]]:
         return [[0], *([i + 1] for i in range(len(Buildings)))]
 
-    def from_input(self) -> List[ActionComponent]:
-        while True:
+    def from_input(self) -> "ActionStage":
+        compound_action = None
+        while compound_action is None:
             string = input(self._prompt() + "\n")
-            try:
-                return [*self._parse_string(string)]
-            except InvalidInput:
-                pass
+            if string:
+                try:
+                    compound_action = self._parse_string(string)
+                except InvalidInput as e:
+                    print(e)
+            else:
+                compound_action = CompoundAction()
+        return self._update(compound_action)
 
     def get_workers(self) -> WorkerGenerator:
         try:
@@ -570,6 +608,41 @@ class ActionStage:
         positions: Positions,
     ) -> Optional[str]:
         return
+
+    @classmethod
+    def mask(cls) -> np.ndarray:
+        def unpadded_generator() -> Generator[List[bool], None, None]:
+            # for _ in Worker:
+            #     yield [
+            #         cls._worker_active(),  # worker active: mask no-op
+            #         *[not cls._worker_active() for _ in range(2)],
+            #     ]
+            yield [
+                False,  # always allowed to cancel
+                # *[not cls._coord_active() for _ in range(Coord.space().n)],
+                *[not cls._building_active() for _ in range(Building.space().n)],
+            ]
+
+        unpadded = [*unpadded_generator()]
+        size = max([len(m) for m in unpadded])
+        padded = [
+            np.pad(
+                m, pad_width=[(0, size - len(m))], mode="constant", constant_values=True
+            )
+            for m in unpadded
+        ]
+        return np.stack(padded)
+
+    @classmethod
+    @lru_cache
+    def _mask(cls) -> np.ndarray:
+        nvec = CompoundAction.input_space().nvec
+        mask = np.ones((len(nvec), max(nvec)))
+        R = np.arange(len(nvec))
+        for permitted_values in cls._permitted_values():
+            unmask = [*permitted_values.to_input_int()]
+            mask[R, unmask] = 0
+        return mask
 
     @classmethod
     def representation_space(cls) -> spaces.MultiDiscrete:
@@ -681,6 +754,13 @@ class NoWorkersAction(WorkerActive):
         #     yield Worker(int(i))
 
     @staticmethod
+    def _permitted_values() -> CompoundActionGenerator:
+        yield CompoundAction()
+        # for i, j in Coord.possible_values():
+        for building in Buildings:
+            yield CompoundAction(building=building)
+
+    @staticmethod
     def _prompt() -> str:
         return "Building index:"
 
@@ -720,6 +800,13 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
                 yield parse_coord(s)
             except ValueError:
                 raise InvalidInput
+
+    @staticmethod
+    def _permitted_values() -> CompoundActionGenerator:
+        for i, j in Coord.possible_values():
+            yield CompoundAction(coord=Coord(i, j))
+        for building in Buildings:
+            yield CompoundAction(building=building)
 
     @staticmethod
     def _prompt() -> str:
