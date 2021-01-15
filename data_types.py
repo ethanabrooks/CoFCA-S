@@ -417,6 +417,7 @@ class CompoundAction:
     worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
     building: OB = None
     coord: OC = None
+    is_op: bool = True
 
     @staticmethod
     def _worker_values() -> List[Ob]:
@@ -428,23 +429,27 @@ class CompoundAction:
 
     @classmethod
     def parse(cls, *values: int) -> "CompoundAction":
-        *ws, b, c = map(int, values)
+        o, *ws, b, c = map(int, values)
+        assert o in (0, 1)
+        is_op = bool(o)
         if 0 in [*ws, b, c]:
-            return CompoundAction()
+            return CompoundAction(is_op=is_op)
         return CompoundAction(
             worker_values=[cls._worker_values()[w] for w in ws],
             building=Building.parse(b - 1),
             coord=Coord.parse(c - 1),
+            is_op=is_op,
         )
 
     @classmethod
-    def possible_worker_values(cls) -> Generator[Tuple[bool, bool], None, None]:
+    def possible_worker_values(cls) -> Generator[tuple, None, None]:
         yield from itertools.product(cls._worker_values(), repeat=len(Worker))
 
     @classmethod
     def representation_space(cls):
         return spaces.MultiDiscrete(
             [
+                2,
                 *[len(cls._worker_values())] * len(Worker),
                 1 + Building.space().n,
                 1 + Coord.space().n,
@@ -454,10 +459,12 @@ class CompoundAction:
     def to_input_int(self) -> IntGenerator:
         # for w in self.worker_values:
         #     yield self._worker_values().index(w)
+        yield int(self.is_op)
         for attr in [self.building]:  # , self.coord]:
             yield 0 if attr is None else 1 + attr.to_int()
 
     def to_representation_ints(self) -> IntGenerator:
+        yield int(self.is_op)
         for w in self.worker_values:
             yield self._worker_values().index(w)
         for attr in [self.building, self.coord]:
