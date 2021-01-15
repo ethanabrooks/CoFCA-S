@@ -727,14 +727,14 @@ class Env(gym.Env):
                     new_action = action.from_input()
 
                 elif isinstance(a, RawAction):
-                    (a,), ptr = a.a, a.ptr
-                    a: int
+                    a, ptr = a.a, a.ptr
+                    a: List[int]
                     c = 1 + int(
                         np.ravel_multi_index(
                             free_coord, (self.world_size, self.world_size)
                         )
                     )
-                    new_action = action.update(2, 1, 1, a, c)
+                    new_action = action.update(2, 1, 1, *a, c)
                 else:
                     raise RuntimeError
 
@@ -746,10 +746,6 @@ class Env(gym.Env):
                     positions=positions,
                 )
 
-                building = Buildings[int(a) - 1]
-
-                # new_action = action.update(*a)
-                assert isinstance(building, Building)
                 if invalid_error is None:
                     action = new_action
             if invalid_error is not None:
