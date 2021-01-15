@@ -1,11 +1,10 @@
-import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
 from collections import Counter
-from dataclasses import dataclass, astuple, replace, field
+from dataclasses import dataclass, astuple, replace
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import gym
 import numpy as np

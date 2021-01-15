@@ -1,7 +1,6 @@
 from collections import Hashable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from enum import Enum, auto, unique
 
 import numpy as np
 import torch
