@@ -647,8 +647,7 @@ class HasWorkers(ActionStage, ABC):
     workers: List[Worker]
 
     def action_components(self) -> CompoundAction:
-        return CompoundAction()
-        # return CompoundAction(workers=[w in self.workers for w in Worker])
+        return CompoundAction(worker_values=[w in self.workers for w in Worker])
 
     def get_workers(self) -> WorkerGenerator:
         yield from self.workers
