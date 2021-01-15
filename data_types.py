@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
 
 import gym
 import numpy as np

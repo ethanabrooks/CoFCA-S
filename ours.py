@@ -22,7 +22,6 @@ from wrappers import VecPyTorch
 
 @dataclass
 class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
-    debug: bool = False
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 13
