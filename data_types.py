@@ -490,19 +490,9 @@ class ActionStage:
             # BuildingCoordAction,
         ]
 
-    @classmethod
-    @abstractmethod
-    def _building_active(cls) -> bool:
-        pass
-
     @staticmethod
     @abstractmethod
     def _gate_openers() -> CompoundActionGenerator:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _coord_active(cls) -> bool:
         pass
 
     def _get_building(self) -> Optional[Building]:
@@ -546,11 +536,6 @@ class ActionStage:
     @staticmethod
     @abstractmethod
     def _update(action: CompoundAction) -> "ActionStage":
-        pass
-
-    @classmethod
-    @abstractmethod
-    def _worker_active(cls) -> bool:
         pass
 
     @abstractmethod
@@ -610,30 +595,6 @@ class ActionStage:
         return
 
     @classmethod
-    def _mask(cls) -> np.ndarray:
-        def unpadded_generator() -> Generator[List[bool], None, None]:
-            # for _ in Worker:
-            #     yield [
-            #         cls._worker_active(),  # worker active: mask no-op
-            #         *[not cls._worker_active() for _ in range(2)],
-            #     ]
-            yield [
-                False,  # always allowed to cancel
-                # *[not cls._coord_active() for _ in range(Coord.space().n)],
-                *[not cls._building_active() for _ in range(Building.space().n)],
-            ]
-
-        unpadded = [*unpadded_generator()]
-        size = max([len(m) for m in unpadded])
-        padded = [
-            np.pad(
-                m, pad_width=[(0, size - len(m))], mode="constant", constant_values=True
-            )
-            for m in unpadded
-        ]
-        return np.stack(padded)
-
-    @classmethod
     @lru_cache
     def mask(cls) -> np.ndarray:
         nvec = CompoundAction.input_space().nvec
@@ -655,48 +616,6 @@ class ActionStage:
         return self.__update(CompoundAction.parse(*components))
 
 
-class WorkerActive(ActionStage, ABC):
-    @classmethod
-    def _building_active(cls) -> bool:
-        return False
-
-    @classmethod
-    def _coord_active(cls) -> bool:
-        return False
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return True
-
-
-class BuildingCoordActive(ActionStage, ABC):
-    @classmethod
-    def _building_active(cls) -> bool:
-        return True
-
-    @classmethod
-    def _coord_active(cls) -> bool:
-        return True
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return False
-
-
-class CoordActive(ActionStage, ABC):
-    @classmethod
-    def _building_active(cls) -> bool:
-        return False
-
-    @classmethod
-    def _coord_active(cls) -> bool:
-        return True
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return False
-
-
 class CoordCanOpenGate(ActionStage, ABC):
     @staticmethod
     def _gate_openers() -> Generator[List[int], None, None]:
@@ -707,20 +626,7 @@ class CoordCanOpenGate(ActionStage, ABC):
 
 
 @dataclass(frozen=True)
-# class NoWorkersAction(WorkerActive): TODO
-class NoWorkersAction(WorkerActive):
-    @classmethod
-    def _building_active(cls) -> bool:
-        return True
-
-    @classmethod
-    def _coord_active(cls) -> bool:
-        return False
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return False
-
+class NoWorkersAction(ActionStage):
     @staticmethod
     def _gate_openers() -> Generator[List[int], None, None]:
         # selecting no workers is a no-op that allows gate to open
@@ -763,12 +669,8 @@ def parse_coord(s):
 
 
 @dataclass(frozen=True)
-class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
+class WorkersAction(CoordCanOpenGate):
     workers: List[Worker]
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return False
 
     @staticmethod
     def _parse_string(s: str) -> ActionComponentGenerator:
@@ -823,7 +725,7 @@ class CoordAction(NoWorkersAction):
 
 
 @dataclass(frozen=True)
-class BuildingAction(CoordActive, CoordCanOpenGate):
+class BuildingAction(NoWorkersAction, CoordCanOpenGate):
     workers: List[Worker]
     building: Building
 
@@ -845,10 +747,6 @@ class BuildingAction(CoordActive, CoordCanOpenGate):
         return BuildingCoordAction(
             workers=self.workers, building=self.building, coord=a
         )
-
-    @classmethod
-    def _worker_active(cls) -> bool:
-        return False
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
