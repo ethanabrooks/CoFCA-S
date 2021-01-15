@@ -138,18 +138,6 @@ class Env(gym.Env):
         resources_space = spaces.MultiDiscrete([sys.maxsize] * 2)
         pointer_space = spaces.Discrete(self.max_lines)
 
-        # noinspection PyTypeChecker
-        def gate_openers():
-            for subclass in ActionStage.subclasses():
-                yield subclass.gate_openers()
-
-        gate_openers = [np.array(o) for o in gate_openers()]
-        self.gate_opener_shape = get_max_shape(*gate_openers)
-        padded = np.stack([self.pad_gate_openers(o) for o in gate_openers])
-        # assert np.all(np.min(padded, axis=0) == 0)
-        gate_opener_space = spaces.MultiDiscrete(
-            np.max(padded, axis=0) + 1
-        )  # +1 because upper bound is not inclusive
         action_mask_space = spaces.MultiBinary(
             action_space.nvec.max() * action_space.nvec.size
         )
@@ -157,7 +145,6 @@ class Env(gym.Env):
             asdict(
                 Obs(
                     action_mask=action_mask_space,
-                    gate_openers=gate_opener_space,
                     lines=lines_space,
                     line_mask=line_mask_space,
                     obs=obs_space,
@@ -471,7 +458,6 @@ class Env(gym.Env):
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, ActionStage)
-            gate_openers = self.pad_gate_openers(np.array(state.action.gate_openers()))
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
@@ -481,7 +467,6 @@ class Env(gym.Env):
                         line_mask=line_mask,
                         lines=preprocessed,
                         action_mask=state.action.mask().ravel(),
-                        gate_openers=gate_openers,
                         partial_action=partial_action,
                         ptr=int(state.pointer),
                     )
@@ -497,11 +482,6 @@ class Env(gym.Env):
                     space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
-
-    def pad_gate_openers(self, gate_openers):
-        pad_amount, too_short = self.gate_opener_shape - np.array(gate_openers.shape)
-        assert not too_short
-        return np.pad(gate_openers, [(0, pad_amount), (0, 0)], mode="edge")
 
     def place_objects(
         self, n_lines: int

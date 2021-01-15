@@ -389,12 +389,8 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        gate_openers_shape = self.obs_spaces.gate_openers.nvec.shape
-        gate_openers = state.gate_openers.view(-1, *gate_openers_shape)[R]
-        matches = gate_openers == action.a.unsqueeze(1)
-        assert isinstance(matches, torch.Tensor)
         # noinspection PyArgumentList
-        can_open_gate = matches.all(-1).any(-1) * ((1 - line_mask[p, R]).sum(-1) > 1)
+        can_open_gate = (1 - line_mask[p, R]).sum(-1) > 1
         dg, dg_dist = self.get_dg(
             can_open_gate=can_open_gate,
             ones=ones,
