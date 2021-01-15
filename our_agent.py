@@ -1,7 +1,6 @@
 from collections import Hashable
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from enum import Enum, auto, unique
 
 import numpy as np
 import torch
@@ -227,7 +226,7 @@ class Agent(NNBase):
         )
 
     def get_gru_in_size(self):
-        return self.instruction_embed_size
+        return self.instruction_embed_size + self.action_embed_size
 
     def build_d_gate(self):
         return self.init_(nn.Linear(self.z_size, 2))
@@ -337,12 +336,14 @@ class Agent(NNBase):
 
         x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
-        embedded_lower = self.embed_action(
+        embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
         m = self.build_m(M, R, p)
-        h, rnn_hxs = self._forward_gru(m, rnn_hxs, masks)
-        z1 = torch.cat([x, resources, embedded_lower, h], dim=-1)
+        h, rnn_hxs = self._forward_gru(
+            torch.cat([m, embedded_action], dim=-1), rnn_hxs, masks
+        )
+        z1 = torch.cat([x, resources, embedded_action, h], dim=-1)
 
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
         rolled = torch.cat([rolled, _z], dim=-1)
