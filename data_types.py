@@ -526,8 +526,8 @@ class ActionStage:
             if string:
                 try:
                     compound_action = self._parse_string(string)
-                except InvalidInput:
-                    pass
+                except InvalidInput as e:
+                    print(e)
             else:
                 compound_action = CompoundAction()
         return self._update(compound_action)
@@ -671,8 +671,8 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
                 raise InvalidInput
             try:
                 building = Buildings[n]
-            except IndexError:
-                raise InvalidInput
+            except IndexError as e:
+                raise InvalidInput(e)
             return CompoundAction(building=building)
         return CompoundAction(coord=Coord(i, j))
 

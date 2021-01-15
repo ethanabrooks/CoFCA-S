@@ -28,12 +28,7 @@ class Categorical(torch.distributions.Categorical):
         # gather = log_pmf.gather(-1, value).squeeze(-1)
         R = torch.arange(value.size(0))
         log_pmf = log_pmf.view(-1, log_pmf.size(-1))
-        try:
-            log_prob = log_pmf[R, value.squeeze(-1)]  # deterministic
-        except RuntimeError:
-            import ipdb
-
-            ipdb.set_trace()
+        log_prob = log_pmf[R, value.squeeze(-1)]  # deterministic
         return log_prob.view(shape)
 
 
@@ -53,13 +48,6 @@ def get_obs_sections(obs_spaces):
 def gate(g, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
     return Categorical(probs=g * new + (1 - g) * old)
-
-
-@unique
-class ZG(Enum):
-    cat = auto()
-    multiply = auto()
-    no_z = auto()
 
 
 @dataclass
@@ -156,6 +144,8 @@ class Agent(NNBase):
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+
+        compound_action_size = CompoundAction.input_space().nvec.size
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
