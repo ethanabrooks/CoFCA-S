@@ -728,7 +728,13 @@ class Env(gym.Env):
 
                 elif isinstance(a, RawAction):
                     (a,), ptr = a.a, a.ptr
-                    a = int(a)
+                    a: int
+                    c = int(
+                        np.ravel_multi_index(
+                            free_coord, (self.world_size, self.world_size)
+                        )
+                    )
+                    new_action = action.update(2, 1, 1, a, c)
                 else:
                     raise RuntimeError
                 if a == 0:
@@ -742,6 +748,7 @@ class Env(gym.Env):
                 new_action = data_types.BuildingCoordAction(
                     [Worker.W1], building, data_types.Coord(*free_coord)
                 )  # TODO
+
                 invalid_error = new_action.invalid(
                     resources=resources,
                     dependencies=dependencies,
