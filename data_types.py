@@ -545,7 +545,7 @@ class ActionStage:
 
     @staticmethod
     @abstractmethod
-    def _update(a: ActionComponent) -> "ActionStage":
+    def _update(action: CompoundAction) -> "ActionStage":
         pass
 
     @classmethod
@@ -651,25 +651,8 @@ class ActionStage:
             #     [*(3 for _ in Worker), 1 + len(Buildings), 1 + Coord.space().n]
         )
 
-    def update(
-        self, *components: Union[np.ndarray, Iterable[Optional[ActionComponent]]]
-    ) -> "ActionStage":
-        if not components or None in [*components]:
-            return NoWorkersAction()
-        if any(isinstance(c, ActionComponent) for c in components):
-            return self._update(*components)
-        *worker_component, n = np.array(components) - 1  # -1 to remove no-op
-        if self._worker_active():
-            return self._update(
-                *[Worker.parse(i) for i, w in enumerate(worker_component, 1) if w]
-            )
-        if self._coord_active() and Coord.space().contains(n):
-            return self._update(Coord.parse(n))
-        n -= Coord.space().n
-        if self._building_active() and Building.space().contains(n):
-            return self._update(Building.parse(n))
-        assert not (Coord.space().contains(n) or Building.space().contains(n))
-        return NoWorkersAction()
+    def update(self, *components: int) -> "ActionStage":
+        return self.__update(CompoundAction.parse(*components))
 
 
 class WorkerActive(ActionStage, ABC):
@@ -745,13 +728,12 @@ class NoWorkersAction(WorkerActive):
         yield [*range(len(Buildings))]
 
     @staticmethod
-    def _parse_string(s: str) -> ActionComponentGenerator:
+    def _parse_string(s: str) -> CompoundAction:
         try:
-            yield Buildings[int(s)]
-        except ValueError:
-            raise InvalidInput()
-        # for i in s.split():
-        #     yield Worker(int(i))
+            b = int(s)
+        except ValueError as e:
+            raise InvalidInput(e)
+        return CompoundAction(building=Building.parse(b))  # , coord=Coord(i, j))
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
@@ -762,15 +744,12 @@ class NoWorkersAction(WorkerActive):
 
     @staticmethod
     def _prompt() -> str:
-        return "Building index:"
+        return "Building:"
 
     def _update(
-        self, *workers: ActionComponent
-    ) -> Union["WorkersAction", "NoWorkersAction"]:
-        workers = [*workers]
-        if not workers:
-            return NoWorkersAction()
-        return WorkersAction(workers)
+        self, action: CompoundAction
+    ) -> Union["BuildingAction", "NoWorkersAction"]:
+        return BuildingAction(workers=[Worker.W1], building=action.building)
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
@@ -814,14 +793,17 @@ class WorkersAction(BuildingCoordActive, CoordCanOpenGate):
             [f"({i}) {b}" for i, b in enumerate(Buildings)] + ["Coord or Building"]
         )
 
-    def _update(self, *a: ActionComponent) -> "ActionStage":
-        (a,) = a  # accepts only one argument
-        if isinstance(a, Coord):
-            return CoordAction(workers=self.workers, coord=a)
-        elif isinstance(a, Building):
-            return BuildingAction(workers=self.workers, building=a)
-        else:
-            raise RuntimeError
+    def _update(self, action: CompoundAction) -> "ActionStage":
+        if (action.coord, action.building) == (None, None):
+            assert not any(action.workers)
+            return NoWorkersAction()
+        if action.coord is not None:
+            assert not any([*action.workers, action.building])
+            return CoordAction(workers=self.workers, coord=action.coord)
+        if action.building is not None:
+            assert not any([*action.workers, action.coord])
+            return BuildingAction(workers=self.workers, building=action.building)
+        raise RuntimeError
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
