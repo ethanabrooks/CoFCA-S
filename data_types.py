@@ -605,10 +605,14 @@ class NoWorkersAction(ActionStage):
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
         try:
-            b = int(s)
-        except ValueError as e:
-            raise InvalidInput(e)
-        return CompoundAction(building=Building.parse(b))  # , coord=Coord(i, j))
+            *ws, b, i, j = map(int, s.split())
+        except ValueError:
+            raise InvalidInput
+        return CompoundAction(
+            worker_values=[w.value in ws for w in Worker],
+            building=Building.parse(b),
+            coord=Coord(i, j),
+        )
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
