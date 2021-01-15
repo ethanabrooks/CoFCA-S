@@ -93,7 +93,7 @@ class DebugAction2(DebugAction):
 
 
 @dataclass(frozen=True)
-class DebugActionStage(ActionStage):
+class DebugCompoundAction(ActionStage):
     action1: DebugAction1 = None
     ptr: int = 0
     active: ActionType = DebugAction1

@@ -720,23 +720,49 @@ class Env(gym.Env):
 
             raw_action: Optional[RawAction]
             # noinspection PyTypeChecker
-            raw_action = yield state, render
-            if raw_action is None:
-                new_action = action.from_input()
-            elif isinstance(raw_action, RawAction):
-                a, ptr = raw_action.a, int(raw_action.ptr)
-                new_action = action.update(*a)
-            else:
-                raise RuntimeError
+            a = yield state, render
 
-            error_msg = new_action.invalid(
-                resources=resources,
-                dependencies=dependencies,
-                building_positions=building_positions,
-                pending_positions=pending_positions,
-                positions=positions,
+            free_coord = next(
+                (
+                    coord
+                    for coord in data_types.Coord.possible_values()
+                    if coord not in [*building_positions.keys(), *positions.values()]
+                ),
+                None,
             )
-            if error_msg is not None:
+            if free_coord is None:
+                invalid_error = "No free coordinates"
+            else:
+                if a is None:
+                    # a: List[ActionComponent] = [*action.from_input()]
+                    new_action = action.from_input()
+
+                elif isinstance(a, RawAction):
+                    a, ptr = a.a, a.ptr
+                    a: List[int]
+                    c = 1 + int(
+                        np.ravel_multi_index(
+                            free_coord, (self.world_size, self.world_size)
+                        )
+                    )
+                    new_action = action.update(2, 1, 1, *a, c)
+                else:
+                    raise RuntimeError
+                if a == 0:
+                    time_remaining -= 1  # penalize agent for no_op
+                    continue
+
+                invalid_error = new_action.invalid(
+                    resources=resources,
+                    dependencies=dependencies,
+                    building_positions=building_positions,
+                    pending_positions=pending_positions,
+                    positions=positions,
+                )
+
+                if invalid_error is None:
+                    action = new_action
+            if invalid_error is not None:
                 time_remaining -= 1  # penalize agent for invalid
                 continue
 
