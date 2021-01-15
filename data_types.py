@@ -508,9 +508,9 @@ class ActionStage:
         return [
             NoWorkersAction,
             # WorkersAction,
-            BuildingAction,
+            # BuildingAction,
             # CoordAction,
-            # BuildingCoordAction,
+            BuildingCoordAction,
         ]
 
     @staticmethod
@@ -647,8 +647,10 @@ class NoWorkersAction(ActionStage):
 
     def _update(
         self, action: CompoundAction
-    ) -> Union["BuildingAction", "NoWorkersAction"]:
-        return BuildingAction(workers=[Worker.W1], building=action.building)
+    ) -> Union["BuildingCoordAction", "NoWorkersAction"]:
+        return BuildingCoordAction(
+            workers=[Worker.W1], building=action.building, coord=action.coord
+        )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
