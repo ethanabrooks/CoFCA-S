@@ -741,14 +741,6 @@ class Env(gym.Env):
                     time_remaining -= 1  # penalize agent for no_op
                     continue
 
-                building = Buildings[int(a) - 1]
-
-                # new_action = action.update(*a)
-                assert isinstance(building, Building)
-                new_action = data_types.BuildingCoordAction(
-                    [Worker.W1], building, data_types.Coord(*free_coord)
-                )  # TODO
-
                 invalid_error = new_action.invalid(
                     resources=resources,
                     dependencies=dependencies,
