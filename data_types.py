@@ -414,14 +414,14 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
-    worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
+    worker_values: List[Ob] = field(default_factory=lambda: [False for _ in Worker])
     building: OB = None
     coord: OC = None
     is_op: bool = True
 
     @staticmethod
     def _worker_values() -> List[Ob]:
-        return [None, False, True]
+        return [False, True]
 
     @classmethod
     def input_space(cls):
@@ -432,7 +432,7 @@ class CompoundAction:
         o, *ws, b, c = map(int, values)
         assert o in (0, 1)
         is_op = bool(o)
-        if 0 in [*ws, b, c]:
+        if 0 in [b, c]:
             return CompoundAction(is_op=is_op)
         return CompoundAction(
             worker_values=[cls._worker_values()[w] for w in ws],
