@@ -636,7 +636,7 @@ class NoWorkersAction(ActionStage):
         return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
-        yield Worker.W1
+        yield from ()
 
     def action_components(self) -> CompoundAction:
         return CompoundAction()
