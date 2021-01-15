@@ -438,9 +438,8 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
-    worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
     building: OB = None
-    coord: OC = None
+    # coord: OC = None
 
     @staticmethod
     def _worker_values() -> List[Ob]:
@@ -448,49 +447,27 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete([1 + Building.space().n])
+        return spaces.MultiDiscrete([1 + Building.space().n])  # , 1 + Coord.space().n])
 
     @classmethod
-    def parse(cls, *values: int) -> "CompoundAction":
-        *ws, b, c = map(int, values)
-        if 0 in [*ws, b, c]:
+    def parse(cls, b: int) -> "CompoundAction":
+        b = int(b)
+        if b == 0:
             return CompoundAction()
         return CompoundAction(
-            worker_values=[cls._worker_values()[w] for w in ws],
-            building=Building.parse(b - 1),
-            coord=Coord.parse(c - 1),
-        )
-
-    @classmethod
-    def possible_worker_values(cls) -> Generator[Tuple[bool, bool], None, None]:
-        yield from itertools.product(cls._worker_values(), repeat=len(Worker))
+            building=Building.parse(b - 1)
+        )  # , coord=Coord.parse(c - 1))
 
     @classmethod
     def representation_space(cls):
-        return spaces.MultiDiscrete(
-            [
-                *[len(cls._worker_values())] * len(Worker),
-                1 + Building.space().n,
-                1 + Coord.space().n,
-            ]
-        )
+        return spaces.MultiDiscrete([1 + len(Buildings)])  # , 1 + Coord.space().n])
 
     def to_input_int(self) -> IntGenerator:
-        # for w in self.worker_values:
-        #     yield self._worker_values().index(w)
         for attr in [self.building]:  # , self.coord]:
             yield 0 if attr is None else 1 + attr.to_int()
 
     def to_representation_ints(self) -> IntGenerator:
-        for w in self.worker_values:
-            yield self._worker_values().index(w)
-        for attr in [self.building, self.coord]:
-            yield 0 if attr is None else 1 + attr.to_int()
-
-    def workers(self) -> Generator[Worker, None, None]:
-        for worker, value in zip(Worker, self.worker_values):
-            if value:
-                yield worker
+        yield from self.to_input_int()
 
 
 CompoundActionGenerator = Generator[CompoundAction, None, None]
@@ -499,7 +476,7 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 @dataclass(frozen=True)
 class ActionStage:
     def __update(self, action: CompoundAction) -> "ActionStage":
-        if None in [*action.worker_values, action.building, action.coord]:
+        if action.building is None:
             return NoWorkersAction()
         return self._update(action)
 
