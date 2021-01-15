@@ -729,7 +729,7 @@ class Env(gym.Env):
                 elif isinstance(a, RawAction):
                     (a,), ptr = a.a, a.ptr
                     a: int
-                    c = int(
+                    c = 1 + int(
                         np.ravel_multi_index(
                             free_coord, (self.world_size, self.world_size)
                         )
@@ -741,14 +741,6 @@ class Env(gym.Env):
                     time_remaining -= 1  # penalize agent for no_op
                     continue
 
-                building = Buildings[int(a) - 1]
-
-                # new_action = action.update(*a)
-                assert isinstance(building, Building)
-                new_action = data_types.BuildingCoordAction(
-                    [Worker.W1], building, data_types.Coord(*free_coord)
-                )  # TODO
-
                 invalid_error = new_action.invalid(
                     resources=resources,
                     dependencies=dependencies,
@@ -756,6 +748,11 @@ class Env(gym.Env):
                     pending_positions=pending_positions,
                     positions=positions,
                 )
+
+                building = Buildings[int(a) - 1]
+
+                # new_action = action.update(*a)
+                assert isinstance(building, Building)
                 if invalid_error is None:
                     action = new_action
             if invalid_error is not None:
