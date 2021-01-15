@@ -173,7 +173,7 @@ class Trainer:
         )
 
         if use_wandb:
-            wandb.init(group=group, name=name)
+            wandb.init(group=group, name=name, project="ppo")
             os.symlink(
                 os.path.abspath(".hydra/config.yaml"),
                 os.path.join(wandb.run.dir, "hydra-config.yaml"),
