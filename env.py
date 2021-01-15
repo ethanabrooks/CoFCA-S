@@ -162,12 +162,8 @@ class Env(gym.Env):
         dependencies = np.round(self.random.random(n) * np.arange(n)) - 1
         dependencies = [None if i < 0 else buildings[int(i)] for i in dependencies]
 
-        # yield Assimilator(), None
-        # yield from itertools.zip_longest(buildings, dependencies)
-        dependency = None
-        for building in buildings:
-            yield building, dependency
-            dependency = building
+        yield Assimilator(), None
+        yield from itertools.zip_longest(buildings, dependencies)
 
     def build_lines(self, dependencies: Dependencies) -> List[Line]:
         def instructions_for(building: Building):
@@ -208,20 +204,7 @@ class Env(gym.Env):
 
         n_lines = self.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
-        required = [i.building for i in instructions if i.required]
-        assert required.count(Assimilator()) <= 1
-
-        def reverse_instructions():
-            building = None
-            for building in dependencies.keys():
-                if building not in dependencies.values():
-                    break
-
-            while building is not None:
-                yield Line(building=building, required=True)
-                building = dependencies[building]
-
-        return [*reversed([*reverse_instructions()])][:n_lines]
+        return instructions
 
     @staticmethod
     def build_trees(dependencies: Dependencies) -> typing.Set[Tree]:
