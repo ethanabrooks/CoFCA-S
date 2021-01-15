@@ -212,7 +212,7 @@ class Worker(WorldObject, ActionComponent, Enum, metaclass=ActionComponentEnumMe
         return str(self.value)
 
     def to_int(self) -> int:
-        return 0
+        return self.value
 
 
 WorkerGenerator = Generator[Worker, None, None]
