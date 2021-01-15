@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import AgentOutputs, NNBase
-from data_types import RecurrentState, RawAction
+from data_types import RecurrentState, RawAction, CompoundAction
 from env import Obs
 from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
@@ -54,9 +54,10 @@ class AgentConfig:
     action_embed_size: int = 75
     add_layer: bool = True
     conv_hidden_size: int = 100
-    feed_action_to_critic: bool = False
+    debug: bool = False
     gate_coef: float = 0.01
     globalized_critic: bool = False
+    instruction_embed_size: int = 128
     kernel_size: int = 2
     num_edges: int = 1
     no_pointer: bool = False
@@ -65,7 +66,6 @@ class AgentConfig:
     olsk: bool = False
     resources_hidden_size: int = 128
     stride: int = 1
-    instruction_embed_size: int = 128
     transformer: bool = False
     zeta_activation: bool = False
 
@@ -78,7 +78,6 @@ class Agent(NNBase):
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
-    feed_action_to_critic: bool
     gate_coef: float
     globalized_critic: bool
     hidden_size: int
@@ -114,8 +113,7 @@ class Agent(NNBase):
         self.embed_instruction = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.instruction_embed_size
         )
-        gru_in_size = self.get_gru_in_size()
-        self.gru = nn.GRU(gru_in_size, self.hidden_size)
+        self.gru = nn.GRU(self.get_gru_in_size(), self.hidden_size)
         self.initial_hxs = nn.Parameter(
             torch.randn(self.action_embed_size), requires_grad=True
         )
@@ -123,10 +121,9 @@ class Agent(NNBase):
         self.gru.reset_parameters()
 
         zeta_input_size = self.z1_size + self.instruction_embed_size
-        instruction_encoder_in_size = self.instruction_embed_size
-        instruction_encoder_in_size += self.z1_size
+        instruction_encoder_in_size = self.instruction_embed_size + self.z1_size
 
-        self.instruction_encoder = nn.GRU(
+        self.encode_G = nn.GRU(
             instruction_encoder_in_size,
             self.instruction_embed_size,
             bidirectional=True,
@@ -135,7 +132,7 @@ class Agent(NNBase):
         self.initial_instruction_encoder_hxs = nn.Parameter(
             torch.randn(self.instruction_embed_size), requires_grad=True
         )
-        self.instruction_encoder.reset_parameters()
+        self.encode_G.reset_parameters()
 
         self.embed_action = MultiEmbeddingBag(
             self.obs_spaces.partial_action.nvec,
@@ -146,6 +143,8 @@ class Agent(NNBase):
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
+
+        compound_action_size = CompoundAction.input_space().nvec.size
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -211,8 +210,6 @@ class Agent(NNBase):
                     self.activation,
                 )
                 critic_in_size = self.hidden_size
-        if self.feed_action_to_critic:
-            critic_in_size += self.action_embed_size
 
         self.critic = self.init_(nn.Linear(critic_in_size, 1))
 
@@ -347,8 +344,7 @@ class Agent(NNBase):
 
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
         rolled = torch.cat([rolled, _z], dim=-1)
-
-        G, _ = self.instruction_encoder(rolled)
+        G, _ = self.encode_G(rolled)
 
         ones = self.ones.expand_as(R)
         P = self.build_P(p, G, R)
@@ -385,10 +381,9 @@ class Agent(NNBase):
         #     except ValueError:
         #         pass
 
-        # noinspection PyArgumentList
-        can_open_gate = (1 - line_mask[p, R]).sum(-1) > 1
+        more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
         dg, dg_dist = self.get_dg(
-            can_open_gate=can_open_gate,
+            can_open_gate=more_than_1_line,
             ones=ones,
             z=z,
         )
@@ -450,11 +445,6 @@ class Agent(NNBase):
             *[None if dist is None else dist.entropy() for dist in astuple(dists)]
         )
         aux_loss = -self.entropy_coef * compute_metric(entropy).mean()
-        if self.feed_action_to_critic:
-            embedded_action = self.embed_action(
-                torch.stack([action.dg, action.delta], dim=-1).long()
-            )
-            zc = torch.cat([zc, embedded_action], dim=-1)
         value = self.critic(zc)
         action = torch.cat(
             astuple(
@@ -484,7 +474,7 @@ class Agent(NNBase):
         return M[R, p]
 
     def get_delta(self, P, dg, line_mask, ones, z):
-        u = self.upsilon(z).softmax(dim=-1)  # TODO: try z
+        u = self.upsilon(z).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
@@ -501,7 +491,7 @@ class Agent(NNBase):
         return delta, delta_dist
 
     def get_dg(self, can_open_gate, ones, z):
-        d_logits = self.d_gate(z)  # TODO: try z
+        d_logits = self.d_gate(z)
         dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = can_open_gate.long().unsqueeze(-1)
         dg_dist = gate(can_open_gate, dg_probs, ones * 0)
