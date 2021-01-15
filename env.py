@@ -749,10 +749,7 @@ class Env(gym.Env):
                     positions=positions,
                 )
 
-                building = Buildings[int(a) - 1]
-
                 # new_action = action.update(*a)
-                assert isinstance(building, Building)
                 if invalid_error is None:
                     action = new_action
             if invalid_error is not None:
