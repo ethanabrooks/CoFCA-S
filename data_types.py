@@ -629,7 +629,7 @@ class NoWorkersAction(ActionStage):
         self, action: CompoundAction
     ) -> Union["BuildingCoordAction", "NoWorkersAction"]:
         return BuildingCoordAction(
-            workers=[Worker.W1], building=action.building, coord=action.coord
+            workers=[*action.workers()], building=action.building, coord=action.coord
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
