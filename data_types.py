@@ -627,7 +627,9 @@ class NoWorkersAction(ActionStage):
 
     def _update(
         self, action: CompoundAction
-    ) -> Union["BuildingCoordAction", "NoWorkersAction"]:
+    ) -> Union["WorkersAction", "NoWorkersAction"]:
+        if None in (action.building, action.coord):
+            return NoWorkersAction()
         return BuildingCoordAction(
             workers=[*action.workers()], building=action.building, coord=action.coord
         )
