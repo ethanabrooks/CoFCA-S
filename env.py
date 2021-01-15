@@ -1,4 +1,5 @@
 import itertools
+import pickle
 import re
 import sys
 import typing
@@ -6,11 +7,10 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from multiprocessing import Queue
+from pathlib import Path
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
-from pathlib import Path
-import pickle
 
 import gym
 import hydra
@@ -31,7 +31,7 @@ from data_types import (
     BuildingPositions,
     Assignment,
     Positions,
-    ActionComponent,
+    CompoundAction,
     Obs,
     Resource,
     Building,
@@ -46,7 +46,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete, get_max_shape
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -104,7 +104,7 @@ class Env(gym.Env):
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
-        action_space = ActionStage.input_space()
+        action_components_space = CompoundAction.input_space()
         self.action_space = spaces.MultiDiscrete(
             [
                 x
@@ -113,7 +113,7 @@ class Env(gym.Env):
                         delta=[2 * self.max_lines],
                         dg=[2],
                         ptr=[self.max_lines],
-                        a=ActionStage.input_space().nvec,
+                        a=action_components_space.nvec,
                     )
                 )
                 for x in field
@@ -137,23 +137,19 @@ class Env(gym.Env):
         )
         resources_space = spaces.MultiDiscrete([sys.maxsize] * 2)
         pointer_space = spaces.Discrete(self.max_lines)
-
         action_mask_space = spaces.MultiBinary(
-            action_space.nvec.max() * action_space.nvec.size
+            action_components_space.nvec.max() * action_components_space.nvec.size
         )
-        self.observation_space = spaces.Dict(
-            asdict(
-                Obs(
-                    action_mask=action_mask_space,
-                    lines=lines_space,
-                    line_mask=line_mask_space,
-                    obs=obs_space,
-                    partial_action=ActionStage.representation_space(),
-                    resources=resources_space,
-                    ptr=pointer_space,
-                )
-            )
+        self.obs_spaces = Obs(
+            action_mask=action_mask_space,
+            lines=lines_space,
+            line_mask=line_mask_space,
+            obs=obs_space,
+            partial_action=CompoundAction.representation_space(),
+            resources=resources_space,
+            ptr=pointer_space,
         )
+        self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
     def build_dependencies(
         self, max_depth: int = None
@@ -405,16 +401,19 @@ class Env(gym.Env):
         state: State
         state = yield
 
-        padded: List[Optional[Line]] = [*lines, *[None] * (self.max_lines - len(lines))]
+        padded: List[Optional[Line]] = [
+            *lines,
+            *[None] * (self.max_lines - len(lines)),
+        ]
         line_mask = np.array([p is None for p in padded])
 
         def render():
             def requirement_for():
-                depender = None
+                depending = None
                 for l in reversed(lines):
                     if l.required:
-                        depender = l.building
-                    yield depender
+                        depending = l.building
+                    yield depending
 
             def required_iterator():
                 buildings = [*state.building_positions.values()]
@@ -458,6 +457,7 @@ class Env(gym.Env):
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, ActionStage)
+
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
                 asdict(
@@ -468,7 +468,7 @@ class Env(gym.Env):
                         lines=preprocessed,
                         action_mask=state.action.mask().ravel(),
                         partial_action=partial_action,
-                        ptr=int(state.pointer),
+                        ptr=state.pointer,
                     )
                 )
             )

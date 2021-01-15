@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import gym
 import numpy as np
@@ -438,8 +438,9 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
+    worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
     building: OB = None
-    # coord: OC = None
+    coord: OC = None
 
     @staticmethod
     def _worker_values() -> List[Ob]:
@@ -447,27 +448,49 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete([1 + Building.space().n])  # , 1 + Coord.space().n])
+        return spaces.MultiDiscrete([1 + Building.space().n])
 
     @classmethod
-    def parse(cls, b: int) -> "CompoundAction":
-        b = int(b)
-        if b == 0:
+    def parse(cls, *values: int) -> "CompoundAction":
+        *ws, b, c = map(int, values)
+        if 0 in [*ws, b, c]:
             return CompoundAction()
         return CompoundAction(
-            building=Building.parse(b - 1)
-        )  # , coord=Coord.parse(c - 1))
+            worker_values=[cls._worker_values()[w] for w in ws],
+            building=Building.parse(b - 1),
+            coord=Coord.parse(c - 1),
+        )
+
+    @classmethod
+    def possible_worker_values(cls) -> Generator[Tuple[bool, bool], None, None]:
+        yield from itertools.product(cls._worker_values(), repeat=len(Worker))
 
     @classmethod
     def representation_space(cls):
-        return spaces.MultiDiscrete([1 + len(Buildings)])  # , 1 + Coord.space().n])
+        return spaces.MultiDiscrete(
+            [
+                *[len(cls._worker_values())] * len(Worker),
+                1 + Building.space().n,
+                1 + Coord.space().n,
+            ]
+        )
 
     def to_input_int(self) -> IntGenerator:
+        # for w in self.worker_values:
+        #     yield self._worker_values().index(w)
         for attr in [self.building]:  # , self.coord]:
             yield 0 if attr is None else 1 + attr.to_int()
 
     def to_representation_ints(self) -> IntGenerator:
-        yield from self.to_input_int()
+        for w in self.worker_values:
+            yield self._worker_values().index(w)
+        for attr in [self.building, self.coord]:
+            yield 0 if attr is None else 1 + attr.to_int()
+
+    def workers(self) -> Generator[Worker, None, None]:
+        for worker, value in zip(Worker, self.worker_values):
+            if value:
+                yield worker
 
 
 CompoundActionGenerator = Generator[CompoundAction, None, None]
@@ -476,7 +499,7 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 @dataclass(frozen=True)
 class ActionStage:
     def __update(self, action: CompoundAction) -> "ActionStage":
-        if action.building is None:
+        if None in [*action.worker_values, action.building, action.coord]:
             return NoWorkersAction()
         return self._update(action)
 
@@ -495,20 +518,6 @@ class ActionStage:
     def _gate_openers() -> CompoundActionGenerator:
         pass
 
-    def _get_building(self) -> Optional[Building]:
-        try:
-            # noinspection PyUnresolvedReferences
-            return self.building
-        except AttributeError:
-            return None
-
-    def _get_coord(self) -> Optional[Coord]:
-        try:
-            # noinspection PyUnresolvedReferences
-            return self.coord
-        except AttributeError:
-            return None
-
     @staticmethod
     @abstractmethod
     def _parse_string(s: str) -> CompoundAction:
@@ -524,36 +533,18 @@ class ActionStage:
     def _prompt() -> str:
         pass
 
-    def to_ints(self) -> IntGenerator:
-        # workers = {*self.get_workers()}
-        # for w in Worker:
-        #     yield int(w in workers)
-        building = self._get_building()
-        # coord = self._get_coord()
-        yield 0 if building is None else 1 + building.to_int()
-        # yield 0 if coord is None else 1 + coord.to_int()
-
     @staticmethod
     @abstractmethod
     def _update(action: CompoundAction) -> "ActionStage":
         pass
 
     @abstractmethod
-    def assignment(self, positions: Positions) -> Optional[Assignment]:
+    def action_components(self) -> CompoundAction:
         pass
 
-    @staticmethod
-    def subclasses():
-        yield NoWorkersAction
-        # yield WorkersAction
-        # yield BuildingAction
-        # yield CoordAction
-        # yield BuildingCoordAction
-
-    @classmethod
-    @lru_cache
-    def gate_openers(cls) -> List[List[int]]:
-        return [[0], *([i + 1] for i in range(len(Buildings)))]
+    @abstractmethod
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        pass
 
     def from_input(self) -> "ActionStage":
         compound_action = None
@@ -568,21 +559,23 @@ class ActionStage:
                 compound_action = CompoundAction()
         return self._update(compound_action)
 
-    def get_workers(self) -> WorkerGenerator:
-        try:
-            # noinspection PyUnresolvedReferences
-            yield from self.workers
-        except AttributeError:
-            pass
+    @classmethod
+    @lru_cache
+    def gate_openers(cls) -> np.ndarray:
+        return np.array([list(o.to_input_int()) for o in cls._gate_openers()])
 
     @classmethod
-    def input_space(cls) -> spaces.MultiDiscrete:
-        def sizes_gen():
-            # for _ in Worker: yield 3  # no-op, choose, don't choose
-            yield len(Buildings) + 1  # for no-op
+    def gate_opener_max_size(cls):
+        def opener_size():
+            for c in cls._children():
+                assert issubclass(c, ActionStage)
+                yield len(c.gate_openers())
 
-        sizes = [*sizes_gen()]
-        return spaces.MultiDiscrete([max(sizes)] * len(sizes))
+        return max(opener_size())
+
+    @abstractmethod
+    def get_workers(self) -> WorkerGenerator:
+        raise NotImplementedError
 
     def invalid(
         self,
@@ -605,12 +598,8 @@ class ActionStage:
             mask[R, unmask] = 0
         return mask
 
-    @classmethod
-    def representation_space(cls) -> spaces.MultiDiscrete:
-        return spaces.MultiDiscrete(
-            [1 + len(Buildings)]
-            #     [*(3 for _ in Worker), 1 + len(Buildings), 1 + Coord.space().n]
-        )
+    def to_ints(self):
+        return self.action_components().to_representation_ints()
 
     def update(self, *components: int) -> "ActionStage":
         return self.__update(CompoundAction.parse(*components))
@@ -618,20 +607,24 @@ class ActionStage:
 
 class CoordCanOpenGate(ActionStage, ABC):
     @staticmethod
-    def _gate_openers() -> Generator[List[int], None, None]:
-        assert isinstance(WORLD_SIZE, int)
-        coords = [*zip(*itertools.product(range(WORLD_SIZE), range(WORLD_SIZE)))]
-        for index in np.ravel_multi_index(coords, (WORLD_SIZE, WORLD_SIZE)):
-            yield [index]
+    def _gate_openers() -> CompoundActionGenerator:
+        for i, j in Coord.possible_values():
+            yield CompoundAction(coord=Coord(i, j))
 
 
 @dataclass(frozen=True)
 class NoWorkersAction(ActionStage):
     @staticmethod
-    def _gate_openers() -> Generator[List[int], None, None]:
+    def _gate_openers() -> CompoundActionGenerator:
         # selecting no workers is a no-op that allows gate to open
-        # yield [0] * len(Worker)
-        yield [*range(len(Buildings))]
+        yield CompoundAction()
+        for building in Buildings:
+            yield CompoundAction(building=building)
+
+        for i, j in Coord.possible_values():
+            yield CompoundAction(coord=Coord(i, j))
+            for building in Buildings:
+                yield CompoundAction(building=building, coord=Coord(i, j))
 
     @staticmethod
     def _parse_string(s: str) -> CompoundAction:
@@ -660,27 +653,42 @@ class NoWorkersAction(ActionStage):
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
 
+    def get_workers(self) -> WorkerGenerator:
+        yield Worker.W1
 
-def parse_coord(s):
-    i, j = map(int, s.split())
-    assert 0 <= i < WORLD_SIZE
-    assert 0 <= j < WORLD_SIZE
-    return Coord(i, j)
+    def action_components(self) -> CompoundAction:
+        return CompoundAction()
 
 
 @dataclass(frozen=True)
-class WorkersAction(CoordCanOpenGate):
+class HasWorkers(ActionStage, ABC):
     workers: List[Worker]
 
+    def action_components(self) -> CompoundAction:
+        return CompoundAction()
+        # return CompoundAction(workers=[w in self.workers for w in Worker])
+
+    def get_workers(self) -> WorkerGenerator:
+        yield from self.workers
+
+
+@dataclass(frozen=True)
+class WorkersAction(HasWorkers, CoordCanOpenGate):
     @staticmethod
-    def _parse_string(s: str) -> ActionComponentGenerator:
+    def _parse_string(s: str) -> CompoundAction:
         try:
-            yield Buildings[int(s)]
+            i, j = map(int, s.split())
         except ValueError:
             try:
-                yield parse_coord(s)
+                n = int(s)
             except ValueError:
                 raise InvalidInput
+            try:
+                building = Buildings[n]
+            except IndexError as e:
+                raise InvalidInput(e)
+            return CompoundAction(building=building)
+        return CompoundAction(coord=Coord(i, j))
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
@@ -712,9 +720,16 @@ class WorkersAction(CoordCanOpenGate):
 
 
 @dataclass(frozen=True)
-class CoordAction(NoWorkersAction):
-    workers: List[Worker]
+class CoordAction(HasWorkers, NoWorkersAction):
     coord: Coord
+
+    @staticmethod
+    def _permitted_values() -> CompoundActionGenerator:
+        for building in Buildings:
+            yield CompoundAction(building=building)
+
+    def action_components(self) -> CompoundAction:
+        return replace(HasWorkers.action_components(self), coord=self.coord)
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         i, j = astuple(self.coord)
@@ -725,31 +740,40 @@ class CoordAction(NoWorkersAction):
 
 
 @dataclass(frozen=True)
-class BuildingAction(NoWorkersAction, CoordCanOpenGate):
-    workers: List[Worker]
+class BuildingAction(HasWorkers, NoWorkersAction):
     building: Building
 
     @staticmethod
-    def _parse_string(s: str) -> ActionComponentGenerator:
+    def _parse_string(s: str) -> CompoundAction:
         try:
-            i, j = map(int, s.split())
-        except ValueError:
-            raise InvalidInput
-        yield Coord.parse(int(np.ravel_multi_index((i, j), (WORLD_SIZE, WORLD_SIZE))))
+            b = int(s)
+        except ValueError as e:
+            raise InvalidInput(e)
+        return CompoundAction(building=Buildings[b])
 
-    @staticmethod
-    def _prompt() -> str:
-        return "Coord"
+    # @staticmethod
+    # def _permitted_values() -> CompoundActionGenerator:
+    #     for i, j in Coord.possible_values():
+    #         yield CompoundAction(coord=Coord(i, j))
 
-    def _update(self, *a: ActionComponent) -> "ActionStage":
-        (a,) = a
-        assert isinstance(a, Coord)
-        return BuildingCoordAction(
-            workers=self.workers, building=self.building, coord=a
-        )
+    # @staticmethod
+    # def _prompt() -> str:
+    # return "Coord"
+    # return "Coord"
+
+    # def _update(self, action: CompoundAction) -> "ActionStage":
+    #     assert action.building is None
+    #     if action.coord is None:
+    #         return NoWorkersAction()
+    #     return BuildingCoordAction(
+    #         workers=self.workers, building=self.building, coord=action.coord
+    #     )
+
+    def action_components(self) -> CompoundAction:
+        return replace(HasWorkers.action_components(self), building=self.building)
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
-        return None
+        return self.building
 
     def invalid(
         self,
@@ -761,7 +785,7 @@ class BuildingAction(NoWorkersAction, CoordCanOpenGate):
     ) -> Optional[str]:
         dependency = dependencies[self.building]
         dependency_met = dependency in [*building_positions.values(), None]
-        insufficient_resources = Counter(self.building.cost) - resources
+        # insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
             return f"Dependency ({dependency}) not met"
         # if insufficient_resources:
@@ -770,10 +794,14 @@ class BuildingAction(NoWorkersAction, CoordCanOpenGate):
 
 
 @dataclass(frozen=True)
-class BuildingCoordAction(NoWorkersAction):
-    workers: List[Worker]
+class BuildingCoordAction(HasWorkers, NoWorkersAction):
     building: Building
     coord: Coord
+
+    def action_components(self) -> CompoundAction:
+        return replace(
+            HasWorkers.action_components(self), coord=self.coord, building=self.building
+        )
 
     def assignment(self, positions: Positions) -> Assignment:
         i, j = astuple(self.coord)
@@ -896,7 +924,7 @@ class CyberneticsCore(Building):
 class DarkShrine(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=0)  # 150)
+        return Resources(minerals=150, gas=150)
 
     @property
     def symbol(self) -> str:
@@ -906,7 +934,7 @@ class DarkShrine(Building):
 class FleetBeacon(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=300, gas=0)  # 200)
+        return Resources(minerals=300, gas=200)
 
     @property
     def symbol(self) -> str:
@@ -966,7 +994,7 @@ class Pylon(Building):
 class RoboticsBay(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=200, gas=0)  # 200)
+        return Resources(minerals=200, gas=200)
 
     @property
     def symbol(self) -> str:
@@ -976,7 +1004,7 @@ class RoboticsBay(Building):
 class RoboticsFacility(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=200, gas=0)  # 100)
+        return Resources(minerals=200, gas=100)
 
     @property
     def symbol(self) -> str:
@@ -986,7 +1014,7 @@ class RoboticsFacility(Building):
 class StarGate(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=0)  # 150)
+        return Resources(minerals=150, gas=150)
 
     @property
     def symbol(self) -> str:
@@ -996,7 +1024,7 @@ class StarGate(Building):
 class TemplarArchives(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=0)  # 200)
+        return Resources(minerals=150, gas=200)
 
     @property
     def symbol(self) -> str:
@@ -1006,7 +1034,7 @@ class TemplarArchives(Building):
 class TwilightCouncil(Building):
     @property
     def cost(self) -> Resources:
-        return Resources(minerals=150, gas=0)  # 100)
+        return Resources(minerals=150, gas=100)
 
     @property
     def symbol(self) -> str:

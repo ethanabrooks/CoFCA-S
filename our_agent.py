@@ -141,10 +141,6 @@ class Agent(NNBase):
             self.obs_spaces.partial_action.nvec,
             embedding_dim=self.action_embed_size,
         )
-        self.embed_action = MultiEmbeddingBag(
-            np.array([self.action_nvec.dg, 2 * self.max_eval_lines]),
-            embedding_dim=self.action_embed_size,
-        )
 
         extrinsic_nvec = self.action_nvec.a
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
