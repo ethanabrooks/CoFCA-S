@@ -714,7 +714,9 @@ class Env(gym.Env):
             free_coord = next(
                 (
                     coord
-                    for coord in data_types.Coord.possible_values()
+                    for coord in itertools.product(
+                        range(self.world_size), range(self.world_size)
+                    )
                     if coord not in [*building_positions.keys(), *positions.values()]
                 ),
                 None,
@@ -724,20 +726,24 @@ class Env(gym.Env):
             else:
                 if a is None:
                     # a: List[ActionComponent] = [*action.from_input()]
-                    new_action = action.from_input()
+                    (building,) = action.from_input()
 
                 elif isinstance(a, RawAction):
-                    a, ptr = a.a, a.ptr
-                    a: List[int]
-                    c = int(
-                        np.ravel_multi_index(
-                            free_coord, (self.world_size, self.world_size)
-                        )
-                    )
-                    new_action = action.update(2, 1, 1, *a, c)
+                    (a,), ptr = a.a, a.ptr
+                    a = int(a)
                 else:
                     raise RuntimeError
+                if a == 0:
+                    time_remaining -= 1  # penalize agent for no_op
+                    continue
 
+                building = Buildings[int(a) - 1]
+
+                # new_action = action.update(*a)
+                assert isinstance(building, Building)
+                new_action = data_types.BuildingCoordAction(
+                    [Worker.W1], building, data_types.Coord(*free_coord)
+                )  # TODO
                 invalid_error = new_action.invalid(
                     resources=resources,
                     dependencies=dependencies,
