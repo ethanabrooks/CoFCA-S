@@ -415,13 +415,13 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
-    worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
+    worker_values: List[Ob] = field(default_factory=lambda: [False for _ in Worker])
     building: OB = None
     coord: OC = None
 
     @staticmethod
     def _worker_values() -> List[Ob]:
-        return [None, False, True]
+        return [False, True]
 
     @classmethod
     def input_space(cls):
@@ -436,7 +436,7 @@ class CompoundAction:
     @classmethod
     def parse(cls, *values: int) -> "CompoundAction":
         *ws, b, c = map(int, values)
-        if 0 in [*ws, b, c]:
+        if 0 in [b, c]:
             return CompoundAction()
         return CompoundAction(
             worker_values=[cls._worker_values()[w] for w in ws],
@@ -473,7 +473,7 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 @dataclass(frozen=True)
 class ActionStage:
     def __update(self, action: CompoundAction) -> "ActionStage":
-        if None in [*action.worker_values, action.building, action.coord]:
+        if None in [action.building, action.coord]:
             return NoWorkersAction()
         return self._update(action)
 
