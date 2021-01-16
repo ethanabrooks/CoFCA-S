@@ -445,9 +445,10 @@ class Agent(NNBase):
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
         unmask = 1 - line_mask
         masked = d_probs * unmask
-        masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
-        self.print("masked", masked.view(masked.size(0), 2, -1))
-        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        normalizer = (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
+        normalized = masked / torch.maximum(normalizer, ones.unsqueeze(-1) / self.inf)
+        self.print("normalized", normalized.view(normalized.size(0), 2, -1))
+        delta_dist = gate(dg.unsqueeze(-1), normalized, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
