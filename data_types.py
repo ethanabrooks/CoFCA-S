@@ -432,12 +432,10 @@ class CompoundAction:
     @classmethod
     def parse(cls, *values: int) -> "CompoundAction":
         *ws, b, c = map(int, values)
-        if 0 in [b, c]:
-            return CompoundAction()
         return CompoundAction(
             worker_values=[cls._worker_values()[w] for w in ws],
-            building=Building.parse(b - 1),
-            coord=Coord.parse(c - 1),
+            building=None if b == 0 else Building.parse(b - 1),
+            coord=None if c == 0 else Coord.parse(c - 1),
         )
 
     @classmethod
@@ -468,18 +466,13 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 
 @dataclass(frozen=True)
 class ActionStage:
-    def __update(self, action: CompoundAction) -> "ActionStage":
-        if None in [action.building, action.coord]:
-            return NoWorkersAction()
-        return self._update(action)
-
     @staticmethod
     def _children() -> List[type]:
         return [
             NoWorkersAction,
             # WorkersAction,
             # BuildingAction,
-            # CoordAction,
+            CoordAction,
             BuildingCoordAction,
         ]
 
@@ -572,7 +565,7 @@ class ActionStage:
         return self.action_components().to_representation_ints()
 
     def update(self, *components: int) -> "ActionStage":
-        return self.__update(CompoundAction.parse(*components))
+        return self._update(CompoundAction.parse(*components))
 
 
 class CoordCanOpenGate(ActionStage, ABC):
@@ -628,10 +621,13 @@ class NoWorkersAction(ActionStage):
     def _update(
         self, action: CompoundAction
     ) -> Union["WorkersAction", "NoWorkersAction"]:
-        if None in (action.building, action.coord):
+        if action.coord is None:
             return NoWorkersAction()
+        workers = [*action.workers()]
+        if action.building is None:
+            return CoordAction(workers=workers, coord=action.coord)
         return BuildingCoordAction(
-            workers=[*action.workers()], building=action.building, coord=action.coord
+            workers=workers, building=action.building, coord=action.coord
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
@@ -705,11 +701,6 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
 @dataclass(frozen=True)
 class CoordAction(HasWorkers, NoWorkersAction):
     coord: Coord
-
-    @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
-        for building in Buildings:
-            yield CompoundAction(building=building)
 
     def action_components(self) -> CompoundAction:
         return replace(HasWorkers.action_components(self), coord=self.coord)
