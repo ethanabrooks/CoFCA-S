@@ -741,7 +741,7 @@ class Env(gym.Env):
                 )
 
             destroy = []
-            if self.random.random() < self.attack_prob:
+            if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
                     c for c, b in building_positions.items() if not isinstance(b, Nexus)
