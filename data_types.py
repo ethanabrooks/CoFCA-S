@@ -635,7 +635,7 @@ class NoWorkersAction(ActionStage):
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
-        return
+        return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
         yield from ()
