@@ -734,7 +734,7 @@ class Env(gym.Env):
                             free_coord, (self.world_size, self.world_size)
                         )
                     )
-                    new_action = action.update(2, 1, 1, a, c)
+                    new_action = action.update(1, 0, 0, a, c)
                 else:
                     raise RuntimeError
 
