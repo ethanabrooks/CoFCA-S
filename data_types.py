@@ -425,7 +425,7 @@ class CompoundAction:
 
     @classmethod
     def input_space(cls):
-        return spaces.MultiDiscrete([1 + Building.space().n])
+        return spaces.MultiDiscrete([2, 1 + Building.space().n])
 
     @classmethod
     def parse(cls, *values: int) -> "CompoundAction":

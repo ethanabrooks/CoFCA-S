@@ -727,14 +727,14 @@ class Env(gym.Env):
                     new_action = action.from_input()
 
                 elif isinstance(a, RawAction):
-                    (b,), ptr = a.a, a.ptr
+                    (op, b), ptr = a.a, a.ptr
                     b: int
                     c = 1 + int(
                         np.ravel_multi_index(
                             free_coord, (self.world_size, self.world_size)
                         )
                     )
-                    new_action = action.update(int(b > 0), 1, 0, 0, b, c)
+                    new_action = action.update(op, 1, 0, 0, b, c)
                 else:
                     raise RuntimeError
 
