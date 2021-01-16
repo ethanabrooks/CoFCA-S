@@ -482,7 +482,10 @@ CompoundActionGenerator = Generator[CompoundAction, None, None]
 @dataclass(frozen=True)
 class ActionStage:
     def __update(self, action: CompoundAction) -> "ActionStage":
-        if None in [*action.worker_values, action.building, action.coord]:
+        no_op = not action.is_op
+        if no_op:
+            return NoOpAction()
+        if None in (action.building, action.coord):
             return DoNothingAction()
         return self._update(action)
 
@@ -490,6 +493,7 @@ class ActionStage:
     def _children() -> List[type]:
         return [
             DoNothingAction,
+            NoOpAction,
             # WorkersAction,
             # BuildingAction,
             # CoordAction,
@@ -642,13 +646,19 @@ class DoNothingAction(ActionStage):
         )
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
-        return
+        return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
         yield from ()
 
     def action_components(self) -> CompoundAction:
         return CompoundAction()
+
+
+@dataclass(frozen=True)
+class NoOpAction(DoNothingAction):
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
+        return None
 
 
 @dataclass(frozen=True)
