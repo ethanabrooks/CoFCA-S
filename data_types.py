@@ -627,7 +627,8 @@ class DoNothingAction(ActionStage):
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
-        yield CompoundAction()
+        for is_op in (True, False):
+            yield CompoundAction(is_op=is_op)
         # for i, j in Coord.possible_values():
         for building in Buildings:
             yield CompoundAction(building=building)
