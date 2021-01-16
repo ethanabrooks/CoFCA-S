@@ -26,7 +26,7 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
-    DoNothingAction,
+    NoWorkersAction,
     Carrying,
     BuildingPositions,
     Assignment,
@@ -670,7 +670,7 @@ class Env(gym.Env):
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
         destroy = []
-        action = DoNothingAction()
+        action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
 
@@ -727,14 +727,14 @@ class Env(gym.Env):
                     new_action = action.from_input()
 
                 elif isinstance(a, RawAction):
-                    (op, b), ptr = a.a, a.ptr
-                    b: int
+                    (a,), ptr = a.a, a.ptr
+                    a: int
                     c = 1 + int(
                         np.ravel_multi_index(
                             free_coord, (self.world_size, self.world_size)
                         )
                     )
-                    new_action = action.update(op, 1, 0, 0, b, c)
+                    new_action = action.update(2, 1, 1, a, c)
                 else:
                     raise RuntimeError
 
