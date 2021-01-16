@@ -26,7 +26,7 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
-    NoWorkersAction,
+    DoNothingAction,
     Carrying,
     BuildingPositions,
     Assignment,
@@ -681,7 +681,7 @@ class Env(gym.Env):
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
         destroy = []
-        action = NoWorkersAction()
+        action = DoNothingAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
 
@@ -738,19 +738,16 @@ class Env(gym.Env):
                     new_action = action.from_input()
 
                 elif isinstance(a, RawAction):
-                    a, ptr = a.a, a.ptr
-                    a: List[int]
+                    (op, b), ptr = a.a, a.ptr
+                    b: int
                     c = 1 + int(
                         np.ravel_multi_index(
                             free_coord, (self.world_size, self.world_size)
                         )
                     )
-                    new_action = action.update(2, 1, 1, *a, c)
+                    new_action = action.update(op, 1, 0, 0, b, c)
                 else:
                     raise RuntimeError
-                if a == 0:
-                    time_remaining -= 1  # penalize agent for no_op
-                    continue
 
                 invalid_error = new_action.invalid(
                     resources=resources,
@@ -795,7 +792,7 @@ class Env(gym.Env):
                 )
 
             destroy = []
-            if self.random.random() < self.attack_prob:
+            if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
                     c for c, b in building_positions.items() if not isinstance(b, Nexus)
