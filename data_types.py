@@ -1,6 +1,7 @@
 import itertools
 import typing
 from abc import abstractmethod, ABC, ABCMeta
+from collections import Counter
 from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
@@ -766,11 +767,11 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
     ) -> Optional[str]:
         dependency = dependencies[self.building]
         dependency_met = dependency in [*building_positions.values(), None]
-        # insufficient_resources = Counter(self.building.cost) - resources
+        insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
             return f"Dependency ({dependency}) not met"
-        # if insufficient_resources:
-        #     return "Insufficient resources"
+        if insufficient_resources:
+            return "Insufficient resources"
         return None
 
 
