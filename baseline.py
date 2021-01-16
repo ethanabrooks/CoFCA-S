@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import hydra
 from omegaconf import DictConfig
 
@@ -9,6 +11,7 @@ from wrappers import VecPyTorch
 class Trainer(ours.Trainer):
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
+        agent_args.update(feed_m_to_gru=False, globalized_critic=False)
         return baseline_agent.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
@@ -17,9 +20,8 @@ class Trainer(ours.Trainer):
 
 
 @hydra.main(config_name="config")
-def app(cfg: ours.OurConfig) -> None:
-    cfg.eval.interval = cfg.eval.steps = None
-    assert isinstance(cfg, DictConfig)
+def app(cfg: DictConfig) -> None:
+    pprint(dict(**cfg))
     Trainer.main(cfg)
 
 
