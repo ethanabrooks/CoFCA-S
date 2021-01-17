@@ -122,15 +122,7 @@ class Agent(NNBase):
 
         self.gru.reset_parameters()
 
-        zeta_input_size = self.z1_size + self.instruction_embed_size
-        instruction_encoder_in_size = self.instruction_embed_size + self.z1_size
-
-        self.encode_G = nn.GRU(
-            instruction_encoder_in_size,
-            self.instruction_embed_size,
-            bidirectional=True,
-            batch_first=True,
-        )
+        self.encode_G = self.build_encode_G()
         self.initial_instruction_encoder_hxs = nn.Parameter(
             torch.randn(self.instruction_embed_size), requires_grad=True
         )
@@ -146,8 +138,6 @@ class Agent(NNBase):
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
-        compound_action_size = CompoundAction.input_space().nvec.size
-
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
@@ -160,12 +150,12 @@ class Agent(NNBase):
             ),
             self.activation,
         )
-        self.z_size = self.hidden_size if self.add_layer else zeta_input_size
+        self.z_size = self.hidden_size if self.add_layer else self.zeta_input_size
 
         self.zeta = nn.Sequential(
             self.init_(
                 nn.Linear(
-                    zeta_input_size,
+                    self.zeta_input_size,
                     self.hidden_size,
                 )
             ),
@@ -227,13 +217,13 @@ class Agent(NNBase):
             dg=1,
         )
 
-    def get_gru_in_size(self):
-        return (
-            self.instruction_embed_size if self.feed_m_to_gru else 0
-        ) + self.action_embed_size
-
-    def build_d_gate(self):
-        return self.init_(nn.Linear(self.z_size, 2))
+    def build_encode_G(self):
+        return nn.GRU(
+            self.instruction_embed_size + self.z1_size,
+            self.instruction_embed_size,
+            bidirectional=True,
+            batch_first=True,
+        )
 
     def build_beta(self):
         in_size = (
@@ -242,37 +232,12 @@ class Agent(NNBase):
         out_size = self.num_edges * self.d_space() if self.no_scan else self.num_edges
         return nn.Sequential(self.init_(nn.Linear(in_size, out_size)))
 
-    @property
-    def z1_size(self):
-        return (
-            self.conv_hidden_size
-            + self.resources_hidden_size
-            + self.action_embed_size
-            + self.hidden_size
-        )
+    def build_d_gate(self):
+        return self.init_(nn.Linear(self.z_size, 2))
 
-    def build_P(self, p, G, R):
-        N = p.size(0)
-        G = G.view(N, self.nl, 2, -1)
-        B = self.beta(G).sigmoid()
-        # B = B * mask[p, R]
-        f, b = torch.unbind(B, dim=-2)
-        B = torch.stack([f, b.flip(-2)], dim=-2)
-        B = B.view(N, 2 * self.nl, self.num_edges)
-
-        last = torch.zeros(2 * self.nl, device=p.device)
-        last[-1] = 1
-        last = last.view(1, -1, 1)
-
-        B = (1 - last).flip(-2) * B  # this ensures the first B is 0
-        zero_last = (1 - last) * B
-        B = zero_last + last  # this ensures that the last B is 1
-        C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
-        P = B * C
-        P = P.view(N, self.nl, 2, self.num_edges)
-        f, b = torch.unbind(P, dim=-2)
-
-        return torch.cat([b.flip(-2), f], dim=-2)
+    @staticmethod
+    def build_m(M, R, p):
+        return M[R, p]
 
     def build_upsilon(self):
         return self.init_(nn.Linear(self.z_size, self.num_edges))
@@ -334,13 +299,10 @@ class Agent(NNBase):
         ).view(N, -1, self.instruction_embed_size)
         p = state.ptr.long().flatten()
         R = torch.arange(N, device=p.device)
-        rolled = torch.stack(
-            [torch.roll(M, shifts=-i, dims=1) for i in range(self.nl)], dim=0
-        )[p, R]
 
         x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
-        embedded_action = self.embed_action(
+        embedded_action = self.embed_action(  # TODO: remove
             state.partial_action.long()
         )  # +1 to deal with negatives
         m = self.build_m(M, R, p)
@@ -352,12 +314,10 @@ class Agent(NNBase):
         h, rnn_hxs = self._forward_gru(gru_in, rnn_hxs, masks)
         z1 = torch.cat([x, resources, embedded_action, h], dim=-1)
 
-        _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
-        rolled = torch.cat([rolled, _z], dim=-1)
-        G, _ = self.encode_G(rolled)
+        G = self.get_G(M=M, R=R, p=p, z1=z1)
 
         ones = self.ones.expand_as(R)
-        P = self.build_P(p, G, R)
+        P = self.get_P(p, G, R)
         z = torch.cat([z1, m], dim=-1)
         if self.add_layer:
             z = self.zeta(z)
@@ -478,20 +438,19 @@ class Agent(NNBase):
             log=dict(entropy=entropy),
         )
 
-    @staticmethod
-    def build_m(M, R, p):
-        return M[R, p]
-
     def get_delta(self, P, dg, line_mask, ones, z):
         u = self.upsilon(z).softmax(dim=-1)
         self.print("u", u)
         d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
         unmask = 1 - line_mask
-        masked = d_probs * unmask
-        masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
-        self.print("masked", masked.view(masked.size(0), 2, -1))
-        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        masked = unmask * d_probs
+        sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
+        masked = ~sum_zero * masked + sum_zero * torch.ones_like(masked) / self.inf
+        normalizer = (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
+        normalized = masked / normalizer
+        self.print("normalized", normalized.view(normalized.size(0), 2, -1))
+        delta_dist = gate(dg.unsqueeze(-1), normalized, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
@@ -507,6 +466,43 @@ class Agent(NNBase):
         self.print("dg prob", dg_dist.probs[:, 1])
         dg = dg_dist.sample()
         return dg, dg_dist
+
+    def get_gru_in_size(self):
+        return (
+            self.instruction_embed_size if self.feed_m_to_gru else 0
+        ) + self.action_embed_size
+
+    def get_G(self, M, R, p, z1):
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(self.nl)], dim=0
+        )[p, R]
+        _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
+        rolled = torch.cat([rolled, _z], dim=-1)
+        G, _ = self.encode_G(rolled)
+        return G
+
+    def get_P(self, p, G, R):
+        N = p.size(0)
+        G = G.view(N, self.nl, 2, -1)
+        B = self.beta(G).sigmoid()
+        # B = B * mask[p, R]
+        f, b = torch.unbind(B, dim=-2)
+        B = torch.stack([f, b.flip(-2)], dim=-2)
+        B = B.view(N, 2 * self.nl, self.num_edges)
+
+        last = torch.zeros(2 * self.nl, device=p.device)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
+
+        B = (1 - last).flip(-2) * B  # this ensures the first B is 0
+        zero_last = (1 - last) * B
+        B = zero_last + last  # this ensures that the last B is 1
+        C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
+        P = B * C
+        P = P.view(N, self.nl, 2, self.num_edges)
+        f, b = torch.unbind(P, dim=-2)
+
+        return torch.cat([b.flip(-2), f], dim=-2)
 
     def get_value(self, inputs, rnn_hxs, masks):
         return self.forward(inputs, rnn_hxs, masks).value
@@ -525,10 +521,6 @@ class Agent(NNBase):
     def nl(self):
         return len(self.obs_spaces.lines.nvec)
 
-    def parse_hidden(self, hx: torch.Tensor) -> RecurrentState:
-        state_sizes = astuple(self.state_sizes)
-        return RecurrentState(*torch.split(hx, state_sizes, dim=-1))
-
     def print(self, *args, **kwargs):
         args = [
             torch.round(100 * a)
@@ -542,3 +534,16 @@ class Agent(NNBase):
     @property
     def recurrent_hidden_state_size(self):
         return self.hidden_size
+
+    @property
+    def z1_size(self):
+        return (
+            self.conv_hidden_size
+            + self.resources_hidden_size
+            + self.action_embed_size
+            + self.hidden_size
+        )
+
+    @property
+    def zeta_input_size(self):
+        return self.z1_size + self.instruction_embed_size

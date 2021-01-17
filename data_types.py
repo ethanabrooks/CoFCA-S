@@ -86,6 +86,10 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def __eq__(self, other):
         return type(self) == type(other)
 
+    def __lt__(self, other):
+        # noinspection PyArgumentList
+        return self.value < other.value
+
     def __hash__(self):
         return hash(type)
 
@@ -758,9 +762,9 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
     ) -> Optional[str]:
         dependency = dependencies[self.building]
         dependency_met = dependency in [*building_positions.values(), None]
-        insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
-            return f"Dependency ({dependency}) not met"
+            return f"Dependency ({dependency}) not met for {self}."
+        insufficient_resources = Counter(self.building.cost) - resources
         if insufficient_resources:
             return "Insufficient resources"
         return None
@@ -792,12 +796,16 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
-        if not dependencies[self.building] in [*building_positions.values(), None]:
-            return "Dependency not met"
+        dependency = dependencies[self.building]
+        if not dependency in [*building_positions.values(), None]:
+            return f"Dependency ({dependency}) not met for {self.building}."
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
         if coord in all_positions:
             return f"coord occupied by {all_positions[coord]}"
+        insufficient_resources = Counter(self.building.cost) - resources
+        if insufficient_resources:
+            return "Insufficient resources"
         if isinstance(self.building, Assimilator):
             return (
                 None

@@ -744,11 +744,13 @@ class Env(gym.Env):
             if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
-                    c for c, b in building_positions.items() if not isinstance(b, Nexus)
+                    (c, b)
+                    for c, b in building_positions.items()
+                    if not isinstance(b, Nexus)
                 ]
                 self.random.shuffle(destroy)
                 destroy = destroy[:num_destroyed]
-                for coord in destroy:
+                for coord, _ in destroy:
                     del building_positions[coord]
 
     def step(self, action: Union[np.ndarray, ActionStage]):
