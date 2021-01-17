@@ -227,10 +227,10 @@ class Resource(WorldObject, Assignment, Enum):
             positions[worker] = move_from(worker_pos, toward=resource_pos)
             worker_pos = positions[worker]
             if worker_pos == resource_pos:
-                if self is Resource.GAS and not isinstance(
-                    building_positions.get(positions[worker]), Assimilator
-                ):
-                    return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
+                # if self is Resource.GAS and not isinstance(
+                #     building_positions.get(positions[worker]), Assimilator
+                # ):
+                #     return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -1023,7 +1023,7 @@ class TwilightCouncil(Building):
 
 
 Buildings: List[Building] = [
-    Assimilator(),
+    # Assimilator(),
     CyberneticsCore(),
     DarkShrine(),
     FleetBeacon(),
