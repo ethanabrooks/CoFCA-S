@@ -128,6 +128,23 @@ class Assignment:
     @abstractmethod
     def execute(
         self,
+        assignments: "Assignments",
+        resources: typing.Counter["Resource"],
+        worker: "Worker",
+        **kwargs,
+    ) -> Optional[str]:
+        original_assignment = assignments[worker]
+        error_msg = self._execute(
+            assignments=assignments, resources=resources, worker=worker, **kwargs
+        )
+        if error_msg is None and isinstance(original_assignment, BuildOrder):
+            # refund cost of building since assignment changed.
+            resources.update(original_assignment.building.cost)
+        return error_msg
+
+    @abstractmethod
+    def _execute(
+        self,
         positions: "Positions",
         worker: "Worker",
         assignments: "Assignments",
@@ -209,7 +226,7 @@ class Resource(WorldObject, Assignment, Enum):
     def __eq__(self, other):
         return Enum.__eq__(self, other)
 
-    def execute(
+    def _execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -324,7 +341,7 @@ class BuildOrder(Assignment):
     building: Building
     coord: CoordType
 
-    def execute(
+    def _execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -343,7 +360,7 @@ class BuildOrder(Assignment):
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
-            return GoTo(self.coord).execute(
+            return GoTo(self.coord)._execute(
                 positions=positions,
                 worker=worker,
                 assignments=assignments,
@@ -359,7 +376,7 @@ class BuildOrder(Assignment):
 class GoTo(Assignment):
     coord: CoordType
 
-    def execute(
+    def _execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
     ) -> Optional[str]:
         positions[worker] = move_from(positions[worker], toward=self.coord)
@@ -367,7 +384,7 @@ class GoTo(Assignment):
 
 
 class DoNothing(Assignment):
-    def execute(self, *args, **kwargs) -> Optional[str]:
+    def _execute(self, *args, **kwargs) -> Optional[str]:
         return
 
 
