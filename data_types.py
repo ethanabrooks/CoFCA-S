@@ -428,13 +428,13 @@ OC = Optional[Coord]
 
 @dataclass(frozen=True)
 class CompoundAction:
-    worker_values: List[Ob] = field(default_factory=lambda: [None for _ in Worker])
+    worker_values: List[Ob] = field(default_factory=lambda: [False for _ in Worker])
     building: OB = None
     coord: OC = None
 
     @staticmethod
     def _worker_values() -> List[Ob]:
-        return [None, False, True]
+        return [False, True]
 
     @classmethod
     def input_space(cls):
