@@ -805,6 +805,11 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         assert not Resource.MINERALS.on((i, j), positions)
         return BuildOrder(self.building, (i, j))
 
+    def get_workers(self) -> WorkerGenerator:
+        for worker in self.workers:
+            yield worker
+            return  # at most one worker
+
     def invalid(
         self,
         resources: typing.Counter[Resource],
