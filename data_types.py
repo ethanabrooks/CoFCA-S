@@ -348,7 +348,6 @@ class BuildOrder(Assignment):
         carrying: "Carrying",
     ) -> Optional[str]:
         if positions[worker] == self.coord:
-            remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
             return None
@@ -805,6 +804,11 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         assert (on_gas and assimilator) or (not on_gas and not assimilator)
         assert not Resource.MINERALS.on((i, j), positions)
         return BuildOrder(self.building, (i, j))
+
+    def get_workers(self) -> WorkerGenerator:
+        for worker in self.workers:
+            yield worker
+            return  # assign at most one worker to building
 
     def invalid(
         self,
