@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import torch
+import torch.nn as nn
 
 import our_agent
 
@@ -15,11 +16,19 @@ class Agent(our_agent.Agent):
     def build_d_gate(self):
         return None
 
-    @staticmethod
-    def build_m(M, R, p):
-        return M.view(M.size(0), -1)
+    def build_encode_G(self):
+        return nn.GRU(
+            self.instruction_embed_size,
+            self.instruction_embed_size,
+            bidirectional=True,
+            batch_first=True,
+        )
 
-    def build_P(self, *args, **kwargs):
+    def build_m(self, M, R, p):
+        _, m = self.encode_G(M)
+        return m.transpose(0, 1).reshape(m.size(1), 2 * m.size(2))
+
+    def get_P(self, *args, **kwargs):
         return None
 
     def build_task_encoder(self):
@@ -35,4 +44,11 @@ class Agent(our_agent.Agent):
         return torch.ones_like(ones) * self.nl, None
 
     def get_gru_in_size(self):
-        return self.action_embed_size + self.nl * self.instruction_embed_size
+        return self.action_embed_size
+
+    def get_G(self, M, R, p, z1):
+        return None
+
+    @property
+    def zeta_input_size(self):
+        return self.z1_size + 2 * self.instruction_embed_size
