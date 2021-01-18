@@ -521,32 +521,13 @@ class Agent(NNBase):
 
             ipdb.set_trace()
         unmask = 1 - line_mask
-        masked = d_probs * unmask
-        check_nan(masked)
-        if torch.any(masked < 0):
-            import ipdb
-
-            ipdb.set_trace()
-        masked = masked / (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
-        check_nan(masked)
-        if torch.any(masked < 0):
-            import ipdb
-
-            ipdb.set_trace()
-        self.print("masked", masked.view(masked.size(0), 2, -1))
-
-        old = ones * self.nl
-        new = masked
-        g = dg.unsqueeze(-1)
-        old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-        probs = g * new + (1 - g) * old
-        check_nan(probs)
-        if torch.any(probs < 0):
-            import ipdb
-
-            ipdb.set_trace()
-        delta_dist = Categorical(probs=probs)
-        # delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        masked = unmask * d_probs
+        sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
+        masked = ~sum_zero * masked + sum_zero * torch.ones_like(masked) / self.inf
+        normalizer = (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
+        normalized = masked / normalizer
+        self.print("normalized", normalized.view(normalized.size(0), 2, -1))
+        delta_dist = gate(dg.unsqueeze(-1), normalized, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
