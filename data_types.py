@@ -5,7 +5,7 @@ from collections import Counter
 from dataclasses import dataclass, astuple, replace, field
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional, Iterable, Any
+from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
 
 import gym
 import numpy as np
@@ -104,7 +104,7 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
         return self == building_positions.get(coord)
 
     @staticmethod
-    def parse(n: int) -> ActionComponent:
+    def parse(n: int) -> "Building":
         return Buildings[n]
 
     @staticmethod
@@ -283,7 +283,7 @@ class Coord(ActionComponent):
     j: int
 
     @staticmethod
-    def parse(n: int) -> "ActionComponent":
+    def parse(n: int) -> "Coord":
         assert isinstance(WORLD_SIZE, int)
         ij = np.unravel_index(n, (WORLD_SIZE, WORLD_SIZE))
         return Coord(*ij)
@@ -335,7 +335,7 @@ class BuildOrder(Assignment):
             remaining = required - Counter(building_positions.values())
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
-            return
+            return None
         else:
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
@@ -539,8 +539,8 @@ class ActionStage:
             if string:
                 try:
                     compound_action = self._parse_string(string)
-                except InvalidInput:
-                    pass
+                except InvalidInput as e:
+                    print(e)
             else:
                 compound_action = CompoundAction()
         return self._update(compound_action)
@@ -665,8 +665,8 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
                 raise InvalidInput
             try:
                 building = Buildings[n]
-            except IndexError:
-                raise InvalidInput
+            except IndexError as e:
+                raise InvalidInput(e)
             return CompoundAction(building=building)
         return CompoundAction(coord=Coord(i, j))
 
@@ -764,9 +764,9 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
     ) -> Optional[str]:
         dependency = dependencies[self.building]
         dependency_met = dependency in [*building_positions.values(), None]
-        insufficient_resources = Counter(self.building.cost) - resources
         if not dependency_met:
-            return f"Dependency ({dependency}) not met"
+            return f"Dependency ({dependency}) not met for {self}."
+        insufficient_resources = Counter(self.building.cost) - resources
         if insufficient_resources:
             return "Insufficient resources"
         return None
@@ -798,8 +798,9 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
-        if not dependencies[self.building] in [*building_positions.values(), None]:
-            return "Dependency not met"
+        dependency = dependencies[self.building]
+        if not dependency in [*building_positions.values(), None]:
+            return f"Dependency ({dependency}) not met for {self.building}."
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
         if coord in all_positions:
