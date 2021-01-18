@@ -86,10 +86,6 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
     def __eq__(self, other):
         return type(self) == type(other)
 
-    def __lt__(self, other):
-        # noinspection PyArgumentList
-        return self.value < other.value
-
     def __hash__(self):
         return hash(type)
 
