@@ -125,7 +125,6 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
 
 class Assignment:
-    @abstractmethod
     def execute(
         self,
         assignments: "Assignments",
@@ -355,12 +354,12 @@ class BuildOrder(Assignment):
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
-            return
+            return None
         else:
             if self.coord not in pending_positions:
                 pending_positions[self.coord] = self.building
                 resources.subtract(self.building.cost)
-            return GoTo(self.coord)._execute(
+            return GoTo(self.coord).execute(
                 positions=positions,
                 worker=worker,
                 assignments=assignments,
