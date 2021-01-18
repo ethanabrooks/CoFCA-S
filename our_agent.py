@@ -340,15 +340,13 @@ class Agent(NNBase):
             a = dists.a.sample()
             action = replace(action, a=a)
 
-        # while True:
-        #     try:
-        #         action = replace(
-        #             action,
-        #             a=float(input("a:")) * torch.ones_like(action.a),
-        #         )
-        #         break
-        #     except ValueError:
-        #         pass
+            # while True:
+            #     try:
+            #         t = torch.tensor([*map(float, input("a:").split())]).unsqueeze(0)
+            #         action.a[:] = t
+            #         break
+            #     except (ValueError, RuntimeError):
+            #         pass
 
         more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
         dg, dg_dist = self.get_dg(
@@ -359,16 +357,15 @@ class Agent(NNBase):
         dists = replace(dists, dg=dg_dist)
         if action.dg is None:
             action = replace(action, dg=dg)
-            # if can_open_gate.item():
-            #     while True:
-            #         try:
-            #             action = replace(
-            #                 action,
-            #                 dg=float(input("dg:")) * torch.ones_like(action.dg),
-            #             )
-            #             break
-            #         except ValueError:
-            #             pass
+            # while True:
+            #     try:
+            #         action = replace(
+            #             action,
+            #             dg=float(input("dg:")) * torch.ones_like(action.dg),
+            #         )
+            #         break
+            #     except ValueError:
+            #         pass
 
         delta, delta_dist = self.get_delta(
             P=P,
