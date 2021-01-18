@@ -1,4 +1,5 @@
 import itertools
+import pickle
 import re
 import sys
 import typing
@@ -6,11 +7,10 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, replace
 from itertools import zip_longest
 from multiprocessing import Queue
+from pathlib import Path
 from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Dict, Generator, Tuple, List, Optional
-from pathlib import Path
-import pickle
 
 import gym
 import hydra
@@ -394,11 +394,11 @@ class Env(gym.Env):
         state: State
         state = yield
 
-        gate_openers: List[Optional[Line]] = [
+        padded: List[Optional[Line]] = [
             *lines,
             *[None] * (self.max_lines - len(lines)),
         ]
-        line_mask = np.array([p is None for p in gate_openers])
+        line_mask = np.array([p is None for p in padded])
 
         def render():
             def requirement_for():
@@ -436,7 +436,7 @@ class Env(gym.Env):
             for string in self.room_strings(array):
                 print(string, end="")
 
-        preprocessed = np.array([*map(self.preprocess_line, gate_openers)])
+        preprocessed = np.array([*map(self.preprocess_line, padded)])
 
         def coords():
             yield from state.positions.items()
@@ -762,11 +762,13 @@ class Env(gym.Env):
             if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
-                    c for c, b in building_positions.items() if not isinstance(b, Nexus)
+                    (c, b)
+                    for c, b in building_positions.items()
+                    if not isinstance(b, Nexus)
                 ]
                 self.random.shuffle(destroy)
                 destroy = destroy[:num_destroyed]
-                for coord in destroy:
+                for coord, _ in destroy:
                     del building_positions[coord]
 
     def step(self, action: Union[np.ndarray, ActionStage]):
