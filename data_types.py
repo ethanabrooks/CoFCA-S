@@ -352,13 +352,6 @@ class BuildOrder(Assignment):
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
     ) -> Optional[str]:
-        for assignment in assignments.values():
-            if (
-                isinstance(assignment, BuildOrder)
-                and self.building == assignment.building
-                and self.coord == assignment.coord
-            ):
-                return  # only one worker per build order.
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
             assignments[worker] = DoNothing()
