@@ -689,6 +689,7 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
+        yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
         for building in Buildings:
@@ -745,6 +746,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
+        yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
 
