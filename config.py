@@ -33,7 +33,7 @@ class NoEval(Eval):
 
 @dataclass
 class YesEval(Eval):
-    interval: Optional[int] = int(1e6)
+    interval: Optional[int] = int(1e5)
     steps: Optional[int] = 500
 
 
