@@ -125,8 +125,6 @@ class Trainer(trainer.Trainer):
 
     @classmethod
     def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
-        if cfg.eval.interval:
-            cfg.eval.steps = 5 * cfg.max_eval_lines
         return super().structure_config(cfg)
 
 

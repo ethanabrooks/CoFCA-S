@@ -150,7 +150,6 @@ class Trainer:
         curriculum_args: dict,
         env_args: dict,
         eval_interval: Optional[int],
-        eval_steps: Optional[int],
         failure_buffer_args: dict,
         group: str,
         load_path: Path,
@@ -167,10 +166,6 @@ class Trainer:
         save_interval: int,
         train_steps: int,
     ):
-        assert (eval_interval and eval_steps) or not (eval_interval or eval_steps), (
-            eval_steps,
-            eval_interval,
-        )
 
         if use_wandb:
             wandb.init(group=group, name=name, project="ppo")
