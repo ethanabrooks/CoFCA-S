@@ -1047,12 +1047,12 @@ Buildings: List[Building] = [
     Forge(),
     Gateway(),
     Nexus(),
-    PhotonCannon(),
-    Pylon(),
+    # PhotonCannon(),
+    # Pylon(),
     RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    TemplarArchives(),
-    TwilightCouncil(),
+    # TemplarArchives(),
+    # TwilightCouncil(),
 ]
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)
