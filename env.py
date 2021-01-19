@@ -611,7 +611,6 @@ class Env(gym.Env):
         next(done_iterator)
         next(info_iterator)
         state, render_state = next(state_iterator)
-        time_remaining = self.eval_steps
 
         def render():
             for tree in self.build_trees(dependencies):
@@ -644,9 +643,6 @@ class Env(gym.Env):
             a = yield s, r, t, i
 
             state, render_state = state_iterator.send(a)
-            if self.evaluating:
-                time_remaining -= 1
-                state = replace(state, time_remaining=time_remaining)
 
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
