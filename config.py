@@ -1,13 +1,13 @@
 from collections import namedtuple
 
 from hydra.core.config_store import ConfigStore
-from omegaconf import MISSING, DictConfig
+from omegaconf import DictConfig
 
 Parsers = namedtuple("Parser", "main agent ppo rollouts")
 
 
-from dataclasses import dataclass, field
-from typing import Optional, Any, List
+from dataclasses import dataclass
+from typing import Optional
 
 
 def flatten(cfg: DictConfig):
@@ -20,30 +20,12 @@ def flatten(cfg: DictConfig):
 
 
 @dataclass
-class Eval:
-    interval: Optional[int] = MISSING
-    steps: Optional[int] = MISSING
-
-
-@dataclass
-class NoEval(Eval):
-    interval: Optional[int] = None
-    steps: Optional[int] = None
-
-
-@dataclass
-class YesEval(Eval):
-    interval: Optional[int] = int(1e5)
-    steps: Optional[int] = 500
-
-
-@dataclass
 class BaseConfig:
     activation_name: str = "ReLU"
     clip_param: float = 0.2
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
-    eval: Any = MISSING
+    eval_interval: Optional[int] = int(1e6)
     gamma: float = 0.99
     group: Optional[str] = None
     hidden_size: int = 150
@@ -71,7 +53,6 @@ class BaseConfig:
     value_loss_coef: float = 0.5
     wandb_version: Optional[str] = None
     _wandb: Optional[str] = None
-    defaults: List[Any] = field(default_factory=lambda: [dict(eval="yes")])
 
 
 @dataclass
@@ -82,5 +63,3 @@ class Config(BaseConfig):
 
 
 cs = ConfigStore.instance()
-cs.store(group="eval", name="yes", node=YesEval)
-cs.store(group="eval", name="no", node=NoEval)

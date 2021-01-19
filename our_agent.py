@@ -138,10 +138,19 @@ class Agent(NNBase):
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
+        compound_action_size = CompoundAction.input_space().nvec.size
+        self.gate_openers_shape = (
+            self.obs_spaces.gate_openers.nvec.size // compound_action_size,
+            compound_action_size,
+        )
+
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
+        self.resources_hidden_size = (
+            self.resources_hidden_size // 2 * 2
+        )  # make divisible by 2
         self.embed_resources = nn.Sequential(
             IntEncoding(self.resources_hidden_size),
             nn.Flatten(),
@@ -340,32 +349,40 @@ class Agent(NNBase):
             a = dists.a.sample()
             action = replace(action, a=a)
 
-            # while True:
-            #     try:
-            #         t = torch.tensor([*map(float, input("a:").split())]).unsqueeze(0)
-            #         action.a[:] = t
-            #         break
-            #     except (ValueError, RuntimeError):
-            #         pass
+        # while True:
+        #     try:
+        #         action = replace(
+        #             action,
+        #             a=float(input("a:")) * torch.ones_like(action.a),
+        #         )
+        #         break
+        #     except ValueError:
+        #         pass
 
+        gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
+        matches = gate_openers == action.a.unsqueeze(1)
+        assert isinstance(matches, torch.Tensor)
+        # noinspection PyArgumentList
         more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
+        can_open_gate = matches.all(-1).any(-1) * more_than_1_line
         dg, dg_dist = self.get_dg(
-            can_open_gate=more_than_1_line,
+            can_open_gate=can_open_gate,
             ones=ones,
             z=z,
         )
         dists = replace(dists, dg=dg_dist)
         if action.dg is None:
             action = replace(action, dg=dg)
-            # while True:
-            #     try:
-            #         action = replace(
-            #             action,
-            #             dg=float(input("dg:")) * torch.ones_like(action.dg),
-            #         )
-            #         break
-            #     except ValueError:
-            #         pass
+            # if can_open_gate.item():
+            #     while True:
+            #         try:
+            #             action = replace(
+            #                 action,
+            #                 dg=float(input("dg:")) * torch.ones_like(action.dg),
+            #             )
+            #             break
+            #         except ValueError:
+            #             pass
 
         delta, delta_dist = self.get_delta(
             P=P,

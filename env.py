@@ -27,10 +27,12 @@ import keyboard_control
 import osx_queue
 from data_types import (
     NoWorkersAction,
+    BuildOrder,
     Carrying,
     BuildingPositions,
     Assignment,
     Positions,
+    ActionComponent,
     CompoundAction,
     Obs,
     Resource,
@@ -46,7 +48,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete
+from utils import RESET, Discrete, get_max_shape
 
 Dependencies = Dict[Building, Building]
 
@@ -80,7 +82,6 @@ class Env(gym.Env):
     break_on_fail: bool
     bucket_size: int
     attack_prob: float
-    eval_steps: int
     failure_buffer: Queue
     max_lines: int
     min_lines: int
@@ -130,7 +131,7 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        max_shape = (len(WorldObjects), *world_shape)
+        max_shape = (len(WorldObjects) + 1, *world_shape)  # +1 for destroy
         obs_space = spaces.Box(
             low=np.zeros(max_shape, dtype=np.float32),
             high=np.ones(max_shape, dtype=np.float32),
@@ -140,8 +141,15 @@ class Env(gym.Env):
         action_mask_space = spaces.MultiBinary(
             action_components_space.nvec.max() * action_components_space.nvec.size
         )
+        gate_opener_space = spaces.MultiDiscrete(
+            np.array(
+                [CompoundAction.input_space().nvec + 1]
+                * ActionStage.gate_opener_max_size()
+            ).flatten()
+        )
         self.obs_spaces = Obs(
             action_mask=action_mask_space,
+            gate_openers=gate_opener_space,
             lines=lines_space,
             line_mask=line_mask_space,
             obs=obs_space,
@@ -204,6 +212,8 @@ class Env(gym.Env):
 
         n_lines = self.n_lines_space.sample()
         instructions = [*random_instructions_under(n_lines)]
+        required = [i.building for i in instructions if i.required]
+        assert required.count(Assimilator()) <= 1
         return instructions
 
     @staticmethod
@@ -434,12 +444,21 @@ class Env(gym.Env):
                 yield b, p
 
         while True:
-            world = np.zeros((len(WorldObjects), *self.world_shape))
+            world = np.zeros(self.obs_spaces.obs.shape)
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
+            for p in state.destroy.keys():
+                world[(-1, *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, ActionStage)
+
+            gate_openers: np.ndarray = self.obs_spaces.gate_openers.nvec.copy().reshape(
+                -1, CompoundAction.input_space().nvec.size
+            )
+            gate_openers -= 1
+            unpadded_gate_openers = state.action.gate_openers()
+            gate_openers[: len(unpadded_gate_openers)] = unpadded_gate_openers
 
             partial_action = np.array([*state.action.to_ints()])
             obs = OrderedDict(
@@ -450,6 +469,7 @@ class Env(gym.Env):
                         line_mask=line_mask,
                         lines=preprocessed,
                         action_mask=state.action.mask().ravel(),
+                        gate_openers=gate_openers.ravel(),
                         partial_action=partial_action,
                         ptr=state.pointer,
                     )
@@ -542,7 +562,7 @@ class Env(gym.Env):
         max_symbols_per_grid = 3
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
-                (nonzero,) = channel.nonzero()
+                (nonzero,) = channel[:-1].nonzero()
                 objects = [WorldObjects[k] for k in nonzero]
                 worker_symbol = None
                 if len(objects) > max_symbols_per_grid:
@@ -593,7 +613,6 @@ class Env(gym.Env):
         next(done_iterator)
         next(info_iterator)
         state, render_state = next(state_iterator)
-        time_remaining = self.eval_steps
 
         def render():
             for tree in self.build_trees(dependencies):
@@ -626,9 +645,6 @@ class Env(gym.Env):
             a = yield s, r, t, i
 
             state, render_state = state_iterator.send(a)
-            if self.evaluating:
-                time_remaining -= 1
-                state = replace(state, time_remaining=time_remaining)
 
     def state_generator(
         self, lines: List[Line], dependencies: Dict[Building, Building]
@@ -652,7 +668,7 @@ class Env(gym.Env):
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
-        destroy = []
+        destroy = {}
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
@@ -666,7 +682,8 @@ class Env(gym.Env):
                 print(f"{k}: {v}")
             if destroy:
                 print(fg("red"), "Destroyed:", sep="")
-                print(*destroy, sep="\n", end=RESET + "\n")
+                pprint(destroy)
+                print(RESET, end="")
             if error_msg is not None:
                 print(fg("red"), error_msg, RESET, sep="")
 
@@ -681,6 +698,7 @@ class Env(gym.Env):
 
             state = State(
                 building_positions=building_positions,
+                destroy=destroy,
                 positions=positions,
                 resources=resources,
                 success=success,
@@ -696,7 +714,7 @@ class Env(gym.Env):
             if raw_action is None:
                 new_action = action.from_input()
             elif isinstance(raw_action, RawAction):
-                a, ptr = raw_action.a, int(raw_action.ptr)
+                a, ptr = raw_action.a, raw_action.ptr
                 new_action = action.update(*a)
             else:
                 raise RuntimeError
@@ -721,7 +739,11 @@ class Env(gym.Env):
                 continue
 
             for worker in action.get_workers():
+                old_assignment = assignments[worker]
                 assignments[worker] = assignment
+                if isinstance(old_assignment, BuildOrder):
+                    resources.update(old_assignment.building.cost)
+                    # refund cost of building for old assignment
 
             worker_id: Worker
             for worker_id, assignment in sorted(
@@ -729,7 +751,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                error_msg = assignment.execute(
+                assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
@@ -740,7 +762,7 @@ class Env(gym.Env):
                     carrying=carrying,
                 )
 
-            destroy = []
+            destroy = {}
             if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
@@ -749,8 +771,8 @@ class Env(gym.Env):
                     if not isinstance(b, Nexus)
                 ]
                 self.random.shuffle(destroy)
-                destroy = destroy[:num_destroyed]
-                for coord, _ in destroy:
+                destroy = dict(destroy[:num_destroyed])
+                for coord in destroy.keys():
                     del building_positions[coord]
 
     def step(self, action: Union[np.ndarray, ActionStage]):
@@ -769,7 +791,6 @@ def app(cfg: DictConfig) -> None:
     Env(
         **cfg,
         rank=0,
-        eval_steps=500,
         failure_buffer=failure_buffer,
     ).main()
 
