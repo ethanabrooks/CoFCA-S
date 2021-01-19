@@ -129,7 +129,7 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        max_shape = (len(WorldObjects), *world_shape)
+        max_shape = (len(WorldObjects) + 1, *world_shape)  # +1 for destroy
         obs_space = spaces.Box(
             low=np.zeros(max_shape, dtype=np.float32),
             high=np.ones(max_shape, dtype=np.float32),
@@ -433,9 +433,11 @@ class Env(gym.Env):
                 yield b, p
 
         while True:
-            world = np.zeros((len(WorldObjects), *self.world_shape))
+            world = np.zeros(self.obs_spaces.obs.shape)
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
+            for p in state.destroy.keys():
+                world[(-1, *p)] = 1
             array = world
             resources = np.array([state.resources[r] for r in Resource])
             assert isinstance(state.action, ActionStage)
@@ -647,7 +649,7 @@ class Env(gym.Env):
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
-        destroy = []
+        destroy = {}
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
@@ -661,7 +663,8 @@ class Env(gym.Env):
                 print(f"{k}: {v}")
             if destroy:
                 print(fg("red"), "Destroyed:", sep="")
-                print(*destroy, sep="\n", end=RESET + "\n")
+                pprint(destroy)
+                print(RESET, end="")
             if error_msg is not None:
                 print(fg("red"), error_msg, RESET, sep="")
 
@@ -676,6 +679,7 @@ class Env(gym.Env):
 
             state = State(
                 building_positions=building_positions,
+                destroy=destroy,
                 positions=positions,
                 resources=resources,
                 success=success,
@@ -735,7 +739,7 @@ class Env(gym.Env):
                     carrying=carrying,
                 )
 
-            destroy = []
+            destroy = {}
             if self.random.random() < self.attack_prob / len(lines):
                 num_destroyed = self.random.randint(len(building_positions))
                 destroy = [
@@ -744,8 +748,8 @@ class Env(gym.Env):
                     if not isinstance(b, Nexus)
                 ]
                 self.random.shuffle(destroy)
-                destroy = destroy[:num_destroyed]
-                for coord, _ in destroy:
+                destroy = dict(destroy[:num_destroyed])
+                for coord in destroy.keys():
                     del building_positions[coord]
 
     def step(self, action: Union[np.ndarray, ActionStage]):
