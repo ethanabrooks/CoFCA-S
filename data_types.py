@@ -859,6 +859,7 @@ class Line:
 class State:
     action: ActionStage
     building_positions: Dict[CoordType, Building]
+    destroy: Dict[CoordType, Building]
     pointer: int
     positions: Dict[Union[Resource, Worker], CoordType]
     resources: typing.Counter[Resource]
