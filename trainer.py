@@ -190,7 +190,8 @@ class Trainer:
         save_path = Path(log_dir, CHECKPOINT_NAME)
 
         def run_epoch(obs, rnn_hxs, masks, envs, num_steps):
-            for _ in range(num_steps):
+            episode_complete = None
+            for _ in itertools.count() if num_steps is None else range(num_steps):
                 with torch.no_grad():
                     act = agent(
                         inputs=obs, rnn_hxs=rnn_hxs, masks=masks
@@ -199,6 +200,10 @@ class Trainer:
                 action = envs.preprocess(act.action)
                 # Observe reward and next obs
                 obs, reward, done, infos = envs.step(action)
+                if episode_complete is None:
+                    episode_complete = done
+                else:
+                    episode_complete = np.logical_or(episode_complete, done)
 
                 # If done then clean the history of observations.
                 masks = torch.tensor(
@@ -209,6 +214,8 @@ class Trainer:
                 )
 
                 rnn_hxs = act.rnn_hxs
+                if num_steps is None and all(episode_complete):
+                    return
 
         if render_eval and not render:
             eval_interval = 1
@@ -331,7 +338,7 @@ class Trainer:
                             rnn_hxs=eval_recurrent_hidden_states,
                             masks=eval_masks,
                             envs=eval_envs,
-                            num_steps=eval_steps,
+                            num_steps=None,  # run until each episode completes an episode
                         ):
                             eval_report.update(
                                 reward=output.reward.cpu().numpy(),
