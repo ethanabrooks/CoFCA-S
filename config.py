@@ -25,7 +25,7 @@ class BaseConfig:
     clip_param: float = 0.2
     cuda_deterministic: bool = True
     entropy_coef: float = 0.25
-    eval_interval: Optional[int] = None
+    eval_interval: Optional[int] = int(1e6)
     gamma: float = 0.99
     group: Optional[str] = None
     hidden_size: int = 150
