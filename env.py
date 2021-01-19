@@ -561,7 +561,7 @@ class Env(gym.Env):
         max_symbols_per_grid = 3
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
-                (nonzero,) = channel.nonzero()
+                (nonzero,) = channel[:-1].nonzero()
                 objects = [WorldObjects[k] for k in nonzero]
                 worker_symbol = None
                 if len(objects) > max_symbols_per_grid:
