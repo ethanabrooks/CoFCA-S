@@ -347,14 +347,15 @@ class BuildOrder(Assignment):
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
     ) -> Optional[str]:
+        if self.coord not in pending_positions:
+            pending_positions[self.coord] = self.building
+            resources.subtract(self.building.cost)
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
+            del pending_positions[self.coord]
             assignments[worker] = DoNothing()
             return None
         else:
-            if self.coord not in pending_positions:
-                pending_positions[self.coord] = self.building
-                resources.subtract(self.building.cost)
             return GoTo(self.coord).execute(
                 positions=positions,
                 worker=worker,
