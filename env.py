@@ -80,7 +80,6 @@ class Env(gym.Env):
     break_on_fail: bool
     bucket_size: int
     attack_prob: float
-    eval_steps: int
     failure_buffer: Queue
     max_lines: int
     min_lines: int
@@ -765,7 +764,6 @@ def app(cfg: DictConfig) -> None:
     Env(
         **cfg,
         rank=0,
-        eval_steps=500,
         failure_buffer=failure_buffer,
     ).main()
 
