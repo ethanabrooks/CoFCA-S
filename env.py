@@ -746,7 +746,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                error_msg = assignment.execute(
+                assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
