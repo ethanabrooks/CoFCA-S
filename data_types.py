@@ -722,7 +722,10 @@ class CoordAction(HasWorkers, NoWorkersAction):
     ) -> Optional[str]:
         coord = astuple(self.coord)
         built_at_destination = building_positions.get(coord)
-        if positions[Resource.GAS] == coord and not built_at_destination == Assimilator:
+        if (
+            positions[Resource.GAS] == coord
+            and not built_at_destination == Assimilator()
+        ):
             return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
 
 
