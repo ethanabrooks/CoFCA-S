@@ -1041,18 +1041,18 @@ class TwilightCouncil(Building):
 
 Buildings: List[Building] = [
     Assimilator(),
-    # CyberneticsCore(),
-    # DarkShrine(),
-    # FleetBeacon(),
-    # Forge(),
-    # Gateway(),
+    CyberneticsCore(),
+    DarkShrine(),
+    FleetBeacon(),
+    Forge(),
+    Gateway(),
     Nexus(),
-    # PhotonCannon(),
-    # Pylon(),
+    PhotonCannon(),
+    Pylon(),
     RoboticsBay(),
     RoboticsFacility(),
     StarGate(),
-    # TemplarArchives(),
-    # TwilightCouncil(),
+    TemplarArchives(),
+    TwilightCouncil(),
 ]
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)
