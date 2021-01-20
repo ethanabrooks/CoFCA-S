@@ -148,7 +148,7 @@ class Assignment:
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         raise NotImplementedError
 
 
@@ -231,7 +231,7 @@ class Resource(WorldObject, Assignment, Enum):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         worker_pos = positions[worker]
 
         if carrying[worker] is None:
@@ -346,7 +346,7 @@ class BuildOrder(Assignment):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         if self.coord not in pending_positions:
             pending_positions[self.coord] = self.building
             resources.subtract(self.building.cost)

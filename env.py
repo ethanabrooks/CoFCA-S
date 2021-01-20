@@ -27,6 +27,7 @@ import keyboard_control
 import osx_queue
 from data_types import (
     NoWorkersAction,
+    BuildOrder,
     Carrying,
     BuildingPositions,
     Assignment,
