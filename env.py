@@ -731,7 +731,7 @@ class Env(gym.Env):
                 continue
 
             action = new_action
-            assignment = action.assignment(positions, building_positions)
+            assignment = action.assignment(positions)
             is_op = assignment is not None
             if is_op:
                 time_remaining -= 1

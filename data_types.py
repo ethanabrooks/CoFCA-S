@@ -547,9 +547,7 @@ class ActionStage:
         pass
 
     @abstractmethod
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Optional[Assignment]:
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
         pass
 
     def from_input(self) -> "ActionStage":
@@ -651,9 +649,7 @@ class NoWorkersAction(ActionStage):
             return NoWorkersAction()
         return WorkersAction(workers)
 
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Optional[Assignment]:
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()
 
     def get_workers(self) -> WorkerGenerator:
@@ -718,9 +714,7 @@ class WorkersAction(HasWorkers, CoordCanOpenGate):
             return BuildingAction(workers=self.workers, building=action.building)
         raise RuntimeError
 
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Optional[Assignment]:
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
 
 
@@ -731,17 +725,11 @@ class CoordAction(HasWorkers, NoWorkersAction):
     def action_components(self) -> CompoundAction:
         return replace(HasWorkers.action_components(self), coord=self.coord)
 
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Optional[Assignment]:
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
         i, j = astuple(self.coord)
         for resource in Resource:
             if resource.on((i, j), positions):
-                if (
-                    resource is not Resource.GAS
-                    or building_positions.get((i, j)) == Assimilator()
-                ):
-                    return resource
+                return resource
         return GoTo((i, j))
 
 
@@ -778,9 +766,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
     def action_components(self) -> CompoundAction:
         return replace(HasWorkers.action_components(self), building=self.building)
 
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Optional[Assignment]:
+    def assignment(self, positions: Positions) -> Optional[Assignment]:
         return None
 
     def invalid(
@@ -811,9 +797,7 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
             HasWorkers.action_components(self), coord=self.coord, building=self.building
         )
 
-    def assignment(
-        self, positions: Positions, building_positions: BuildingPositions
-    ) -> Assignment:
+    def assignment(self, positions: Positions) -> Assignment:
         i, j = astuple(self.coord)
         on_gas = Resource.GAS.on((i, j), positions)
         assimilator = isinstance(self.building, Assimilator)
