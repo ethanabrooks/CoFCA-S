@@ -739,7 +739,11 @@ class Env(gym.Env):
                 continue
 
             for worker in action.get_workers():
+                old_assignment = assignments[worker]
                 assignments[worker] = assignment
+                if isinstance(old_assignment, BuildOrder):
+                    resources.update(old_assignment.building.cost)
+                    # refund cost of building for old assignment
 
             worker_id: Worker
             for worker_id, assignment in sorted(
