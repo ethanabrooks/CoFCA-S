@@ -27,7 +27,6 @@ import keyboard_control
 import osx_queue
 from data_types import (
     NoWorkersAction,
-    BuildOrder,
     Carrying,
     BuildingPositions,
     Assignment,
@@ -562,7 +561,7 @@ class Env(gym.Env):
         max_symbols_per_grid = 3
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
-                (nonzero,) = channel[:-1].nonzero()
+                (nonzero,) = channel.nonzero()
                 objects = [WorldObjects[k] for k in nonzero]
                 worker_symbol = None
                 if len(objects) > max_symbols_per_grid:
@@ -739,11 +738,7 @@ class Env(gym.Env):
                 continue
 
             for worker in action.get_workers():
-                old_assignment = assignments[worker]
                 assignments[worker] = assignment
-                if isinstance(old_assignment, BuildOrder):
-                    resources.update(old_assignment.building.cost)
-                    # refund cost of building for old assignment
 
             worker_id: Worker
             for worker_id, assignment in sorted(
@@ -751,7 +746,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                assignment.execute(
+                error_msg = assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,

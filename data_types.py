@@ -121,8 +121,24 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
 
 class Assignment:
-    @abstractmethod
     def execute(
+        self,
+        assignments: "Assignments",
+        resources: typing.Counter["Resource"],
+        worker: "Worker",
+        **kwargs,
+    ) -> Optional[str]:
+        original_assignment = assignments[worker]
+        error_msg = self._execute(
+            assignments=assignments, resources=resources, worker=worker, **kwargs
+        )
+        if error_msg is None and isinstance(original_assignment, BuildOrder):
+            # refund cost of building since assignment changed.
+            resources.update(original_assignment.building.cost)
+        return error_msg
+
+    @abstractmethod
+    def _execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -132,7 +148,7 @@ class Assignment:
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> Optional[str]:
         raise NotImplementedError
 
 
@@ -205,7 +221,7 @@ class Resource(WorldObject, Assignment, Enum):
     def __eq__(self, other):
         return Enum.__eq__(self, other)
 
-    def execute(
+    def _execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -215,7 +231,7 @@ class Resource(WorldObject, Assignment, Enum):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> Optional[str]:
         worker_pos = positions[worker]
 
         if carrying[worker] is None:
@@ -223,6 +239,10 @@ class Resource(WorldObject, Assignment, Enum):
             positions[worker] = move_from(worker_pos, toward=resource_pos)
             worker_pos = positions[worker]
             if worker_pos == resource_pos:
+                if self is Resource.GAS and not isinstance(
+                    building_positions.get(positions[worker]), Assimilator
+                ):
+                    return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
                 carrying[worker] = self
         else:
             nexus_positions: List[CoordType] = [
@@ -316,7 +336,7 @@ class BuildOrder(Assignment):
     building: Building
     coord: CoordType
 
-    def execute(
+    def _execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -326,7 +346,7 @@ class BuildOrder(Assignment):
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> None:
+    ) -> Optional[str]:
         if self.coord not in pending_positions:
             pending_positions[self.coord] = self.building
             resources.subtract(self.building.cost)
@@ -352,15 +372,15 @@ class BuildOrder(Assignment):
 class GoTo(Assignment):
     coord: CoordType
 
-    def execute(
+    def _execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
-    ) -> None:
+    ) -> Optional[str]:
         positions[worker] = move_from(positions[worker], toward=self.coord)
         return
 
 
 class DoNothing(Assignment):
-    def execute(self, *args, **kwargs) -> None:
+    def _execute(self, *args, **kwargs) -> Optional[str]:
         return
 
 
@@ -712,19 +732,6 @@ class CoordAction(HasWorkers, NoWorkersAction):
                 return resource
         return GoTo((i, j))
 
-    def invalid(
-        self,
-        resources: typing.Counter[Resource],
-        dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
-        pending_positions: BuildingPositions,
-        positions: Positions,
-    ) -> Optional[str]:
-        coord = astuple(self.coord)
-        built_at_destination = building_positions.get(coord)
-        if positions[Resource.GAS] == coord and not built_at_destination == Assimilator:
-            return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
-
 
 @dataclass(frozen=True)
 class BuildingAction(HasWorkers, CoordCanOpenGate):
@@ -1037,18 +1044,18 @@ class TwilightCouncil(Building):
 
 Buildings: List[Building] = [
     Assimilator(),
-    # CyberneticsCore(),
+    CyberneticsCore(),
     DarkShrine(),
-    # FleetBeacon(),
-    # Forge(),
-    # Gateway(),
+    FleetBeacon(),
+    Forge(),
+    Gateway(),
     Nexus(),
-    # PhotonCannon(),
-    # Pylon(),
-    # RoboticsBay(),
-    # RoboticsFacility(),
-    # StarGate(),
-    # TemplarArchives(),
-    # TwilightCouncil(),
+    PhotonCannon(),
+    Pylon(),
+    RoboticsBay(),
+    RoboticsFacility(),
+    StarGate(),
+    TemplarArchives(),
+    TwilightCouncil(),
 ]
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)

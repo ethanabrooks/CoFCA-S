@@ -148,9 +148,6 @@ class Agent(NNBase):
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
-        self.resources_hidden_size = (
-            self.resources_hidden_size // 2 * 2
-        )  # make divisible by 2
         self.embed_resources = nn.Sequential(
             IntEncoding(self.resources_hidden_size),
             nn.Flatten(),
