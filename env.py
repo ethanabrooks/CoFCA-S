@@ -26,6 +26,7 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
+    BuildOrder,
     NoWorkersAction,
     Carrying,
     BuildingPositions,
@@ -671,12 +672,18 @@ class Env(gym.Env):
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
+        pending_costs = Counter
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
+            if pending_costs:
+                print("Pending costs:")
+                pprint(pending_costs)
+            print()
             pprint(action if error_msg is None else new_action)
+            print()
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
@@ -694,6 +701,15 @@ class Env(gym.Env):
             )  # cap resources
             remaining = required - Counter(building_positions.values())
             success = not remaining
+
+            _pending_positions = {
+                a.coord: a.building
+                for a in assignments.values()
+                if isinstance(a, BuildOrder)
+            }
+            pending_costs = Counter(
+                [r for b in _pending_positions.values() for r in b.cost]
+            )
 
             state = State(
                 building_positions=building_positions,

@@ -276,6 +276,9 @@ class Resource(WorldObject, Assignment, Enum):
         raise RuntimeError
 
 
+ResourceCounter = typing.Counter[Resource]
+
+
 @dataclass(frozen=True)
 class Resources:
     minerals: int
@@ -819,7 +822,7 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         positions: Positions,
     ) -> Optional[str]:
         dependency = dependencies[self.building]
-        if not dependency in [*building_positions.values(), None]:
+        if dependency not in [*building_positions.values(), None]:
             return f"Dependency ({dependency}) not met for {self.building}."
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
