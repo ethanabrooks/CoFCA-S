@@ -32,7 +32,6 @@ from data_types import (
     BuildingPositions,
     Assignment,
     Positions,
-    ActionComponent,
     CompoundAction,
     Obs,
     Resource,
@@ -48,7 +47,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete, get_max_shape
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
