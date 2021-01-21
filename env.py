@@ -655,7 +655,6 @@ class Env(gym.Env):
         building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
-        pending_positions: BuildingPositions = {}
         positions: Positions = dict(
             [
                 (o, (i, j))
@@ -672,12 +671,18 @@ class Env(gym.Env):
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
+        pending_costs = Counter
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
+            if pending_costs:
+                print("Pending costs:")
+                pprint(pending_costs)
+            print()
             pprint(action if error_msg is None else new_action)
+            print()
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
@@ -719,10 +724,19 @@ class Env(gym.Env):
             else:
                 raise RuntimeError
 
+            pending_positions = {
+                a.coord: a.building
+                for a in assignments.values()
+                if isinstance(a, BuildOrder)
+            }
+            pending_costs = Counter(
+                [r for b in pending_positions.values() for r in b.cost]
+            )
             error_msg = new_action.invalid(
-                resources=resources,
+                resources=resources - pending_costs,
                 dependencies=dependencies,
                 building_positions=building_positions,
+                pending_costs=pending_costs,
                 pending_positions=pending_positions,
                 positions=positions,
             )
@@ -739,11 +753,7 @@ class Env(gym.Env):
                 continue
 
             for worker in action.get_workers():
-                old_assignment = assignments[worker]
                 assignments[worker] = assignment
-                if isinstance(old_assignment, BuildOrder):
-                    resources.update(old_assignment.building.cost)
-                    # refund cost of building for old assignment
 
             worker_id: Worker
             for worker_id, assignment in sorted(
@@ -756,6 +766,7 @@ class Env(gym.Env):
                     worker=worker_id,
                     assignments=assignments,
                     building_positions=building_positions,
+                    pending_costs=pending_costs,
                     pending_positions=pending_positions,
                     required=required,
                     resources=resources,

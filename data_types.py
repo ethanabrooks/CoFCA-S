@@ -128,6 +128,7 @@ class Assignment:
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
@@ -211,6 +212,7 @@ class Resource(WorldObject, Assignment, Enum):
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
@@ -254,6 +256,9 @@ class Resource(WorldObject, Assignment, Enum):
         if self is Resource.MINERALS:
             return fg("blue") + "m" + RESET
         raise RuntimeError
+
+
+ResourceCounter = typing.Counter[Resource]
 
 
 @dataclass(frozen=True)
@@ -322,17 +327,17 @@ class BuildOrder(Assignment):
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: ResourceCounter,
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: ResourceCounter,
         carrying: "Carrying",
     ) -> None:
         if self.coord not in pending_positions:
             pending_positions[self.coord] = self.building
-            resources.subtract(self.building.cost)
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
-            del pending_positions[self.coord]
+            resources.subtract(pending_costs)
             assignments[worker] = DoNothing()
             return None
         else:
@@ -566,6 +571,7 @@ class ActionStage:
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -717,6 +723,7 @@ class CoordAction(HasWorkers, NoWorkersAction):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -770,6 +777,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         *args,
         **kwargs,
     ) -> Optional[str]:
@@ -777,7 +785,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         dependency_met = dependency in [*building_positions.values(), None]
         if not dependency_met:
             return f"Dependency ({dependency}) not met for {self}."
-        insufficient_resources = Counter(self.building.cost) - resources
+        insufficient_resources = Counter(self.building.cost) - resources - pending_costs
         if insufficient_resources:
             return "Insufficient resources"
         return None
@@ -811,11 +819,12 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
         dependency = dependencies[self.building]
-        if not dependency in [*building_positions.values(), None]:
+        if dependency not in [*building_positions.values(), None]:
             return f"Dependency ({dependency}) not met for {self.building}."
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
