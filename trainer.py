@@ -429,7 +429,7 @@ class Trainer:
         if cfg.render:
             cfg.num_processes = 1
 
-        if cfg.eval_interval < 0:
+        if cfg.eval_interval is not None and cfg.eval_interval < 0:
             cfg.eval_interval = None
 
         def parameters(*ms):
