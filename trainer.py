@@ -429,6 +429,9 @@ class Trainer:
         if cfg.render:
             cfg.num_processes = 1
 
+        if cfg.eval_interval < 0:
+            cfg.eval_interval = None
+
         def parameters(*ms):
             for method in ms:
                 yield from inspect.signature(method).parameters
