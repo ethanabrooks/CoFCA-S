@@ -782,7 +782,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         dependency_met = dependency in [*building_positions.values(), None]
         if not dependency_met:
             return f"Dependency ({dependency}) not met for {self}."
-        insufficient_resources = Counter(self.building.cost) - resources
+        insufficient_resources = Counter(self.building.cost) - resources - pending_costs
         if insufficient_resources:
             return "Insufficient resources"
         return None
