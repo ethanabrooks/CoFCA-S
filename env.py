@@ -4,7 +4,7 @@ import re
 import sys
 import typing
 from collections import Counter, OrderedDict
-from dataclasses import astuple, asdict, dataclass, replace
+from dataclasses import astuple, asdict, dataclass
 from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
@@ -32,7 +32,6 @@ from data_types import (
     BuildingPositions,
     Assignment,
     Positions,
-    ActionComponent,
     CompoundAction,
     Obs,
     Resource,
@@ -48,7 +47,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete, get_max_shape
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -69,6 +68,7 @@ class EnvConfig:
     attack_prob: float = 0
     break_on_fail: bool = False
     bucket_size: int = 5
+    include_pending_buildings_in_obs: bool = True
     max_lines: int = 10
     min_lines: int = 1
     time_per_line: int = 4
@@ -83,6 +83,7 @@ class Env(gym.Env):
     bucket_size: int
     attack_prob: float
     failure_buffer: Queue
+    include_pending_buildings_in_obs: bool
     max_lines: int
     min_lines: int
     rank: int
@@ -131,7 +132,10 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        max_shape = (len(WorldObjects) + 1, *world_shape)  # +1 for destroy
+        channel_size = len(WorldObjects) + 1  # +1 for destroy
+        if self.include_pending_buildings_in_obs:
+            channel_size += len(Buildings)
+        max_shape = (channel_size, *world_shape)
         obs_space = spaces.Box(
             low=np.zeros(max_shape, dtype=np.float32),
             high=np.ones(max_shape, dtype=np.float32),
@@ -447,6 +451,10 @@ class Env(gym.Env):
             world = np.zeros(self.obs_spaces.obs.shape)
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
+            if self.include_pending_buildings_in_obs:
+                for p, b in state.pending_positions.items():
+                    c = len(WorldObjects) + Buildings.index(b)
+                    world[(c, *p)] = 1
             for p in state.destroy.keys():
                 world[(-1, *p)] = 1
             array = world
@@ -701,9 +709,19 @@ class Env(gym.Env):
             remaining = required - Counter(building_positions.values())
             success = not remaining
 
+            pending_positions = {
+                a.coord: a.building
+                for a in assignments.values()
+                if isinstance(a, BuildOrder)
+            }
+            pending_costs = Counter(
+                [r for b in pending_positions.values() for r in b.cost]
+            )
+
             state = State(
                 building_positions=building_positions,
                 destroy=destroy,
+                pending_positions=pending_positions,
                 positions=positions,
                 resources=resources,
                 success=success,
@@ -724,14 +742,6 @@ class Env(gym.Env):
             else:
                 raise RuntimeError
 
-            pending_positions = {
-                a.coord: a.building
-                for a in assignments.values()
-                if isinstance(a, BuildOrder)
-            }
-            pending_costs = Counter(
-                [r for b in pending_positions.values() for r in b.cost]
-            )
             error_msg = new_action.invalid(
                 resources=resources - pending_costs,
                 dependencies=dependencies,
