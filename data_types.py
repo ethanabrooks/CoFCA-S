@@ -722,6 +722,23 @@ class CoordAction(HasWorkers, NoWorkersAction):
                 return resource
         return GoTo((i, j))
 
+    def invalid(
+        self,
+        resources: typing.Counter[Resource],
+        dependencies: Dict[Building, Building],
+        building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
+        pending_positions: BuildingPositions,
+        positions: Positions,
+    ) -> Optional[str]:
+        coord = astuple(self.coord)
+        built_at_destination = building_positions.get(coord)
+        if (
+            positions[Resource.GAS] == coord
+            and not built_at_destination == Assimilator()
+        ):
+            return "Assimilator required for harvesting gas"  # no op on gas unless Assimilator
+
 
 @dataclass(frozen=True)
 class BuildingAction(HasWorkers, CoordCanOpenGate):
