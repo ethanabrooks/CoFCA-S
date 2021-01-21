@@ -121,21 +121,8 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
 
 class Assignment:
-    def execute(
-        self,
-        assignments: "Assignments",
-        resources: typing.Counter["Resource"],
-        worker: "Worker",
-        **kwargs,
-    ) -> Optional[str]:
-        original_assignment = assignments[worker]
-        error_msg = self._execute(
-            assignments=assignments, resources=resources, worker=worker, **kwargs
-        )
-        return error_msg
-
     @abstractmethod
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -218,7 +205,7 @@ class Resource(WorldObject, Assignment, Enum):
     def __eq__(self, other):
         return Enum.__eq__(self, other)
 
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -336,7 +323,7 @@ class BuildOrder(Assignment):
     building: Building
     coord: CoordType
 
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
@@ -371,7 +358,7 @@ class BuildOrder(Assignment):
 class GoTo(Assignment):
     coord: CoordType
 
-    def _execute(
+    def execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
     ) -> Optional[str]:
         positions[worker] = move_from(positions[worker], toward=self.coord)
@@ -379,7 +366,7 @@ class GoTo(Assignment):
 
 
 class DoNothing(Assignment):
-    def _execute(self, *args, **kwargs) -> Optional[str]:
+    def execute(self, *args, **kwargs) -> Optional[str]:
         return
 
 
