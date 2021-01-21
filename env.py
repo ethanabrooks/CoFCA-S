@@ -26,8 +26,8 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
-    BuildOrder,
     NoWorkersAction,
+    BuildOrder,
     Carrying,
     BuildingPositions,
     Assignment,
@@ -721,10 +721,10 @@ class Env(gym.Env):
             state = State(
                 building_positions=building_positions,
                 destroy=destroy,
+                pending_positions=pending_positions,
                 positions=positions,
                 resources=resources,
                 success=success,
-                pending_positions=pending_positions,
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
@@ -771,7 +771,7 @@ class Env(gym.Env):
                 key=lambda w: isinstance(w[1], Resource),
                 reverse=True,
             ):  # collect resources first.
-                error_msg = assignment.execute(
+                assignment.execute(
                     positions=positions,
                     worker=worker_id,
                     assignments=assignments,
