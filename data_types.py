@@ -132,9 +132,6 @@ class Assignment:
         error_msg = self._execute(
             assignments=assignments, resources=resources, worker=worker, **kwargs
         )
-        if error_msg is None and isinstance(original_assignment, BuildOrder):
-            # refund cost of building since assignment changed.
-            resources.update(original_assignment.building.cost)
         return error_msg
 
     @abstractmethod
@@ -352,7 +349,6 @@ class BuildOrder(Assignment):
     ) -> Optional[str]:
         if self.coord not in pending_positions:
             pending_positions[self.coord] = self.building
-            resources.subtract(self.building.cost)
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
             del pending_positions[self.coord]
