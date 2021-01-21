@@ -333,11 +333,8 @@ class BuildOrder(Assignment):
         resources: ResourceCounter,
         carrying: "Carrying",
     ) -> None:
-        if self.coord not in pending_positions:
-            pending_positions[self.coord] = self.building
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
-            del pending_positions[self.coord]
             assignments[worker] = DoNothing()
             return None
         else:

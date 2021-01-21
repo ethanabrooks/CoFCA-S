@@ -663,7 +663,6 @@ class Env(gym.Env):
         building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
-        pending_positions: BuildingPositions = {}
         positions: Positions = dict(
             [
                 (o, (i, j))
@@ -710,13 +709,13 @@ class Env(gym.Env):
             remaining = required - Counter(building_positions.values())
             success = not remaining
 
-            _pending_positions = {
+            pending_positions = {
                 a.coord: a.building
                 for a in assignments.values()
                 if isinstance(a, BuildOrder)
             }
             pending_costs = Counter(
-                [r for b in _pending_positions.values() for r in b.cost]
+                [r for b in pending_positions.values() for r in b.cost]
             )
 
             state = State(
