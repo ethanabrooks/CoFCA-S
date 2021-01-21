@@ -335,6 +335,7 @@ class BuildOrder(Assignment):
     ) -> None:
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
+            resources.subtract(pending_costs)
             assignments[worker] = DoNothing()
             return None
         else:
