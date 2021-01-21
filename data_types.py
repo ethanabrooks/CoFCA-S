@@ -128,11 +128,12 @@ class Assignment:
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: "ResourceCounter",
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         raise NotImplementedError
 
 
@@ -211,11 +212,12 @@ class Resource(WorldObject, Assignment, Enum):
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         worker_pos = positions[worker]
 
         if carrying[worker] is None:
@@ -329,11 +331,12 @@ class BuildOrder(Assignment):
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: ResourceCounter,
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: ResourceCounter,
         carrying: "Carrying",
-    ) -> Optional[str]:
+    ) -> None:
         if self.coord not in pending_positions:
             pending_positions[self.coord] = self.building
         if positions[worker] == self.coord:
@@ -360,13 +363,13 @@ class GoTo(Assignment):
 
     def execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
-    ) -> Optional[str]:
+    ) -> None:
         positions[worker] = move_from(positions[worker], toward=self.coord)
         return
 
 
 class DoNothing(Assignment):
-    def execute(self, *args, **kwargs) -> Optional[str]:
+    def execute(self, *args, **kwargs) -> None:
         return
 
 
@@ -572,6 +575,7 @@ class ActionStage:
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -760,6 +764,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         *args,
         **kwargs,
     ) -> Optional[str]:
@@ -801,6 +806,7 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -844,8 +850,9 @@ class Line:
 @dataclass
 class State:
     action: ActionStage
-    building_positions: Dict[CoordType, Building]
+    building_positions: BuildingPositions
     destroy: Dict[CoordType, Building]
+    pending_positions: BuildingPositions
     pointer: int
     positions: Dict[Union[Resource, Worker], CoordType]
     resources: typing.Counter[Resource]

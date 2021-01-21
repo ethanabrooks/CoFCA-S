@@ -4,7 +4,7 @@ import re
 import sys
 import typing
 from collections import Counter, OrderedDict
-from dataclasses import astuple, asdict, dataclass, replace
+from dataclasses import astuple, asdict, dataclass
 from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
@@ -717,6 +717,7 @@ class Env(gym.Env):
                 positions=positions,
                 resources=resources,
                 success=success,
+                pending_positions=pending_positions,
                 pointer=ptr,
                 action=action,
                 time_remaining=time_remaining,
@@ -738,6 +739,7 @@ class Env(gym.Env):
                 resources=resources,
                 dependencies=dependencies,
                 building_positions=building_positions,
+                pending_costs=pending_costs,
                 pending_positions=pending_positions,
                 positions=positions,
             )
@@ -767,6 +769,7 @@ class Env(gym.Env):
                     worker=worker_id,
                     assignments=assignments,
                     building_positions=building_positions,
+                    pending_costs=pending_costs,
                     pending_positions=pending_positions,
                     required=required,
                     resources=resources,
