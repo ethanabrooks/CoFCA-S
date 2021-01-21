@@ -112,6 +112,10 @@ class Agent(NNBase):
         self.eval_lines = self.max_eval_lines
         self.train_lines = len(self.obs_spaces.lines.nvec)
 
+        self.resources_hidden_size = (
+            self.resources_hidden_size // 2 * 2
+        )  # make divisible by 2
+
         self.embed_instruction = MultiEmbeddingBag(
             self.obs_spaces.lines.nvec[0], embedding_dim=self.instruction_embed_size
         )
