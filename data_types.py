@@ -131,7 +131,7 @@ class Assignment:
         pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: "ResourceCounter",
         carrying: "Carrying",
     ) -> None:
         raise NotImplementedError
@@ -333,8 +333,6 @@ class BuildOrder(Assignment):
         resources: ResourceCounter,
         carrying: "Carrying",
     ) -> None:
-        if self.coord not in pending_positions:
-            pending_positions[self.coord] = self.building
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
             resources.subtract(pending_costs)

@@ -743,7 +743,7 @@ class Env(gym.Env):
                 raise RuntimeError
 
             error_msg = new_action.invalid(
-                resources=resources - pending_costs,
+                resources=resources,
                 dependencies=dependencies,
                 building_positions=building_positions,
                 pending_costs=pending_costs,
