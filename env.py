@@ -68,7 +68,7 @@ class EnvConfig:
     attack_prob: float = 0
     break_on_fail: bool = False
     bucket_size: int = 5
-    include_pending_buildings_in_obs: bool = True
+    include_pending_buildings_in_obs: bool = False
     max_lines: int = 10
     min_lines: int = 1
     time_per_line: int = 4
