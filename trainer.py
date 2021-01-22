@@ -137,7 +137,7 @@ class Trainer:
         return env
 
     @staticmethod
-    def report(frames: int, log_dir: Path, **kwargs):
+    def report(frames: int, **kwargs):
         print("Frames:", frames)
         pprint(kwargs)
         try:
@@ -348,7 +348,6 @@ class Trainer:
                             **dict(eval_report.items()),
                             **dict(eval_infos.items()),
                             frames=frames["so_far"],
-                            log_dir=log_dir,
                         )
                         print("Done evaluating...")
                     eval_envs.close()
