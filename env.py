@@ -4,7 +4,7 @@ import re
 import sys
 import typing
 from collections import Counter, OrderedDict
-from dataclasses import astuple, asdict, dataclass
+from dataclasses import astuple, asdict, dataclass, field
 from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
@@ -26,6 +26,7 @@ import data_types
 import keyboard_control
 import osx_queue
 from data_types import (
+    ResourceCounter,
     NoWorkersAction,
     BuildOrder,
     Carrying,
@@ -98,9 +99,11 @@ class Env(gym.Env):
     render_thunk = None
     success_avg = 0.5
     success_with_failure_buf_avg = 0.5
+    max_resources: ResourceCounter = field(
+        default_factory=lambda: Counter({Resource.MINERALS: 500, Resource.GAS: 500})
+    )
 
     def __post_init__(self):
-        super().__init__()
         data_types.WORLD_SIZE = self.world_size
         self.random, _ = seeding.np_random(self.random_seed)
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
@@ -672,7 +675,12 @@ class Env(gym.Env):
         )
         assignments: Dict[Worker, Assignment] = {w: Resource.MINERALS for w in Worker}
         required = Counter(li.building for li in lines if li.required)
-        resources: typing.Counter[Resource] = Counter()
+        resources: typing.Counter[Resource] = Counter(
+            {
+                r: round(self.random.randint(v) / 25) * 25
+                for r, v in self.max_resources.items()
+            }
+        )
         carrying: Carrying = {w: None for w in Worker}
         ptr: int = 0
         destroy = {}
@@ -703,9 +711,7 @@ class Env(gym.Env):
         self.render_thunk = render
 
         while True:
-            resources = resources & Counter(
-                {Resource.MINERALS: 500, Resource.GAS: 500}
-            )  # cap resources
+            resources = resources & self.max_resources  # cap resources
             remaining = required - Counter(building_positions.values())
             success = not remaining
 
