@@ -541,7 +541,7 @@ class Env(gym.Env):
             for b, p in zip(initial_buildings, initial_pos):
                 # assert not any(np.array_equal(p, p_) for p_ in occupied)
                 # occupied += [p]
-                yield b, gas if isinstance(b, Assimilator) else p
+                yield b, (gas if isinstance(b, Assimilator) else p)
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
@@ -670,7 +670,12 @@ class Env(gym.Env):
                 if isinstance(o, (Resource, Worker))
             ]
         )
-        assignments: Dict[Worker, Assignment] = {w: Resource.MINERALS for w in Worker}
+        initial_assignments = [Resource.MINERALS]
+        if Assimilator() in building_positions.values():
+            initial_assignments += [Resource.GAS]
+        assignments: Dict[Worker, Assignment] = {
+            w: self.random.choice(initial_assignments) for w in Worker
+        }
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
