@@ -4,7 +4,7 @@ import re
 import sys
 import typing
 from collections import Counter, OrderedDict
-from dataclasses import astuple, asdict, dataclass, replace
+from dataclasses import astuple, asdict, dataclass
 from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
@@ -32,7 +32,6 @@ from data_types import (
     BuildingPositions,
     Assignment,
     Positions,
-    ActionComponent,
     CompoundAction,
     Obs,
     Resource,
@@ -48,7 +47,7 @@ from data_types import (
     Assimilator,
     Nexus,
 )
-from utils import RESET, Discrete, get_max_shape
+from utils import RESET, Discrete
 
 Dependencies = Dict[Building, Building]
 
@@ -69,6 +68,7 @@ class EnvConfig:
     attack_prob: float = 0
     break_on_fail: bool = False
     bucket_size: int = 5
+    include_pending_buildings_in_obs: bool = False
     max_lines: int = 10
     min_lines: int = 1
     time_per_line: int = 4
@@ -83,6 +83,7 @@ class Env(gym.Env):
     bucket_size: int
     attack_prob: float
     failure_buffer: Queue
+    include_pending_buildings_in_obs: bool
     max_lines: int
     min_lines: int
     rank: int
@@ -131,7 +132,10 @@ class Env(gym.Env):
             high=(world_shape - 1).astype(np.float32),
         )
 
-        max_shape = (len(WorldObjects) + 1, *world_shape)  # +1 for destroy
+        channel_size = len(WorldObjects) + 1  # +1 for destroy
+        if self.include_pending_buildings_in_obs:
+            channel_size += len(Buildings)
+        max_shape = (channel_size, *world_shape)
         obs_space = spaces.Box(
             low=np.zeros(max_shape, dtype=np.float32),
             high=np.ones(max_shape, dtype=np.float32),
@@ -447,6 +451,10 @@ class Env(gym.Env):
             world = np.zeros(self.obs_spaces.obs.shape)
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
+            if self.include_pending_buildings_in_obs:
+                for p, b in state.pending_positions.items():
+                    c = len(WorldObjects) + Buildings.index(b)
+                    world[(c, *p)] = 1
             for p in state.destroy.keys():
                 world[(-1, *p)] = 1
             array = world
@@ -533,7 +541,7 @@ class Env(gym.Env):
             for b, p in zip(initial_buildings, initial_pos):
                 # assert not any(np.array_equal(p, p_) for p_ in occupied)
                 # occupied += [p]
-                yield b, gas if isinstance(b, Assimilator) else p
+                yield b, (gas if isinstance(b, Assimilator) else p)
 
     @staticmethod
     def preprocess_line(line: Optional[Line]):
@@ -562,7 +570,7 @@ class Env(gym.Env):
         max_symbols_per_grid = 3
         for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
             for j, channel in enumerate(row):
-                (nonzero,) = channel[:-1].nonzero()
+                (nonzero,) = channel[: len(WorldObjects)].nonzero()
                 objects = [WorldObjects[k] for k in nonzero]
                 worker_symbol = None
                 if len(objects) > max_symbols_per_grid:
@@ -655,7 +663,6 @@ class Env(gym.Env):
         building_positions: BuildingPositions = dict(
             [((i, j), b) for b, (i, j) in positions if isinstance(b, Building)]
         )
-        pending_positions: BuildingPositions = {}
         positions: Positions = dict(
             [
                 (o, (i, j))
@@ -663,7 +670,12 @@ class Env(gym.Env):
                 if isinstance(o, (Resource, Worker))
             ]
         )
-        assignments: Dict[Worker, Assignment] = {w: Resource.MINERALS for w in Worker}
+        initial_assignments = [Resource.MINERALS]
+        if Assimilator() in building_positions.values():
+            initial_assignments += [Resource.GAS]
+        assignments: Dict[Worker, Assignment] = {
+            w: self.random.choice(initial_assignments) for w in Worker
+        }
         required = Counter(li.building for li in lines if li.required)
         resources: typing.Counter[Resource] = Counter()
         carrying: Carrying = {w: None for w in Worker}
@@ -672,12 +684,18 @@ class Env(gym.Env):
         action = NoWorkersAction()
         time_remaining = (1 + len(lines)) * self.time_per_line
         error_msg = None
+        pending_costs = Counter
 
         def render():
             print("Time remaining:", time_remaining)
             print("Resources:")
             pprint(resources)
+            if pending_costs:
+                print("Pending costs:")
+                pprint(pending_costs)
+            print()
             pprint(action if error_msg is None else new_action)
+            print()
             for k, v in sorted(assignments.items()):
                 print(f"{k}: {v}")
             if destroy:
@@ -696,9 +714,19 @@ class Env(gym.Env):
             remaining = required - Counter(building_positions.values())
             success = not remaining
 
+            pending_positions = {
+                a.coord: a.building
+                for a in assignments.values()
+                if isinstance(a, BuildOrder)
+            }
+            pending_costs = Counter(
+                [r for b in pending_positions.values() for r in b.cost]
+            )
+
             state = State(
                 building_positions=building_positions,
                 destroy=destroy,
+                pending_positions=pending_positions,
                 positions=positions,
                 resources=resources,
                 success=success,
@@ -723,6 +751,7 @@ class Env(gym.Env):
                 resources=resources,
                 dependencies=dependencies,
                 building_positions=building_positions,
+                pending_costs=pending_costs,
                 pending_positions=pending_positions,
                 positions=positions,
             )
@@ -739,11 +768,7 @@ class Env(gym.Env):
                 continue
 
             for worker in action.get_workers():
-                old_assignment = assignments[worker]
                 assignments[worker] = assignment
-                if isinstance(old_assignment, BuildOrder):
-                    resources.update(old_assignment.building.cost)
-                    # refund cost of building for old assignment
 
             worker_id: Worker
             for worker_id, assignment in sorted(
@@ -756,6 +781,7 @@ class Env(gym.Env):
                     worker=worker_id,
                     assignments=assignments,
                     building_positions=building_positions,
+                    pending_costs=pending_costs,
                     pending_positions=pending_positions,
                     required=required,
                     resources=resources,

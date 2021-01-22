@@ -121,32 +121,17 @@ class Building(WorldObject, ActionComponent, ABC, metaclass=ActionComponentABCMe
 
 
 class Assignment:
-    def execute(
-        self,
-        assignments: "Assignments",
-        resources: typing.Counter["Resource"],
-        worker: "Worker",
-        **kwargs,
-    ) -> Optional[str]:
-        original_assignment = assignments[worker]
-        error_msg = self._execute(
-            assignments=assignments, resources=resources, worker=worker, **kwargs
-        )
-        if error_msg is None and isinstance(original_assignment, BuildOrder):
-            # refund cost of building since assignment changed.
-            resources.update(original_assignment.building.cost)
-        return error_msg
-
     @abstractmethod
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: "ResourceCounter",
         carrying: "Carrying",
     ) -> None:
         raise NotImplementedError
@@ -221,12 +206,13 @@ class Resource(WorldObject, Assignment, Enum):
     def __eq__(self, other):
         return Enum.__eq__(self, other)
 
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: "ResourceCounter",
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
         resources: typing.Counter["Resource"],
@@ -270,6 +256,9 @@ class Resource(WorldObject, Assignment, Enum):
         if self is Resource.MINERALS:
             return fg("blue") + "m" + RESET
         raise RuntimeError
+
+
+ResourceCounter = typing.Counter[Resource]
 
 
 @dataclass(frozen=True)
@@ -332,23 +321,21 @@ class BuildOrder(Assignment):
     building: Building
     coord: CoordType
 
-    def _execute(
+    def execute(
         self,
         positions: "Positions",
         worker: "Worker",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
+        pending_costs: ResourceCounter,
         pending_positions: "BuildingPositions",
         required: typing.Counter["Building"],
-        resources: typing.Counter["Resource"],
+        resources: ResourceCounter,
         carrying: "Carrying",
     ) -> None:
-        if self.coord not in pending_positions:
-            pending_positions[self.coord] = self.building
-            resources.subtract(self.building.cost)
         if positions[worker] == self.coord:
             building_positions[self.coord] = self.building
-            del pending_positions[self.coord]
+            resources.subtract(pending_costs)
             assignments[worker] = DoNothing()
             return None
         else:
@@ -368,15 +355,15 @@ class BuildOrder(Assignment):
 class GoTo(Assignment):
     coord: CoordType
 
-    def _execute(
+    def execute(
         self, positions: "Positions", worker: "Worker", assignments, *args, **kwargs
-    ) -> Optional[str]:
+    ) -> None:
         positions[worker] = move_from(positions[worker], toward=self.coord)
         return
 
 
 class DoNothing(Assignment):
-    def _execute(self, *args, **kwargs) -> Optional[str]:
+    def execute(self, *args, **kwargs) -> None:
         return
 
 
@@ -582,6 +569,7 @@ class ActionStage:
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -733,6 +721,7 @@ class CoordAction(HasWorkers, NoWorkersAction):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
@@ -786,6 +775,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         *args,
         **kwargs,
     ) -> Optional[str]:
@@ -793,7 +783,7 @@ class BuildingAction(HasWorkers, CoordCanOpenGate):
         dependency_met = dependency in [*building_positions.values(), None]
         if not dependency_met:
             return f"Dependency ({dependency}) not met for {self}."
-        insufficient_resources = Counter(self.building.cost) - resources
+        insufficient_resources = Counter(self.building.cost) - resources - pending_costs
         if insufficient_resources:
             return "Insufficient resources"
         return None
@@ -827,11 +817,12 @@ class BuildingCoordAction(HasWorkers, NoWorkersAction):
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
         building_positions: BuildingPositions,
+        pending_costs: ResourceCounter,
         pending_positions: BuildingPositions,
         positions: Positions,
     ) -> Optional[str]:
         dependency = dependencies[self.building]
-        if not dependency in [*building_positions.values(), None]:
+        if dependency not in [*building_positions.values(), None]:
             return f"Dependency ({dependency}) not met for {self.building}."
         coord = astuple(self.coord)
         all_positions = {**building_positions, **pending_positions}
@@ -870,8 +861,9 @@ class Line:
 @dataclass
 class State:
     action: ActionStage
-    building_positions: Dict[CoordType, Building]
+    building_positions: BuildingPositions
     destroy: Dict[CoordType, Building]
+    pending_positions: BuildingPositions
     pointer: int
     positions: Dict[Union[Resource, Worker], CoordType]
     resources: typing.Counter[Resource]
