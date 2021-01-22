@@ -24,7 +24,7 @@ id=$(echo $wandb_output | tail -n1 | awk 'END {print $NF}')
 
 echo "Creating $nruns sessions..."
 
-for i in $(seq $gpu0 $(($nruns-1))); do
+for i in $(seq $gpu0 $(($gpu0 + $nruns-1))); do
   gpu=$(($i % $ngpu));
   echo "tmux at -t $session$i"
   tmux new-session -d -s "$session$i" "CUDA_VISIBLE_DEVICES=$gpu wandb agent $id"
