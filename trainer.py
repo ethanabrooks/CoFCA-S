@@ -292,7 +292,6 @@ class Trainer:
                     **dict(time_per.items()),
                     **dict(time_spent.items()),
                     frames=frames["so_far"],
-                    log_dir=log_dir,
                 )
                 if failure_buffer is not None:
                     report.update({"failure buffer size": failure_buffer.qsize()})
