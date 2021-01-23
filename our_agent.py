@@ -270,7 +270,7 @@ class Agent(NNBase):
         train_lines = self.train_lines
         self.obs_spaces = eval_obs_space.spaces
         self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
-        self.train_lines = len(self.obs_spaces["lines"].nvec)
+        self.train_lines = len(self.obs_spaces["instructions"].nvec)
         # noinspection PyProtectedMember
         self.state_sizes = replace(self.state_sizes, d_probs=self.d_space())
         self.obs_spaces = Obs(**self.obs_spaces)
