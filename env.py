@@ -597,7 +597,7 @@ class Env(gym.Env):
 
     def reset(self):
         self.i += 1
-        self.iterator = self.failure_buffer_wrapper(self.srti_generator())
+        self.iterator = self.srti_generator()
         s, r, t, i = next(self.iterator)
         return s
 
