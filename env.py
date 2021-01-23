@@ -148,7 +148,10 @@ class Env(gym.Env):
             ).flatten()
         )
         instructions = spaces.MultiDiscrete(
-            np.array([Building.space().n + Unit.space().n] * self.max_lines)
+            np.array(
+                [Building.space().n + Unit.space().n + 1]  # +1 for padding
+                * self.max_lines
+            )
         )
         instruction_mask = spaces.MultiDiscrete(2 * np.ones(self.max_lines))
         obs = spaces.Box(

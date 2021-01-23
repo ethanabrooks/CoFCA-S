@@ -191,11 +191,11 @@ class Worker(
 
     @staticmethod
     def parse(n: int) -> "Worker":
-        return Worker(n)
+        return Worker(n + 1)
 
     @staticmethod
     def space() -> spaces.Discrete:
-        return spaces.Discrete(len(Worker))  # binary: in or out
+        return spaces.Discrete(len(Worker))
 
     @property
     def symbol(self) -> str:
@@ -419,38 +419,61 @@ class CompoundAction:
     coord: Optional[Coord] = None
     unit: Optional["Unit"] = None
 
-    @classmethod
-    def input_space(cls):
-        return spaces.MultiDiscrete(
-            [
-                1 + Worker.space().n,
-                1 + Building.space().n,
-                1 + Coord.space().n,
-                1 + Unit.space().n,
-            ]
-        )
+    @staticmethod
+    def component_classes() -> Generator[type, None, None]:
+        yield Worker
+        yield Building
+        yield Coord
+        yield Unit
 
     @classmethod
-    def parse(cls, worker: int, coord: int, building: int, unit: int):
-        return CompoundAction(
-            worker=None if worker == 0 else Worker.parse(worker - 1),
-            building=None if building == 0 else Building.parse(building - 1),
-            coord=None if coord == 0 else Coord.parse(worker - 1),
-            unit=None if unit == 0 else Unit.parse(unit - 1),
-        )
+    def input_space(cls):
+        def space_size(c):
+            assert issubclass(c, ActionComponent)
+            return c.space().n
+
+        return spaces.MultiDiscrete([1 + sum(map(space_size, cls.component_classes()))])
+
+    @classmethod
+    def parse(cls, value: int):
+        worker = building = coord = unit = None
+
+        def parse_alternatives(n, *classes: ActionComponentMeta):
+            head, *tail = classes
+            nones = [None for _ in tail]
+            assert issubclass(head, ActionComponent)
+            if head.space().contains(n):
+                return [head.parse(n), *nones]
+            return [None, *parse_alternatives(n - head.space().n, *tail)]
+
+        if value > 0:
+            return CompoundAction(
+                *parse_alternatives(value - 1, *cls.component_classes())
+            )
+
+        return CompoundAction(worker=worker, building=building, coord=coord, unit=unit)
 
     @classmethod
     def representation_space(cls):
-        return cls.input_space()
+        return spaces.MultiDiscrete([1 + c.space().n for c in cls.component_classes()])
 
     def to_input_int(self) -> IntGenerator:
+        base = 1
+        for f, cls in zip(fields(self), self.component_classes()):
+            assert issubclass(cls, ActionComponent)
+            value = getattr(self, f.name)
+            if value is not None:
+                assert isinstance(value, cls)
+                yield base + value.to_int()
+                return
+            base += cls.space().n
+        yield 0
+
+    def to_representation_ints(self) -> IntGenerator:
         value: Optional[ActionComponent]
         for f in fields(self):
             value = getattr(self, f.name)
             yield 0 if value is None else value.to_int()
-
-    def to_representation_ints(self) -> IntGenerator:
-        yield from self.to_input_int()
 
 
 CompoundActionGenerator = Generator[CompoundAction, None, None]
@@ -627,11 +650,11 @@ class InitialAction(ActionStage):
     ) -> Union["WorkerAction", "BuildingAction", "InitialAction"]:
         if action.worker is not None:
             return WorkerAction(action.worker)
-        try:
-            building = building_positions[astuple(action.coord)]
-        except KeyError:
-            return InitialAction()
-        return BuildingAction(building)
+        if action.coord is not None:
+            coord = astuple(action.coord)
+            if coord in building_positions:
+                return BuildingAction(building_positions[coord])
+        return InitialAction()
 
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         return DoNothing()

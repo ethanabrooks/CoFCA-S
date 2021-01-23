@@ -116,7 +116,7 @@ class Agent(NNBase):
             self.resources_hidden_size // 2 * 2
         )  # make divisible by 2
 
-        self.embed_instruction = MultiEmbeddingBag(
+        self.embed_instruction = nn.Embedding(
             self.obs_spaces.instructions.nvec[0],
             embedding_dim=self.instruction_embed_size,
         )
