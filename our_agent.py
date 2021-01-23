@@ -110,14 +110,15 @@ class Agent(NNBase):
         self.action_nvec = RawAction.parse(*self.action_space.nvec)
         self.obs_sections = get_obs_sections(self.obs_spaces)
         self.eval_lines = self.max_eval_lines
-        self.train_lines = len(self.obs_spaces.lines.nvec)
+        self.train_lines = len(self.obs_spaces.instructions.nvec)
 
         self.resources_hidden_size = (
             self.resources_hidden_size // 2 * 2
         )  # make divisible by 2
 
         self.embed_instruction = MultiEmbeddingBag(
-            self.obs_spaces.lines.nvec[0], embedding_dim=self.instruction_embed_size
+            self.obs_spaces.instructions.nvec[0],
+            embedding_dim=self.instruction_embed_size,
         )
         self.gru = nn.GRU(self.get_gru_in_size(), self.hidden_size)
         self.initial_hxs = nn.Parameter(
@@ -294,8 +295,10 @@ class Agent(NNBase):
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
         state = replace(state, obs=state.obs.view(N, *self.obs_spaces.obs.shape))
-        lines = state.lines.view(N, *self.obs_spaces.lines.shape).long()
-        line_mask = state.line_mask.view(N, self.nl)
+        instructions = state.instructions.view(
+            N, *self.obs_spaces.instructions.shape
+        ).long()
+        line_mask = state.instruction_mask.view(N, self.nl)
         line_mask = F.pad(line_mask, [self.nl, 0], value=1)  # pad for backward mask
         line_mask = torch.stack(
             [torch.roll(line_mask, shifts=-i, dims=-1) for i in range(self.nl)], dim=0
@@ -305,14 +308,14 @@ class Agent(NNBase):
 
         # build memory
         M = self.embed_instruction(
-            lines.view(-1, self.obs_spaces.lines.nvec[0].size)
+            instructions.view(-1, self.obs_spaces.instructions.nvec[0].size)
         ).view(N, -1, self.instruction_embed_size)
         p = state.ptr.long().flatten()
         R = torch.arange(N, device=p.device)
 
         x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
-        embedded_action = self.embed_action(  # TODO: remove
+        embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
         m = self.build_m(M, R, p)
@@ -534,7 +537,7 @@ class Agent(NNBase):
 
     @property
     def nl(self):
-        return len(self.obs_spaces.lines.nvec)
+        return len(self.obs_spaces.instructions.nvec)
 
     def print(self, *args, **kwargs):
         args = [
