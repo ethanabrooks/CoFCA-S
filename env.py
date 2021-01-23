@@ -177,21 +177,26 @@ class Env(gym.Env):
 
     def attack(
         self, building_positions: BuildingPositions, required: UnitCounter
-    ) -> Tuple[UnitCounter, BuildingPositions]:
-        destructible = [*required, *building_positions.keys()]
-        num_destroyed = self.random.randint(len(destructible))
-        destroy_idxs = self.random.choice(
-            len(destructible), size=num_destroyed, replace=False
-        )
-        units, buildings = [], {}
-        for idx in destroy_idxs:
-            chosen = destructible[idx]
-            if isinstance(chosen, Unit):
-                units.append(chosen)
-            else:
-                coord, building = chosen
-                buildings[coord] = building
-        return Counter(units), buildings
+    ) -> Tuple[Unit, BuildingPositions]:
+        unit: Unit = self.random.choice(list(required))
+        destructible: List[data_types.CoordType] = [
+            c for c, b in building_positions.items() if not isinstance(b, Nexus)
+        ]
+        buildings = {}
+        if destructible:
+            num_destroyed = self.random.randint(len(destructible))
+            destroy_idxs = self.random.choice(
+                len(destructible), size=num_destroyed, replace=False
+            )
+
+            def get_buildings():
+                for i in destroy_idxs:
+                    destroy_coord = destructible[i]
+                    yield destroy_coord, building_positions[destroy_coord]
+
+            buildings = dict(get_buildings())
+
+        return unit, buildings
 
     def build_building_dependencies(
         self, max_depth: int = None
@@ -845,7 +850,6 @@ class Env(gym.Env):
                 destroyed_unit, destroyed_buildings = self.attack(
                     building_positions, required
                 )
-                assert isinstance(destroyed_buildings, BuildingPositions)
                 required.subtract([destroyed_unit])
                 for coord in destroyed_buildings.keys():
                     del building_positions[coord]
