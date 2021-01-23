@@ -442,7 +442,7 @@ class Trainer:
         args_to_methods = cls.args_to_methods()
         args = {k: {} for k in args_to_methods}
         for k, v in cfg.items():
-            if k in ("_wandb", "wandb_version", "eval_perform"):
+            if k in ("_wandb", "wandb_version", "profile"):
                 continue
             assigned = False
             for arg_name, methods in args_to_methods.items():

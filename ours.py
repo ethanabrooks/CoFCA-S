@@ -1,6 +1,7 @@
+import cProfile
 import pickle
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
@@ -26,6 +27,7 @@ class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
     failure_buffer_size: int = 10000
     max_eval_lines: int = 13
     min_eval_lines: int = 1
+    profile: bool = False
 
 
 class Trainer(trainer.Trainer):
@@ -141,4 +143,10 @@ def main(_app):
 
 
 if __name__ == "__main__":
-    main(app)
+    config = DictConfig(asdict(OurConfig()))
+    config.synchronous = True
+    config.num_processes = 10
+    config.use_wandb = False
+    config.eval_interval = None
+    config.log_interval = 1
+    Trainer.main(config)
