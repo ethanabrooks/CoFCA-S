@@ -202,7 +202,7 @@ class Worker(
         return str(self.value)
 
     def to_int(self) -> int:
-        return self.value
+        return self.value - 1
 
 
 AssigneeGenerator = Generator[Assignee, None, None]
@@ -439,6 +439,7 @@ class CompoundAction:
         worker = building = coord = unit = None
 
         def parse_alternatives(n, *classes: ActionComponentMeta):
+            assert n >= 0
             head, *tail = classes
             nones = [None for _ in tail]
             assert issubclass(head, ActionComponent)
@@ -750,8 +751,8 @@ class BuildingAction(ActionStage):
 
     @staticmethod
     def _permitted_values() -> CompoundActionGenerator:
-        for i, j in Coord.possible_values():
-            yield CompoundAction(coord=Coord(i, j))
+        for unit in Units:
+            yield CompoundAction(unit=unit)
 
     @staticmethod
     def _prompt() -> str:

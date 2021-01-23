@@ -798,7 +798,7 @@ class Env(gym.Env):
             if raw_action is None:
                 new_action = action.from_input(building_positions)
             elif isinstance(raw_action, RawAction):
-                a, ptr = raw_action.a, raw_action.ptr
+                a, ptr = map(int, raw_action.a), int(raw_action.ptr)
                 new_action = action.update(*a, building_positions=building_positions)
             else:
                 raise RuntimeError
