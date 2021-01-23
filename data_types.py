@@ -1062,4 +1062,192 @@ Buildings: List[Building] = [
     TemplarArchives(),
     TwilightCouncil(),
 ]
+
+
+class Unit(ActionComponent, ABC, metaclass=ActionComponentABCMeta):
+    @property
+    @abstractmethod
+    def resource_cost(self) -> "Resources":
+        pass
+
+    @property
+    @abstractmethod
+    def population_cost(self) -> int:
+        pass
+
+    @staticmethod
+    def parse(n: int) -> "ActionComponent":
+        return Units[n]
+
+    @staticmethod
+    def space() -> spaces.Discrete:
+        return spaces.Discrete(len(Units))
+
+    @lru_cache
+    def to_int(self) -> int:
+        return Units.index(self)
+
+
+class Zealot(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=100, gas=0)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class Stalker(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=125, gas=50)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class Sentry(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=50, gas=100)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class Adept(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=100, gas=25)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class HighTemplar(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=50, gas=150)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class DarkTemplar(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=125, gas=125)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class Immortal(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=275, gas=100)
+
+    @property
+    def population_cost(self) -> int:
+        return 4
+
+
+class Colossus(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=300, gas=200)
+
+    @property
+    def population_cost(self) -> int:
+        return 6
+
+
+class Disruptor(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=150, gas=150)
+
+    @property
+    def population_cost(self) -> int:
+        return 3
+
+
+class Observer(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=25, gas=75)
+
+    @property
+    def population_cost(self) -> int:
+        return 1
+
+
+class WarpPrism(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=250, gas=0)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class Phoenix(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=150, gas=100)
+
+    @property
+    def population_cost(self) -> int:
+        return 2
+
+
+class VoidRay(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=200, gas=150)
+
+    @property
+    def population_cost(self) -> int:
+        return 4
+
+
+class Oracle(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=150, gas=150)
+
+    @property
+    def population_cost(self) -> int:
+        return 3
+
+
+class Carrier(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=350, gas=250)
+
+    @property
+    def population_cost(self) -> int:
+        return 6
+
+
+class Tempest(Unit):
+    @property
+    def resource_cost(self) -> "Resources":
+        return Resources(minerals=250, gas=175)
+
+    @property
+    def population_cost(self) -> int:
+        return 5
+
+
+Units = []
+
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)
