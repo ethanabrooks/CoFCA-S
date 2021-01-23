@@ -69,7 +69,6 @@ class EnvConfig:
     attack_prob: float = 0
     break_on_fail: bool = False
     bucket_size: int = 5
-    include_pending_buildings_in_obs: bool = False
     max_lines: int = 10
     min_lines: int = 1
     time_per_line: int = 4
@@ -84,7 +83,6 @@ class Env(gym.Env):
     bucket_size: int
     attack_prob: float
     failure_buffer: Queue
-    include_pending_buildings_in_obs: bool
     max_lines: int
     min_lines: int
     rank: int
@@ -136,8 +134,6 @@ class Env(gym.Env):
         )
 
         channel_size = len(WorldObjects) + 1  # +1 for destroy
-        if self.include_pending_buildings_in_obs:
-            channel_size += len(Buildings)
         max_shape = (channel_size, *world_shape)
         obs_space = spaces.Box(
             low=np.zeros(max_shape, dtype=np.float32),
@@ -454,10 +450,6 @@ class Env(gym.Env):
             world = np.zeros(self.obs_spaces.obs.shape)
             for o, p in coords():
                 world[(WorldObjects.index(o), *p)] = 1
-            if self.include_pending_buildings_in_obs:
-                for p, b in state.pending_positions.items():
-                    c = len(WorldObjects) + Buildings.index(b)
-                    world[(c, *p)] = 1
             for p in state.destroy.keys():
                 world[(-1, *p)] = 1
             array = world
