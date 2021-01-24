@@ -221,7 +221,6 @@ class Env(gym.Env):
             self.n_lines_space.low >= 2
         ), "At least 2 lines required to build a worker."
 
-        @lru_cache(maxsize=len(Buildings))
         def instructions_for(building: Building):
             if building is None:
                 return
@@ -238,7 +237,7 @@ class Env(gym.Env):
             while True:
                 unit = self.random.choice(Units)
                 building = unit_dependencies[unit]
-                building_instructions = [b for b in instructions_for(building)]
+                building_instructions = [*instructions_for(building)]
                 instructions = [
                     *building_instructions,
                     unit,
