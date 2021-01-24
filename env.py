@@ -221,6 +221,8 @@ class Env(gym.Env):
             self.n_lines_space.low >= 2
         ), "At least 2 lines required to build a worker."
 
+        instructions_cache = {}
+
         def instructions_for(building: Building):
             if building is None:
                 return
@@ -237,11 +239,12 @@ class Env(gym.Env):
             while True:
                 unit = self.random.choice(Units)
                 building = unit_dependencies[unit]
-                building_instructions = [*instructions_for(building)]
-                instructions = [
-                    *building_instructions,
-                    unit,
-                ]
+                try:
+                    building_instructions = instructions_cache[building]
+                except KeyError:
+                    building_instructions = [*instructions_for(building)]
+                    instructions_cache[building] = building_instructions
+                instructions = [*building_instructions, unit]
                 if len(instructions) <= n:
                     yield from instructions
                     yield from random_instructions(n=n - len(instructions))
