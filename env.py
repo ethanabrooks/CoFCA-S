@@ -446,6 +446,8 @@ class Env(gym.Env):
         ]
 
         def render():
+            pprint(unit_dependencies)
+
             def buildings_required_for(
                 unit_or_building: Union[Unit, Building]
             ) -> Generator[Building, None, None]:
@@ -504,7 +506,7 @@ class Env(gym.Env):
             obs = OrderedDict(
                 asdict(
                     Obs(
-                        action_mask=state.action.mask().ravel(),
+                        action_mask=state.action.mask(unit_dependencies).ravel(),
                         destroyed_unit=destroyed_unit,
                         gate_openers=gate_openers.ravel(),
                         instruction_mask=(np.array([int(p is None) for p in padded])),

@@ -102,7 +102,7 @@ class Building(
         return self.__class__.__name__
 
     def __repr__(self):
-        return f"({Buildings.index(self)}) {str(self)}: {self.cost}"
+        return f"({Buildings.index(self)}) {str(self)}"
 
     @property
     @abstractmethod
@@ -506,7 +506,9 @@ class ActionStage:
 
     @staticmethod
     @abstractmethod
-    def _permitted_values() -> CompoundActionGenerator:
+    def _permitted_values(
+        unit_dependencies: Dict["Unit", Building]
+    ) -> CompoundActionGenerator:
         pass
 
     @staticmethod
@@ -577,13 +579,11 @@ class ActionStage:
     ) -> Optional[str]:
         return
 
-    @classmethod
-    @lru_cache
-    def mask(cls) -> np.ndarray:
+    def mask(self, unit_dependencies: Dict["Unit", Building]) -> np.ndarray:
         nvec = CompoundAction.input_space().nvec
         mask = np.ones((len(nvec), max(nvec)))
         R = np.arange(len(nvec))
-        for permitted_values in cls._permitted_values():
+        for permitted_values in self._permitted_values(unit_dependencies):
             unmask = [*permitted_values.to_input_int()]
             mask[R, unmask] = 0
         return mask
@@ -636,7 +636,7 @@ class InitialAction(ActionStage):
         return CompoundAction(worker=worker, coord=coord)
 
     @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
+    def _permitted_values(unit_dependencies) -> CompoundActionGenerator:
         for worker in Worker:
             yield CompoundAction(worker=worker)
         for coord in Coord.possible_values():
@@ -697,7 +697,7 @@ class WorkerAction(HasWorker, CoordCanOpenGate):
         return CompoundAction(coord=Coord(i, j))
 
     @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
+    def _permitted_values(unit_dependencies) -> CompoundActionGenerator:
         yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
@@ -749,10 +749,10 @@ class BuildingAction(ActionStage):
             raise InvalidInput
         return CompoundAction(unit=unit)
 
-    @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
+    def _permitted_values(self, unit_dependencies) -> CompoundActionGenerator:
         for unit in Units:
-            yield CompoundAction(unit=unit)
+            if unit_dependencies[unit] == self.building:
+                yield CompoundAction(unit=unit)
 
     @staticmethod
     def _prompt() -> str:
@@ -829,7 +829,7 @@ class WorkerBuildingAction(HasWorker, CoordCanOpenGate):
         return CompoundAction(coord=Coord(i, j))
 
     @staticmethod
-    def _permitted_values() -> CompoundActionGenerator:
+    def _permitted_values(unit_dependencies) -> CompoundActionGenerator:
         yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
@@ -1160,7 +1160,7 @@ class Unit(ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta):
         return self.__class__.__name__
 
     def __repr__(self):
-        return f"({Units.index(self)}) {str(self)}: {self.resource_cost}"
+        return f"({Units.index(self)}) {str(self)}"
 
     def execute(
         self,
@@ -1378,6 +1378,7 @@ Units = [
     Zealot(),
 ]
 UnitCounter = typing.Counter[Unit]
+UnitSet = typing.Set[Unit]
 
 WorldObjects = list(Buildings) + list(Resource) + list(Worker)
 Line = Union[Building, Unit]
