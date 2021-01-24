@@ -25,7 +25,7 @@ class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 13
-    min_eval_lines: int = 1
+    min_eval_lines: int = 2
 
 
 class Trainer(trainer.Trainer):
