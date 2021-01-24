@@ -212,16 +212,17 @@ class Env(gym.Env):
         yield Assimilator(), None
         yield from itertools.zip_longest(buildings, dependencies)
 
-    def build_instructions(
+    def build_instructions_and_dependencies(
         self,
-        building_dependencies: BuildingDependencies,
-        unit_dependencies: UnitDependencies,
-    ) -> List[Line]:
+    ) -> Tuple[List[Line], BuildingDependencies, UnitDependencies]:
         assert (
             self.n_lines_space.low >= 2
         ), "At least 2 lines required to build a worker."
 
-        instructions_cache = {}
+        building_dependencies: BuildingDependencies = dict(
+            self.build_building_dependencies()
+        )
+        unit_dependencies: UnitDependencies = dict(self.build_unit_dependencies())
 
         def instructions_for(building: Building):
             if building is None:
@@ -229,28 +230,31 @@ class Env(gym.Env):
             yield from instructions_for(building_dependencies[building])
             yield building
 
-        def random_instructions(
-            n: int,
-        ) -> Generator[List[Line], None, None]:
-            if n < 0:
-                raise RuntimeError
-            if n == 0:
-                return
-            while True:
-                unit = self.random.choice(Units)
-                building = unit_dependencies[unit]
-                try:
-                    building_instructions = instructions_cache[building]
-                except KeyError:
-                    building_instructions = [*instructions_for(building)]
-                    instructions_cache[building] = building_instructions
-                instructions = [*building_instructions, unit]
-                if len(instructions) <= n:
-                    yield from instructions
-                    yield from random_instructions(n=n - len(instructions))
-                    return
+        n_lines = self.n_lines_space.sample()
+        instructions_for = {b: [*instructions_for(b)] for b in Buildings}
 
-        return [*random_instructions(self.n_lines_space.sample())]
+        def random_instructions(n):
+            if n <= 0:
+                return
+            _instructions_for = {
+                b: i for b, i in instructions_for.items() if len(i) < n
+            }
+            possible_units = [
+                u for u, b in unit_dependencies.items() if b in _instructions_for.keys()
+            ]
+            if not possible_units:
+                return
+            unit = possible_units[self.random.choice(len(possible_units))]
+            building = unit_dependencies[unit]
+            _instructions = [*_instructions_for[building], unit]
+            yield from _instructions
+            yield from random_instructions(n - len(_instructions))
+
+        instructions = [*random_instructions(n_lines)]
+        if not instructions:
+            return self.build_instructions_and_dependencies()
+        assert len(instructions) >= 2
+        return instructions, building_dependencies, unit_dependencies
 
     @staticmethod
     def build_trees(dependencies: BuildingDependencies) -> typing.Set[Tree]:
@@ -648,12 +652,12 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], Optional[RawAction], None]:
-        building_dependencies = dict(self.build_building_dependencies())
-        unit_dependencies = dict(self.build_unit_dependencies())
-        instructions = self.build_instructions(
-            building_dependencies=building_dependencies,
-            unit_dependencies=unit_dependencies,
-        )
+        (
+            instructions,
+            building_dependencies,
+            unit_dependencies,
+        ) = self.build_instructions_and_dependencies()
+        assert len(instructions) >= 2
         obs_iterator = self.obs_generator(
             *instructions,
             building_dependencies=building_dependencies,
