@@ -583,7 +583,10 @@ class ActionStage:
         nvec = CompoundAction.input_space().nvec
         mask = np.ones((len(nvec), max(nvec)))
         R = np.arange(len(nvec))
-        for permitted_values in self._permitted_values(unit_dependencies):
+        for permitted_values in [
+            *self._permitted_values(unit_dependencies),
+            CompoundAction(),
+        ]:
             unmask = [*permitted_values.to_input_int()]
             mask[R, unmask] = 0
         return mask
@@ -698,7 +701,6 @@ class WorkerAction(HasWorker, CoordCanOpenGate):
 
     @staticmethod
     def _permitted_values(unit_dependencies) -> CompoundActionGenerator:
-        yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
         for building in Buildings:
@@ -830,7 +832,6 @@ class WorkerBuildingAction(HasWorker, CoordCanOpenGate):
 
     @staticmethod
     def _permitted_values(unit_dependencies) -> CompoundActionGenerator:
-        yield CompoundAction()
         for i, j in Coord.possible_values():
             yield CompoundAction(coord=Coord(i, j))
 
