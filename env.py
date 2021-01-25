@@ -73,7 +73,8 @@ def strip_color(s: str):
 
 @dataclass
 class EnvConfig:
-    attack_prob: float = 0
+    ambush_prob: float = 0.25
+    attack_prob: float = 0.25
     break_on_fail: bool = False
     bucket_size: int = 5
     max_lines: int = 10
@@ -86,9 +87,10 @@ class EnvConfig:
 # noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
+    ambush_prob: float
+    attack_prob: float
     break_on_fail: bool
     bucket_size: int
-    attack_prob: float
     failure_buffer: Queue
     max_lines: int
     min_lines: int
@@ -175,10 +177,7 @@ class Env(gym.Env):
         )
         self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
-    def attack(
-        self, building_positions: BuildingPositions, required: UnitCounter
-    ) -> Tuple[Unit, BuildingPositions]:
-        unit: Unit = self.random.choice(list(required))
+    def attack(self, building_positions: BuildingPositions) -> BuildingPositions:
         destructible: List[data_types.CoordType] = [
             c for c, b in building_positions.items() if not isinstance(b, Nexus)
         ]
@@ -196,7 +195,7 @@ class Env(gym.Env):
 
             buildings = dict(get_buildings())
 
-        return unit, buildings
+        return buildings
 
     def build_building_dependencies(
         self, max_depth: int = None
@@ -244,7 +243,7 @@ class Env(gym.Env):
             ]
             if not possible_units:
                 return
-            unit = possible_units[self.random.choice(len(possible_units))]
+            unit = self.random.choice(possible_units)
             building = unit_dependencies[unit]
             _instructions = [*_instructions_for[building], unit]
             yield from _instructions
@@ -279,10 +278,7 @@ class Env(gym.Env):
     def build_unit_dependencies(
         self,
     ) -> Generator[Tuple[Unit, Building], None, None]:
-        buildings = [
-            Building.parse(i)
-            for i in self.random.choice(len(Buildings), size=len(Units))
-        ]
+        buildings = self.random.choice(Buildings, size=len(Units))
         units = copy.copy(Units)
         self.random.shuffle(units)
         yield from zip(units, buildings)
@@ -854,10 +850,14 @@ class Env(gym.Env):
                     resources=resources,
                 )
 
+            destroyed_unit = None
+            if deployed and self.random.random() < self.ambush_prob / len(instructions):
+                destroyed_unit = self.random.choice([*deployed])
+                deployed.pop(destroyed_unit)
+
+            destroyed_buildings = {}
             if self.random.random() < self.attack_prob / len(instructions):
-                destroyed_unit, destroyed_buildings = self.attack(
-                    building_positions, required
-                )
+                destroyed_buildings = self.attack(building_positions)
                 required.subtract([destroyed_unit])
                 for coord in destroyed_buildings.keys():
                     del building_positions[coord]

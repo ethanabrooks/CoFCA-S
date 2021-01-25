@@ -55,6 +55,7 @@ class AgentConfig:
     add_layer: bool = True
     conv_hidden_size: int = 100
     debug: bool = False
+    destroyed_unit_embed_size: int = 100
     feed_m_to_gru: bool = True
     gate_coef: float = 0.01
     globalized_critic: bool = False
@@ -79,6 +80,7 @@ class Agent(NNBase):
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
     debug: bool
+    destroyed_unit_embed_size: int
     feed_m_to_gru: bool
     gate_coef: float
     globalized_critic: bool
@@ -116,6 +118,10 @@ class Agent(NNBase):
             self.resources_hidden_size // 2 * 2
         )  # make divisible by 2
 
+        self.embed_destroyed_unit = nn.Embedding(
+            self.obs_spaces.destroyed_unit.n,
+            embedding_dim=self.destroyed_unit_embed_size,
+        )
         self.embed_instruction = nn.Embedding(
             self.obs_spaces.instructions.nvec[0],
             embedding_dim=self.instruction_embed_size,
@@ -315,6 +321,9 @@ class Agent(NNBase):
 
         x = self.conv(state.obs)
         resources = self.embed_resources(state.resources)
+        destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
+            N, self.destroyed_unit_embed_size
+        )
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
@@ -325,7 +334,7 @@ class Agent(NNBase):
             else embedded_action
         )
         h, rnn_hxs = self._forward_gru(gru_in, rnn_hxs, masks)
-        z1 = torch.cat([x, resources, embedded_action, h], dim=-1)
+        z1 = torch.cat([x, resources, embedded_action, destroyed_unit, h], dim=-1)
 
         G = self.get_G(M=M, R=R, p=p, z1=z1)
 
@@ -559,6 +568,7 @@ class Agent(NNBase):
             self.conv_hidden_size
             + self.resources_hidden_size
             + self.action_embed_size
+            + self.destroyed_unit_embed_size
             + self.hidden_size
         )
 
