@@ -77,6 +77,7 @@ class EnvConfig:
     attack_prob: float = 0.25
     break_on_fail: bool = False
     bucket_size: int = 5
+    check_spaces: bool = False
     max_lines: int = 10
     min_lines: int = 2
     time_per_line: int = 4
@@ -91,6 +92,7 @@ class Env(gym.Env):
     attack_prob: float
     break_on_fail: bool
     bucket_size: int
+    check_spaces: bool
     failure_buffer: Queue
     max_lines: int
     min_lines: int
@@ -520,14 +522,15 @@ class Env(gym.Env):
                     )
                 )
             )
-            for (k, space), (n, o) in zip(
-                self.observation_space.spaces.items(), obs.items()
-            ):
-                if not space.contains(o):
-                    import ipdb
+            if self.check_spaces:
+                for (k, space), (n, o) in zip(
+                    self.observation_space.spaces.items(), obs.items()
+                ):
+                    if not space.contains(o):
+                        import ipdb
 
-                    ipdb.set_trace()
-                    space.contains(o)
+                        ipdb.set_trace()
+                        space.contains(o)
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
 
