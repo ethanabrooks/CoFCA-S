@@ -517,7 +517,7 @@ class Env(gym.Env):
                         instructions=(np.array([*map(self.preprocess_line, padded)])),
                         obs=world,
                         partial_action=(np.array([*state.action.to_ints()])),
-                        ptr=state.pointer,
+                        ptr=np.clip(state.pointer, 0, self.max_lines - 1),
                         resources=(np.array([state.resources[r] for r in Resource])),
                     )
                 )
