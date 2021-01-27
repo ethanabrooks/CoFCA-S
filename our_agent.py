@@ -460,7 +460,7 @@ class Agent(NNBase):
             action=action,
             action_log_probs=compute_metric(action_log_probs),
             aux_loss=aux_loss,
-            dist=None,
+            dist=dists,
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
