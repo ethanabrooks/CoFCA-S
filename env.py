@@ -476,7 +476,9 @@ class Env(gym.Env):
                     "{:2}{}{} {}".format(
                         i,
                         "-" if i == state.pointer else " ",
-                        "*" if line in required_buildings else " ",
+                        "*"
+                        if line in [*required_buildings, *state.required_units]
+                        else " ",
                         repr(line),
                     )
                 )
