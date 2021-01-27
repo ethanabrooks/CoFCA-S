@@ -473,11 +473,8 @@ class Agent(NNBase):
         unmask = 1 - line_mask
         masked = unmask * d_probs
         sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
-        masked = ~sum_zero * masked + sum_zero * torch.ones_like(masked) / self.inf
-        normalizer = (masked + 1 - dg.unsqueeze(-1)).sum(-1, keepdim=True)
-        normalized = masked / normalizer
-        self.print("normalized", normalized.view(normalized.size(0), 2, -1))
-        delta_dist = gate(dg.unsqueeze(-1), normalized, ones * self.nl)
+        masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
+        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
