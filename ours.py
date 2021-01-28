@@ -26,6 +26,7 @@ class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
     failure_buffer_size: int = 10000
     max_eval_lines: int = 13
     min_eval_lines: int = 2
+    eval_time_per_line: int = 10
 
 
 class Trainer(trainer.Trainer):
@@ -99,27 +100,31 @@ class Trainer(trainer.Trainer):
     def make_vec_envs(
         cls,
         curriculum_setting,
+        eval_time_per_line: int,
         evaluating: bool,
         failure_buffer: Queue,
         max_eval_lines: int,
         min_eval_lines: int,
         max_lines: int,
         min_lines: int,
+        time_per_line: int,
         world_size: int,
         **kwargs,
     ):
         if evaluating:
             min_lines = min_eval_lines
             max_lines = max_eval_lines
+            time_per_line = eval_time_per_line
         data_types.WORLD_SIZE = world_size
         mp_kwargs = dict()
         return super().make_vec_envs(
-            mp_kwargs=mp_kwargs,
-            min_lines=min_lines,
-            max_lines=max_lines,
             evaluating=evaluating,
-            world_size=world_size,
             failure_buffer=failure_buffer,
+            max_lines=max_lines,
+            min_lines=min_lines,
+            mp_kwargs=mp_kwargs,
+            time_per_line=time_per_line,
+            world_size=world_size,
             **kwargs,
         )
 
