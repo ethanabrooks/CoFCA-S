@@ -1,5 +1,5 @@
+import importlib
 import pickle
-import sys
 from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
@@ -11,10 +11,10 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
+import cofi_s
 import data_types
 import env
 import osx_queue
-import cofi_s
 import trainer
 from config import BaseConfig
 from wrappers import VecPyTorch
@@ -27,6 +27,7 @@ class OurConfig(BaseConfig, env.EnvConfig, cofi_s.AgentConfig):
     max_eval_lines: int = 13
     min_eval_lines: int = 2
     eval_time_per_line: int = 5
+    architecture: str = "cofi_s"
 
 
 class Trainer(trainer.Trainer):
@@ -42,12 +43,12 @@ class Trainer(trainer.Trainer):
         return mapping
 
     @staticmethod
-    def build_agent(envs: VecPyTorch, **agent_args):
-        return cofi_s.Agent(
+    def build_agent(envs: VecPyTorch, architecture: str, **agent_args):
+        agent_args.update(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
-            **agent_args,
         )
+        return importlib.import_module(architecture).Agent(**agent_args)
 
     @staticmethod
     def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
