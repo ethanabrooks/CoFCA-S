@@ -11,11 +11,17 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-import cofi_s
 import data_types
 import env
 import osx_queue
 import trainer
+import cofi_s
+
+# noinspection PyUnresolvedReferences
+import cofi
+
+# noinspection PyUnresolvedReferences
+import unstructured_memory
 from config import BaseConfig
 from wrappers import VecPyTorch
 

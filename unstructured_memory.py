@@ -13,7 +13,7 @@ class Agent(cofi_s.Agent):
     def build_beta(self):
         return None
 
-    def build_d_gate(self):
+    def build_gate(self):
         return None
 
     def build_encode_G(self):
@@ -37,16 +37,23 @@ class Agent(cofi_s.Agent):
     def build_upsilon(self):
         return None
 
-    def get_dg(self, can_open_gate, ones, z):
+    def get_gate(self, can_open_gate, ones, z):
         return torch.ones_like(ones), None
 
-    def get_delta(self, P, dg, line_mask, ones, z):
+    def get_delta(self, delta_probs, dg, line_mask, ones):
         return torch.ones_like(ones) * self.nl, None
 
+    def get_delta_probs(self, G, P, z):
+        return None
+
     def get_gru_in_size(self):
+        assert self.feed_m_to_gru is False
         return self.action_embed_size
 
-    def get_G(self, M, R, p, z1):
+    def get_rolled(self, M, R, p, z1):
+        return None
+
+    def get_G(self, rolled):
         return None
 
     @property

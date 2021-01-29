@@ -125,9 +125,9 @@ class Env(gym.Env):
                 for field in astuple(
                     RawAction(
                         delta=[2 * self.max_lines],
-                        dg=[2],
+                        gate=[2],
                         ptr=[self.max_lines],
-                        a=action_components_space.nvec,
+                        extrinsic=action_components_space.nvec,
                     )
                 )
                 for x in field
@@ -807,8 +807,10 @@ class Env(gym.Env):
             if raw_action is None:
                 new_action = action.from_input(building_positions)
             elif isinstance(raw_action, RawAction):
-                a, ptr = map(int, raw_action.a), int(raw_action.ptr)
-                new_action = action.update(*a, building_positions=building_positions)
+                extrinsic, ptr = map(int, raw_action.extrinsic), int(raw_action.ptr)
+                new_action = action.update(
+                    *extrinsic, building_positions=building_positions
+                )
             else:
                 raise RuntimeError
 

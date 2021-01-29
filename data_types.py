@@ -397,16 +397,16 @@ X = typing.TypeVar("X")
 @dataclass(frozen=True)
 class RawAction:
     delta: Union[np.ndarray, torch.Tensor, X]
-    dg: Union[np.ndarray, torch.Tensor, X]
+    gate: Union[np.ndarray, torch.Tensor, X]
     ptr: Union[np.ndarray, torch.Tensor, X]
-    a: Union[np.ndarray, torch.Tensor, X]
+    extrinsic: Union[np.ndarray, torch.Tensor, X]
 
     @staticmethod
     def parse(*xs) -> "RawAction":
-        delta, dg, ptr, *a = xs
-        if a == [None]:
-            a = None
-        return RawAction(delta, dg, ptr, a)
+        delta, gate, ptr, *extrinsic = xs
+        if extrinsic == [None]:
+            extrinsic = None
+        return RawAction(delta, gate, ptr, extrinsic)
 
     def flatten(self) -> Generator[any, None, None]:
         yield from astuple(self)

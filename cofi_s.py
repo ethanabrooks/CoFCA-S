@@ -44,9 +44,9 @@ def get_obs_sections(obs_spaces):
     return [int(np.prod(s.shape)) for s in astuple(obs_spaces)]
 
 
-def gate(g, new, old):
+def apply_gate(gate, new, old):
     old = torch.zeros_like(new).scatter(1, old.unsqueeze(1), 1)
-    return Categorical(probs=g * new + (1 - g) * old)
+    return Categorical(probs=gate * new + (1 - gate) * old)
 
 
 @dataclass
@@ -144,7 +144,7 @@ class Agent(NNBase):
             embedding_dim=self.action_embed_size,
         )
 
-        extrinsic_nvec = self.action_nvec.a
+        extrinsic_nvec = self.action_nvec.extrinsic
         self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
@@ -182,7 +182,7 @@ class Agent(NNBase):
             self.zeta = nn.Sequential(self.activation, self.zeta)
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
-        self.d_gate = self.build_d_gate()
+        self.d_gate = self.build_gate()
 
         conv_out = conv_output_dimension(h, self.padding, self.kernel_size, self.stride)
         self.conv = nn.Sequential(
@@ -226,7 +226,7 @@ class Agent(NNBase):
             a=1,
             a_probs=num_actor_logits,
             d=1,
-            d_probs=(self.d_space()),
+            d_probs=self.delta_size(),
             h=self.hidden_size,
             p=1,
             v=1,
@@ -243,13 +243,11 @@ class Agent(NNBase):
         )
 
     def build_beta(self):
-        in_size = (
-            2 if self.no_roll or self.no_scan else 1
-        ) * self.instruction_embed_size
-        out_size = self.num_edges * self.d_space() if self.no_scan else self.num_edges
-        return nn.Sequential(self.init_(nn.Linear(in_size, out_size)))
+        return nn.Sequential(
+            self.init_(nn.Linear(self.instruction_embed_size, self.num_edges))
+        )
 
-    def build_d_gate(self):
+    def build_gate(self):
         return self.init_(nn.Linear(self.z_size, 2))
 
     @staticmethod
@@ -259,7 +257,7 @@ class Agent(NNBase):
     def build_upsilon(self):
         return self.init_(nn.Linear(self.z_size, self.num_edges))
 
-    def d_space(self):
+    def delta_size(self):
         if self.olsk:
             return 3
         elif self.transformer or self.no_scan or self.no_pointer:
@@ -278,7 +276,7 @@ class Agent(NNBase):
         self.obs_sections = get_obs_sections(Obs(**self.obs_spaces))
         self.train_lines = len(self.obs_spaces["instructions"].nvec)
         # noinspection PyProtectedMember
-        self.state_sizes = replace(self.state_sizes, d_probs=self.d_space())
+        self.state_sizes = replace(self.state_sizes, d_probs=self.delta_size())
         self.obs_spaces = Obs(**self.obs_spaces)
         yield self
         self.obs_spaces = obs_spaces
@@ -296,7 +294,7 @@ class Agent(NNBase):
             action = RawAction.parse(None, None, None, None)
         else:
             action = RawAction.parse(*action.unbind(-1))
-            action = replace(action, a=torch.stack(action.a, dim=-1))
+            action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -304,11 +302,8 @@ class Agent(NNBase):
         instructions = state.instructions.view(
             N, *self.obs_spaces.instructions.shape
         ).long()
-        line_mask = state.instruction_mask.view(N, self.nl)
-        line_mask = F.pad(line_mask, [self.nl, 0], value=1)  # pad for backward mask
-        line_mask = torch.stack(
-            [torch.roll(line_mask, shifts=-i, dims=-1) for i in range(self.nl)], dim=0
-        )
+        instruction_mask = state.instruction_mask
+        instruction_mask = self.get_instruction_mask(N, instruction_mask)
         # mask[:, :, 0] = 0  # prevent self-loops
         # line_mask = line_mask.view(self.nl, N, 2, self.nl).transpose(2, 3).unsqueeze(-1)
 
@@ -336,7 +331,8 @@ class Agent(NNBase):
         h, rnn_hxs = self._forward_gru(gru_in, rnn_hxs, masks)
         z1 = torch.cat([x, resources, embedded_action, destroyed_unit, h], dim=-1)
 
-        G = self.get_G(M=M, R=R, p=p, z1=z1)
+        rolled = self.get_rolled(M, R, p, z1)
+        G = self.get_G(rolled)
 
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R)
@@ -354,13 +350,13 @@ class Agent(NNBase):
         a_logits = self.actor(z).view(-1, *self.actor_logits_shape)
         mask = state.action_mask.view(-1, *self.actor_logits_shape)
         mask = mask * -self.inf
-        dists = replace(dists, a=Categorical(logits=a_logits + mask))
+        dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
 
-        self.print("a_probs", dists.a.probs)
+        self.print("a_probs", dists.extrinsic.probs)
 
-        if action.a is None:
-            a = dists.a.sample()
-            action = replace(action, a=a)
+        if action.extrinsic is None:
+            extrinsic = dists.extrinsic.sample()
+            action = replace(action, extrinsic=extrinsic)
 
         # while True:
         #     try:
@@ -373,19 +369,19 @@ class Agent(NNBase):
         #         pass
 
         gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
-        matches = gate_openers == action.a.unsqueeze(1)
+        matches: torch.Tensor = gate_openers == action.extrinsic.unsqueeze(1)
         assert isinstance(matches, torch.Tensor)
         # noinspection PyArgumentList
-        more_than_1_line = (1 - line_mask[p, R]).sum(-1) > 1
+        more_than_1_line = (1 - instruction_mask[p, R]).sum(-1) > 1
         can_open_gate = matches.all(-1).any(-1) * more_than_1_line
-        dg, dg_dist = self.get_dg(
+        gate, gate_dist = self.get_gate(
             can_open_gate=can_open_gate,
             ones=ones,
             z=z,
         )
-        dists = replace(dists, dg=dg_dist)
-        if action.dg is None:
-            action = replace(action, dg=dg)
+        dists = replace(dists, gate=gate_dist)
+        if action.gate is None:
+            action = replace(action, gate=gate)
             # if can_open_gate.item():
             #     while True:
             #         try:
@@ -397,17 +393,17 @@ class Agent(NNBase):
             #         except ValueError:
             #             pass
 
-        delta, delta_dist = self.get_delta(
-            P=P,
-            dg=action.dg,
-            line_mask=line_mask[p, R],
+        d_probs = self.get_delta_probs(G, P, z)
+        d, d_dist = self.get_delta(
+            delta_probs=d_probs,
+            dg=action.gate,
+            line_mask=instruction_mask[p, R],
             ones=ones,
-            z=z,
         )
-        dists = replace(dists, delta=delta_dist)
+        dists = replace(dists, delta=d_dist)
 
         if action.delta is None:
-            action = replace(action, delta=delta)
+            action = replace(action, delta=d)
             # if action.dg.item():
             #     while True:
             #         try:
@@ -421,14 +417,14 @@ class Agent(NNBase):
             #         except ValueError:
             #             pass
 
-        delta = action.delta.clone() - self.nl
-        self.print("action.delta, delta", action.delta, delta)
+        d = action.delta.clone() - self.nl
+        self.print("action.delta, delta", action.delta, d)
 
         if action.ptr is None:
-            action = replace(action, ptr=p + delta)
+            action = replace(action, ptr=p + d)
 
         def compute_metric(raw: RawAction):
-            raw = astuple(replace(raw, a=raw.a.sum(1)))
+            raw = astuple(replace(raw, extrinsic=raw.extrinsic.sum(1)))
             return sum([x for x in raw if x is not None])
 
         action_log_probs = RawAction(
@@ -446,7 +442,7 @@ class Agent(NNBase):
             astuple(
                 replace(
                     action,
-                    dg=action.dg.unsqueeze(-1),
+                    gate=action.gate.unsqueeze(-1),
                     delta=action.delta.unsqueeze(-1),
                     ptr=action.ptr.unsqueeze(-1),
                 )
@@ -465,16 +461,21 @@ class Agent(NNBase):
             log=dict(entropy=entropy),
         )
 
-    def get_delta(self, P, dg, line_mask, ones, z):
-        u = self.upsilon(z).softmax(dim=-1)
-        self.print("u", u)
-        d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
-        self.print("d_probs", d_probs.view(d_probs.size(0), 2, -1))
+    def get_instruction_mask(self, N, instruction_mask):
+        line_mask = instruction_mask.view(N, self.nl)
+        line_mask = F.pad(line_mask, [self.nl, 0], value=1)  # pad for backward mask
+        line_mask = torch.stack(
+            [torch.roll(line_mask, shifts=-i, dims=-1) for i in range(self.nl)], dim=0
+        )
+        return line_mask
+
+    def get_delta(self, delta_probs, dg, line_mask, ones):
+        self.print("d_probs", delta_probs.view(delta_probs.size(0), 2, -1))
         unmask = 1 - line_mask
-        masked = unmask * d_probs
+        masked = unmask * delta_probs
         sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
-        delta_dist = gate(dg.unsqueeze(-1), masked, ones * self.nl)
+        delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.nl)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print(
             "dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), 2, -1)
@@ -482,11 +483,17 @@ class Agent(NNBase):
         delta = delta_dist.sample()
         return delta, delta_dist
 
-    def get_dg(self, can_open_gate, ones, z):
+    def get_delta_probs(self, G, P, z):
+        u = self.upsilon(z).softmax(dim=-1)
+        self.print("u", u)
+        d_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
+        return d_probs
+
+    def get_gate(self, can_open_gate, ones, z):
         d_logits = self.d_gate(z)
         dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = can_open_gate.long().unsqueeze(-1)
-        dg_dist = gate(can_open_gate, dg_probs, ones * 0)
+        dg_dist = apply_gate(can_open_gate, dg_probs, ones * 0)
         self.print("dg prob", dg_dist.probs[:, 1])
         dg = dg_dist.sample()
         return dg, dg_dist
@@ -496,14 +503,16 @@ class Agent(NNBase):
             self.instruction_embed_size if self.feed_m_to_gru else 0
         ) + self.action_embed_size
 
-    def get_G(self, M, R, p, z1):
+    def get_G(self, rolled):
+        G, _ = self.encode_G(rolled)
+        return G
+
+    def get_rolled(self, M, R, p, z1):
         rolled = torch.stack(
             [torch.roll(M, shifts=-i, dims=1) for i in range(self.nl)], dim=0
         )[p, R]
         _z = z1.unsqueeze(1).expand(-1, rolled.size(1), -1)
-        rolled = torch.cat([rolled, _z], dim=-1)
-        G, _ = self.encode_G(rolled)
-        return G
+        return torch.cat([rolled, _z], dim=-1)
 
     def get_P(self, p, G, R):
         N = p.size(0)
