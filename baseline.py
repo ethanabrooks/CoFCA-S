@@ -3,16 +3,16 @@ from pprint import pprint
 import hydra
 from omegaconf import DictConfig
 
-import baseline_agent
-import ours
+import unstructured_memory
+import main
 from wrappers import VecPyTorch
 
 
-class Trainer(ours.Trainer):
+class Trainer(main.Trainer):
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
         agent_args.update(feed_m_to_gru=False, globalized_critic=False)
-        return baseline_agent.Agent(
+        return unstructured_memory.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
@@ -26,4 +26,4 @@ def app(cfg: DictConfig) -> None:
 
 
 if __name__ == "__main__":
-    ours.main(app)
+    main.main(app)

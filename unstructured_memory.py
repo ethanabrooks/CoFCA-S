@@ -2,11 +2,11 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-import our_agent
+import cofi_s
 
 
 @dataclass
-class Agent(our_agent.Agent):
+class Agent(cofi_s.Agent):
     def __hash__(self):
         return self.hash()
 

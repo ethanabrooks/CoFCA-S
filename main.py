@@ -14,14 +14,14 @@ from omegaconf import DictConfig
 import data_types
 import env
 import osx_queue
-import our_agent
+import cofi_s
 import trainer
 from config import BaseConfig
 from wrappers import VecPyTorch
 
 
 @dataclass
-class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
+class OurConfig(BaseConfig, env.EnvConfig, cofi_s.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 13
@@ -33,7 +33,7 @@ class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
-        mapping["agent_args"] += [our_agent.Agent.__init__]
+        mapping["agent_args"] += [cofi_s.Agent.__init__]
         mapping["env_args"] += [
             env.Env.__init__,
             trainer.Trainer.make_vec_envs,
@@ -43,7 +43,7 @@ class Trainer(trainer.Trainer):
 
     @staticmethod
     def build_agent(envs: VecPyTorch, **agent_args):
-        return our_agent.Agent(
+        return cofi_s.Agent(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
             **agent_args,
