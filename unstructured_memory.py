@@ -7,6 +7,11 @@ import cofi_s
 
 @dataclass
 class Agent(cofi_s.Agent):
+    def __post_init__(self):
+        self.globalized_critic = False
+        self.feed_m_to_gru = False
+        super().__post_init__()
+
     def __hash__(self):
         return self.hash()
 
@@ -41,7 +46,7 @@ class Agent(cofi_s.Agent):
         return torch.ones_like(ones), None
 
     def get_delta(self, delta_probs, dg, line_mask, ones):
-        return torch.ones_like(ones) * self.nl, None
+        return torch.ones_like(ones) * self.instruction_length, None
 
     def get_delta_probs(self, G, P, z):
         return None

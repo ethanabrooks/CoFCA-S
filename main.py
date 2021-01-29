@@ -22,6 +22,9 @@ import cofi
 
 # noinspection PyUnresolvedReferences
 import unstructured_memory
+
+# noinspection PyUnresolvedReferences
+import olsk
 from config import BaseConfig
 from wrappers import VecPyTorch
 
@@ -30,7 +33,7 @@ from wrappers import VecPyTorch
 class OurConfig(BaseConfig, env.EnvConfig, cofi_s.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    max_eval_lines: int = 13
+    max_eval_lines: int = 20
     min_eval_lines: int = 2
     eval_time_per_line: int = 5
     architecture: str = "cofi_s"

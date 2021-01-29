@@ -17,13 +17,25 @@ class Agent(cofi_s.Agent):
             self.init_(
                 nn.Linear(
                     self.instruction_embed_size * 2,  # biGRU
-                    self.delta_size(),
+                    self.delta_size,
                 )
             )
         )
 
-    def delta_size(self):
-        return 2 * self.nl
+    def get_critic_input(self, G, R, p, z1, zc):
+        if self.globalized_critic:
+            zc = torch.cat([z1, G], dim=-1)
+            if self.add_layer:
+                zc = self.eta(zc)
+        return zc
+
+    @property
+    def max_backward_jump(self):
+        return self.eval_lines
+
+    @property
+    def max_forward_jump(self):
+        return self.eval_lines - 1
 
     def build_upsilon(self):
         return None
@@ -36,15 +48,14 @@ class Agent(cofi_s.Agent):
         _, G = self.encode_G(rolled)
         return G.transpose(0, 1).reshape(N, 2 * self.instruction_embed_size)
 
-    @property
-    def nl(self):
-        return self.eval_lines
-
     def get_instruction_mask(self, N, instruction_mask):
+        instruction_mask = super().get_instruction_mask(N, instruction_mask)
         instruction_mask = F.pad(
-            instruction_mask, (0, self.nl - instruction_mask.size(-1))
+            instruction_mask,
+            (0, self.delta_size - instruction_mask.size(-1)),
+            value=1,
         )
-        return super().get_instruction_mask(N, instruction_mask)
+        return instruction_mask
 
     def get_P(self, *args, **kwargs):
         return None
