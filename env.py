@@ -73,8 +73,8 @@ def strip_color(s: str):
 
 @dataclass
 class EnvConfig:
-    ambush_prob: float = 0.25
-    attack_prob: float = 0.25
+    ambush_prob: float = 0.01
+    attack_prob: float = 0.01
     break_on_fail: bool = False
     bucket_size: int = 5
     check_spaces: bool = False
@@ -858,12 +858,12 @@ class Env(gym.Env):
                 )
 
             destroyed_unit = None
-            if deployed and self.random.random() < self.ambush_prob / len(instructions):
+            if deployed and self.random.random() < self.ambush_prob:
                 destroyed_unit = self.random.choice([*deployed])
                 deployed.pop(destroyed_unit)
 
             destroyed_buildings = {}
-            if self.random.random() < self.attack_prob / len(instructions):
+            if self.random.random() < self.attack_prob:
                 destroyed_buildings = self.attack(building_positions)
                 required.subtract([destroyed_unit])
                 for coord in destroyed_buildings.keys():
