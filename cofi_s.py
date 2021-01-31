@@ -159,14 +159,14 @@ class Agent(NNBase):
         self.obs_dim = d
         self.kernel_size = min(d, self.kernel_size)
         self.padding = optimal_padding(h, self.kernel_size, self.stride) + 1
-        self.embed_resources = nn.Sequential(
-            IntEncoding(self.resources_hidden_size),
-            nn.Flatten(),
-            self.init_(
-                nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
-            ),
-            self.activation,
-        )
+        # self.embed_resources = nn.Sequential(
+        #     IntEncoding(self.resources_hidden_size),
+        #     nn.Flatten(),
+        #     self.init_(
+        #         nn.Linear(2 * self.resources_hidden_size, self.resources_hidden_size)
+        #     ),
+        #     self.activation,
+        # )
         self.z_size = self.hidden_size if self.add_layer else self.zeta_input_size
 
         self.zeta = nn.Sequential(
@@ -318,7 +318,6 @@ class Agent(NNBase):
         R = torch.arange(N, device=p.device)
 
         x = self.conv(state.obs)
-        resources = self.embed_resources(state.resources)
         destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
             N, self.destroyed_unit_embed_size
         )
@@ -332,7 +331,7 @@ class Agent(NNBase):
             else embedded_action
         )
         h, rnn_hxs = self._forward_gru(gru_in, rnn_hxs, masks)
-        z1 = torch.cat([x, resources, embedded_action, destroyed_unit, h], dim=-1)
+        z1 = torch.cat([x, embedded_action, destroyed_unit, h], dim=-1)
 
         rolled = self.get_rolled(M, R, p, z1)
         G = self.get_G(rolled)
@@ -584,7 +583,6 @@ class Agent(NNBase):
     def z1_size(self):
         return (
             self.conv_hidden_size
-            + self.resources_hidden_size
             + self.action_embed_size
             + self.destroyed_unit_embed_size
             + self.hidden_size
