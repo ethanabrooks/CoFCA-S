@@ -134,8 +134,7 @@ class Agent(NNBase):
         self.action_gru = nn.GRU(self.action_embed_size, self.hidden_size)
         self.action_gru.reset_parameters()
 
-        self.g_gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
-        self.g_gru.reset_parameters()
+        self.g_gru = self.build_g_gru()
 
         self.encode_G = self.build_encode_G()
         self.initial_instruction_encoder_hxs = nn.Parameter(
@@ -177,8 +176,6 @@ class Agent(NNBase):
             + self.destroyed_unit_embed_size
             + self.hidden_size
         )
-        self.za_size = self.z_size + self.instruction_embed_size
-        self.zg_size = self.z_size + self.hidden_size
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -231,6 +228,19 @@ class Agent(NNBase):
             dg_probs=2,
             dg=1,
         )
+
+    @property
+    def za_size(self):
+        return self.z_size + self.instruction_embed_size
+
+    @property
+    def zg_size(self):
+        return self.z_size + self.hidden_size
+
+    def build_g_gru(self):
+        gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
+        gru.reset_parameters()
+        return gru
 
     def build_encode_G(self):
         return nn.GRU(
@@ -322,7 +332,7 @@ class Agent(NNBase):
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
 
-        action_rnn_hxs, g_rnn_hxs = torch.split(rnn_hxs, self.hidden_size, dim=-1)
+        action_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -349,18 +359,21 @@ class Agent(NNBase):
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        m = self.build_m(M, R, p)
         rolled = self.get_rolled(M, R, p)
         G = self.get_G(rolled)
+        m = self.build_m(M, R, p)
 
-        ha, action_rnn_hxs = self._forward_gru(
-            embedded_action, action_rnn_hxs, masks, gru=self.action_gru
+        ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
+            embedded_action=embedded_action,
+            action_rnn_hxs=action_rnn_hxs,
+            g=self.get_g(G, R, p),
+            g_rnn_hxs=g_rnn_hxs,
+            masks=masks,
         )
-        hg, g_rnn_hxs = self._forward_gru(G[R, p], g_rnn_hxs, masks, gru=self.g_gru)
 
         z = torch.cat([x, embedded_action, destroyed_unit, ha], dim=-1)
         za = torch.cat([z, m], dim=-1)
-        zg = torch.cat([z, hg], dim=-1)
+        zg = self.get_zg(hg, z, za)
 
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R, zg)
@@ -470,7 +483,7 @@ class Agent(NNBase):
             dim=-1,
         )
 
-        rnn_hxs = torch.cat([action_rnn_hxs, g_rnn_hxs], dim=-1)
+        rnn_hxs = self.combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,
@@ -481,6 +494,23 @@ class Agent(NNBase):
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
+
+    def get_zg(self, hg, z, za):
+        return torch.cat([z, hg], dim=-1)
+
+    def update_hxs(self, embedded_action, action_rnn_hxs, g, g_rnn_hxs, masks):
+        ha, action_rnn_hxs = self._forward_gru(
+            embedded_action, action_rnn_hxs, masks, gru=self.action_gru
+        )
+        hg, g_rnn_hxs = self._forward_gru(g, g_rnn_hxs, masks, gru=self.g_gru)
+        return ha, action_rnn_hxs, hg, g_rnn_hxs
+
+    def split_rnn_hxs(self, rnn_hxs):
+        return torch.split(rnn_hxs, self.hidden_size, dim=-1)
+
+    @staticmethod
+    def combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs):
+        return torch.cat([action_rnn_hxs, g_rnn_hxs], dim=-1)
 
     def get_instruction_mask(self, N, instruction_mask):
         line_mask = instruction_mask.view(N, self.instruction_length)
@@ -526,6 +556,9 @@ class Agent(NNBase):
     def get_G(self, rolled):
         G, _ = self.encode_G(rolled)
         return G
+
+    def get_g(self, G, R, p):
+        return G[R, p]
 
     def get_rolled(self, M, R, p):
         return torch.stack(
@@ -599,4 +632,4 @@ class Agent(NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return self.hidden_size * 2
+        return 2 * self.hidden_size

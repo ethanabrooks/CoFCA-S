@@ -51,16 +51,42 @@ class Agent(cofi_s.Agent):
     def get_delta_probs(self, G, P, z):
         return None
 
-    def get_gru_in_size(self):
-        assert self.feed_m_to_gru is False
-        return self.action_embed_size
-
-    def get_rolled(self, M, R, p, z1):
+    def get_rolled(self, M, R, p):
         return None
 
     def get_G(self, rolled):
         return None
 
+    def build_g_gru(self):
+        return None
+
+    def get_g(self, G, R, p):
+        return None
+
+    def update_hxs(self, embedded_action, action_rnn_hxs, g, g_rnn_hxs, masks):
+        ha, action_rnn_hxs = self._forward_gru(
+            embedded_action, action_rnn_hxs, masks, gru=self.action_gru
+        )
+        return ha, action_rnn_hxs, None, None
+
+    def split_rnn_hxs(self, rnn_hxs):
+        return rnn_hxs, None
+
+    @staticmethod
+    def combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs):
+        return action_rnn_hxs
+
     @property
-    def zeta_input_size(self):
-        return self.z1_size + 2 * self.instruction_embed_size
+    def recurrent_hidden_state_size(self):
+        return self.hidden_size
+
+    def get_zg(self, hg, z, za):
+        return za
+
+    @property
+    def za_size(self):
+        return self.z_size + 2 * self.instruction_embed_size
+
+    @property
+    def zg_size(self):
+        return self.z_size + 2 * self.instruction_embed_size

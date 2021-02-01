@@ -34,12 +34,13 @@ class Agent(cofi_s.Agent):
         return None
 
     def get_delta_probs(self, G, P, z):
-        return torch.softmax(self.beta(G), dim=-1)
+        N = G.size(0)
+        g = G.reshape(N, 2 * self.instruction_embed_size)
+        return torch.softmax(self.beta(g), dim=-1)
 
     def get_G(self, rolled):
-        N = rolled.size(0)
         _, G = self.encode_G(rolled)
-        return G.transpose(0, 1).reshape(N, 2 * self.instruction_embed_size)
+        return G.transpose(0, 1)
 
     def get_instruction_mask(self, N, instruction_mask):
         instruction_mask = super().get_instruction_mask(N, instruction_mask)
@@ -52,3 +53,7 @@ class Agent(cofi_s.Agent):
 
     def get_P(self, *args, **kwargs):
         return None
+
+    def get_g(self, G, R, p):
+        N = G.size(0)
+        return G.reshape(N, 2 * self.instruction_embed_size)
