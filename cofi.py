@@ -22,13 +22,6 @@ class Agent(cofi_s.Agent):
             )
         )
 
-    def get_critic_input(self, G, R, p, z1, zc):
-        if self.globalized_critic:
-            zc = torch.cat([z1, G], dim=-1)
-            if self.add_layer:
-                zc = self.eta(zc)
-        return zc
-
     @property
     def max_backward_jump(self):
         return self.eval_lines
