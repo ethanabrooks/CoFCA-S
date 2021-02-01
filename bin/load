@@ -5,6 +5,6 @@ ${0:a:h}/fix_config $1
 ${0:a:h}/fix_config $1 > $new_config
 
 load=$(${0:a:h}/search $1 checkpoint.pt)
-cmd="python $2 --config-path=/tmp load_path=$(pwd)/$load use_wandb=False ${@:3}"
+cmd="python main.py --config-path=/tmp load_path=$(pwd)/$load use_wandb=False ${@:2}"
 echo "$cmd\n"
 eval "$cmd"
