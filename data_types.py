@@ -1168,7 +1168,7 @@ class Unit(ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta):
 
     def execute(
         self,
-        assignee: "Worker",
+        assignee: "Assignee",
         assignments: "Assignments",
         building_positions: "BuildingPositions",
         carrying: "Carrying",
@@ -1179,6 +1179,7 @@ class Unit(ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta):
         resources: "ResourceCounter",
     ) -> None:
         deployed_units.update([self])
+        del assignments[assignee]
 
     @property
     @abstractmethod
