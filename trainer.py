@@ -30,7 +30,7 @@ from aggregator import (
 from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
-from wrappers import VecPyTorch
+from wrappers import VecPyTorch, RenderWrapper
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 CHECKPOINT_NAME = "checkpoint.pt"
@@ -109,18 +109,22 @@ class Trainer:
 
         def env_thunk(rank):
             def thunk(**_kwargs):
-                return cls.make_env(
+                env = cls.make_env(
                     rank=rank, evaluating=evaluating, **_kwargs, **kwargs
                 )
+                if render:
+                    env = RenderWrapper(env)
+                return env
 
             return thunk
 
         env_fns = [env_thunk(i) for i in range(num_processes)]
-        return VecPyTorch(
-            DummyVecEnv(env_fns, render=render)
+        envs = (
+            DummyVecEnv(env_fns)
             if synchronous or num_processes == 1
-            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork", render=render)
+            else SubprocVecEnv(env_fns, **mp_kwargs, start_method="fork")
         )
+        return VecPyTorch(envs)
 
     @classmethod
     def main(cls, cfg: DictConfig):
@@ -133,7 +137,7 @@ class Trainer:
         return env
 
     @staticmethod
-    def report(frames: int, log_dir: Path, **kwargs):
+    def report(frames: int, **kwargs):
         print("Frames:", frames)
         pprint(kwargs)
         try:
@@ -288,7 +292,6 @@ class Trainer:
                     **dict(time_per.items()),
                     **dict(time_spent.items()),
                     frames=frames["so_far"],
-                    log_dir=log_dir,
                 )
                 if failure_buffer is not None:
                     report.update({"failure buffer size": failure_buffer.qsize()})
@@ -344,7 +347,6 @@ class Trainer:
                             **dict(eval_report.items()),
                             **dict(eval_infos.items()),
                             frames=frames["so_far"],
-                            log_dir=log_dir,
                         )
                         print("Done evaluating...")
                     eval_envs.close()

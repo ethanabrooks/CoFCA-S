@@ -1,5 +1,5 @@
+import importlib
 import pickle
-import sys
 from dataclasses import dataclass
 from multiprocessing import Queue
 from pathlib import Path
@@ -14,25 +14,35 @@ from omegaconf import DictConfig
 import data_types
 import env
 import osx_queue
-import our_agent
 import trainer
+import cofi_s
+
+# noinspection PyUnresolvedReferences
+import cofi
+
+# noinspection PyUnresolvedReferences
+import unstructured_memory
+
+# noinspection PyUnresolvedReferences
+import olsk
 from config import BaseConfig
 from wrappers import VecPyTorch
 
 
 @dataclass
-class OurConfig(BaseConfig, env.EnvConfig, our_agent.AgentConfig):
+class OurConfig(BaseConfig, env.EnvConfig, cofi_s.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
-    max_eval_lines: int = 13
-    min_eval_lines: int = 1
+    max_eval_lines: int = 20
+    min_eval_lines: int = 2
+    architecture: str = "cofi_s"
 
 
 class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls):
         mapping = super().args_to_methods()
-        mapping["agent_args"] += [our_agent.Agent.__init__]
+        mapping["agent_args"] += [cofi_s.Agent.__init__]
         mapping["env_args"] += [
             env.Env.__init__,
             trainer.Trainer.make_vec_envs,
@@ -41,12 +51,12 @@ class Trainer(trainer.Trainer):
         return mapping
 
     @staticmethod
-    def build_agent(envs: VecPyTorch, **agent_args):
-        return our_agent.Agent(
+    def build_agent(envs: VecPyTorch, architecture: str, **agent_args):
+        agent_args.update(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
-            **agent_args,
         )
+        return importlib.import_module(architecture).Agent(**agent_args)
 
     @staticmethod
     def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
@@ -114,12 +124,12 @@ class Trainer(trainer.Trainer):
         data_types.WORLD_SIZE = world_size
         mp_kwargs = dict()
         return super().make_vec_envs(
-            mp_kwargs=mp_kwargs,
-            min_lines=min_lines,
-            max_lines=max_lines,
             evaluating=evaluating,
-            world_size=world_size,
             failure_buffer=failure_buffer,
+            max_lines=max_lines,
+            min_lines=min_lines,
+            mp_kwargs=mp_kwargs,
+            world_size=world_size,
             **kwargs,
         )
 
