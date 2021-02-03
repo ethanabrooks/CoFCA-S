@@ -342,7 +342,7 @@ class BuildOrder(Assignment):
         resources: "ResourceCounter",
         **kwargs,
     ) -> None:
-        if positions[assignee] == self.coord:
+        if True:  # positions[assignee] == self.coord:
             building_positions[self.coord] = self.building
             resources.subtract(pending_costs)
             assignments[assignee] = DoNothing()
