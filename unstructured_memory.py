@@ -55,7 +55,7 @@ class Agent(cofi_s.Agent):
         return None
 
     def get_G_g(self, rolled):
-        return None
+        return None, None
 
     def build_g_gru(self):
         return None
@@ -67,7 +67,10 @@ class Agent(cofi_s.Agent):
         self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
     ):
         ha, action_rnn_hxs = self._forward_gru(
-            embedded_action, action_rnn_hxs, masks, gru=self.action_gru
+            torch.cat([embedded_action, destroyed_unit], dim=-1),
+            action_rnn_hxs,
+            masks,
+            gru=self.action_gru,
         )
         return ha, action_rnn_hxs, None, None
 

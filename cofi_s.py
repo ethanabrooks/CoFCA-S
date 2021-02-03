@@ -505,7 +505,12 @@ class Agent(NNBase):
             masks,
             gru=self.action_gru,
         )
-        hg, g_rnn_hxs = self._forward_gru(g, g_rnn_hxs, masks, gru=self.g_gru)
+        hg, g_rnn_hxs = self._forward_gru(
+            g.reshape(g.size(0), 2 * self.instruction_embed_size),
+            g_rnn_hxs,
+            masks,
+            gru=self.g_gru,
+        )
         return ha, action_rnn_hxs, hg, g_rnn_hxs
 
     def split_rnn_hxs(self, rnn_hxs):
@@ -558,7 +563,7 @@ class Agent(NNBase):
 
     def get_G_g(self, rolled):
         G, g = self.encode_G(rolled)
-        return G, g.transpose(0, 1).reshape(g.size(1), 2 * self.instruction_embed_size)
+        return G, g.transpose(0, 1)
 
     def get_rolled(self, M, R, p):
         return torch.stack(

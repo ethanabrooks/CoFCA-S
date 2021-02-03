@@ -39,8 +39,8 @@ class Agent(cofi_s.Agent):
         return torch.softmax(self.beta(g), dim=-1)
 
     def get_G_g(self, rolled):
-        _, G = self.encode_G(rolled)
-        return G.transpose(0, 1)
+        _, g = super().get_G_g(rolled)
+        return g, g
 
     def get_instruction_mask(self, N, instruction_mask):
         instruction_mask = super().get_instruction_mask(N, instruction_mask)
