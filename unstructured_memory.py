@@ -54,7 +54,7 @@ class Agent(cofi_s.Agent):
     def get_rolled(self, M, R, p):
         return None
 
-    def get_G(self, rolled):
+    def get_G_g(self, rolled):
         return None
 
     def build_g_gru(self):
@@ -63,7 +63,9 @@ class Agent(cofi_s.Agent):
     def get_g(self, G, R, p):
         return None
 
-    def update_hxs(self, embedded_action, action_rnn_hxs, g, g_rnn_hxs, masks):
+    def update_hxs(
+        self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
+    ):
         ha, action_rnn_hxs = self._forward_gru(
             embedded_action, action_rnn_hxs, masks, gru=self.action_gru
         )
@@ -80,7 +82,7 @@ class Agent(cofi_s.Agent):
     def recurrent_hidden_state_size(self):
         return self.hidden_size
 
-    def get_zg(self, hg, z, za):
+    def get_zg(self, z, hg, za):
         return za
 
     @property

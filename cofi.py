@@ -38,7 +38,7 @@ class Agent(cofi_s.Agent):
         g = G.reshape(N, 2 * self.instruction_embed_size)
         return torch.softmax(self.beta(g), dim=-1)
 
-    def get_G(self, rolled):
+    def get_G_g(self, rolled):
         _, G = self.encode_G(rolled)
         return G.transpose(0, 1)
 

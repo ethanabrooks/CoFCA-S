@@ -131,7 +131,9 @@ class Agent(NNBase):
             embedding_dim=self.instruction_embed_size,
         )
 
-        self.action_gru = nn.GRU(self.action_embed_size, self.hidden_size)
+        self.action_gru = nn.GRU(
+            self.action_embed_size + self.destroyed_unit_embed_size, self.hidden_size
+        )
         self.action_gru.reset_parameters()
 
         self.g_gru = self.build_g_gru()
@@ -170,12 +172,7 @@ class Agent(NNBase):
         #     ),
         #     self.activation,
         # )
-        self.z_size = (
-            self.conv_hidden_size
-            + self.action_embed_size
-            + self.destroyed_unit_embed_size
-            + self.hidden_size
-        )
+        self.z_size = self.conv_hidden_size + self.hidden_size
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -360,20 +357,21 @@ class Agent(NNBase):
             state.partial_action.long()
         )  # +1 to deal with negatives
         rolled = self.get_rolled(M, R, p)
-        G = self.get_G(rolled)
+        G, g = self.get_G_g(rolled)
         m = self.build_m(M, R, p)
 
         ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
             embedded_action=embedded_action,
+            destroyed_unit=destroyed_unit,
             action_rnn_hxs=action_rnn_hxs,
-            g=self.get_g(G, R, p),
+            g=g,
             g_rnn_hxs=g_rnn_hxs,
             masks=masks,
         )
 
-        z = torch.cat([x, embedded_action, destroyed_unit, ha], dim=-1)
+        z = torch.cat([x, ha], dim=-1)
         za = torch.cat([z, m], dim=-1)
-        zg = self.get_zg(hg, z, za)
+        zg = self.get_zg(z, hg, za)
 
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R, zg)
@@ -495,12 +493,17 @@ class Agent(NNBase):
             log=dict(entropy=entropy),
         )
 
-    def get_zg(self, hg, z, za):
+    def get_zg(self, z, hg, za):
         return torch.cat([z, hg], dim=-1)
 
-    def update_hxs(self, embedded_action, action_rnn_hxs, g, g_rnn_hxs, masks):
+    def update_hxs(
+        self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
+    ):
         ha, action_rnn_hxs = self._forward_gru(
-            embedded_action, action_rnn_hxs, masks, gru=self.action_gru
+            torch.cat([embedded_action, destroyed_unit], dim=-1),
+            action_rnn_hxs,
+            masks,
+            gru=self.action_gru,
         )
         hg, g_rnn_hxs = self._forward_gru(g, g_rnn_hxs, masks, gru=self.g_gru)
         return ha, action_rnn_hxs, hg, g_rnn_hxs
@@ -553,12 +556,9 @@ class Agent(NNBase):
         dg = dg_dist.sample()
         return dg, dg_dist
 
-    def get_G(self, rolled):
-        G, _ = self.encode_G(rolled)
-        return G
-
-    def get_g(self, G, R, p):
-        return G[R, p]
+    def get_G_g(self, rolled):
+        G, g = self.encode_G(rolled)
+        return G, g.transpose(0, 1).reshape(g.size(1), 2 * self.instruction_embed_size)
 
     def get_rolled(self, M, R, p):
         return torch.stack(
