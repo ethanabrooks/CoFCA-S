@@ -4,12 +4,12 @@ import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
-import cofi
-import cofi_s
+import cofca
+import cofca_s
 
 
 @dataclass
-class Agent(cofi.Agent):
+class Agent(cofca.Agent):
     def __post_init__(self):
         super().__post_init__()
 

@@ -1,7 +1,7 @@
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from gym.envs.classic_control.mountain_car import MountainCarEnv
 from multiprocessing import Queue
-from env import Env
+from starcraft import Env
 
 
 def create_thunk():

@@ -7,7 +7,7 @@ from pprint import pprint
 
 import numpy as np
 
-import env
+import starcraft
 from data_types import (
     ActionType,
     X,
@@ -116,7 +116,7 @@ class DebugCompoundAction(ActionStage):
 
 
 @dataclass
-class Env(env.Env):
+class Env(starcraft.Env):
     def building_allowed(
         self,
         building: Building,

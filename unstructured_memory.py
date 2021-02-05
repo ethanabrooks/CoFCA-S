@@ -2,11 +2,11 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-import cofi_s
+import cofca_s
 
 
 @dataclass
-class Agent(cofi_s.Agent):
+class Agent(cofca_s.Agent):
     def __post_init__(self):
         self.globalized_critic = False
         self.feed_m_to_gru = False

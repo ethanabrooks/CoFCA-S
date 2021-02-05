@@ -4,11 +4,11 @@ import torch.nn.functional as F
 import torch
 import torch.nn as nn
 
-import cofi_s
+import cofca_s
 
 
 @dataclass
-class Agent(cofi_s.Agent):
+class Agent(cofca_s.Agent):
     def __hash__(self):
         return self.hash()
 

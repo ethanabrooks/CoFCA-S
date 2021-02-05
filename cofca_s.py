@@ -10,7 +10,7 @@ from gym import spaces
 
 from agents import AgentOutputs, NNBase
 from data_types import RecurrentState, RawAction, CompoundAction
-from env import Obs
+from starcraft import Obs
 from layers import MultiEmbeddingBag, IntEncoding
 from utils import astuple, init_
 
