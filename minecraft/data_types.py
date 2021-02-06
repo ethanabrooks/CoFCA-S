@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from enum import Enum, unique, auto
-from typing import List, Generator, Optional
+from typing import List, Generator, Optional, Union
 
 # noinspection PyShadowingBuiltins
 from numpy.random.mtrand import RandomState
@@ -29,6 +29,31 @@ class Line:
 
 
 @dataclass(frozen=True)
+class If(Line):
+    pass
+
+
+@dataclass(frozen=True)
+class Else(Line):
+    pass
+
+
+@dataclass(frozen=True)
+class EndIf(Line):
+    pass
+
+
+@dataclass(frozen=True)
+class While(Line):
+    pass
+
+
+@dataclass(frozen=True)
+class EndWhile(Line):
+    pass
+
+
+@dataclass(frozen=True)
 class Expression:
     @abstractmethod
     def __iter__(self) -> Generator[Line, None, None]:
@@ -37,25 +62,48 @@ class Expression:
     def __len__(self) -> int:
         return sum(1 for _ in self)
 
-    @abstractmethod
-    def is_complete(self) -> bool:
-        pass
-
     @staticmethod
     def multi_line_expressions() -> List[type]:
-        return [Sequence, WhileLoop, IfCondition, IfElseCondition]
+        return [WhileLoop, IfCondition, IfElseCondition, Sequence]
 
     @abstractmethod
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
+    def complete(self) -> bool:
         pass
 
-    def next_subtask(self, passing: bool) -> Optional["Subtask"]:
-        if self.is_complete():
-            return None
-        return self.next_subtask_if_not_complete(passing)
+    @abstractmethod
+    def inside_passing_if(self) -> "IfCondition":
+        pass
+
+    @abstractmethod
+    def inside_passing_while(self) -> "WhileLoop":
+        pass
+
+    @abstractmethod
+    def as_first_expression_of_passing_if_else(
+        self, expr2: "IncompleteExpression"
+    ) -> "IfElseCondition":
+        pass
+
+    @abstractmethod
+    def as_second_expression_of_failing_if_else(
+        self, expr1: "IncompleteExpression"
+    ) -> "IfElseCondition":
+        pass
+
+    @abstractmethod
+    def followed_by(self, expr: "Expression") -> "Sequence":
+        pass
+
+    @abstractmethod
+    def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
+        pass
+
+    @abstractmethod
+    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+        pass
 
     @classmethod
-    def random(cls, length: int, rng: RandomState) -> "Expression":
+    def random(cls, length: int, rng: RandomState) -> "IncompleteExpression":
         if length == 1:
             return Subtask.random(rng)
         else:
@@ -68,222 +116,320 @@ class Expression:
             assert issubclass(expr, MultiLineExpression)
             return expr.random(length, rng)
 
+
+@dataclass(frozen=True)
+class IncompleteExpression(Expression, ABC):
+    def complete(self) -> bool:
+        return False
+
     @abstractmethod
-    def reset(self) -> "Expression":
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        pass
+
+
+@dataclass(frozen=True)
+class PredicatedExpression(Expression, ABC):
+    pass
+
+
+@dataclass(frozen=True)
+class UnpredicatedExpression(IncompleteExpression, ABC):
+    def followed_by(
+        self, expr: "UnpredicatedExpression"
+    ) -> "SequenceWithUnpredicatedExpr1":
+        return SequenceWithUnpredicatedExpr1(self, expr)
+
+    def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
+        return SequenceWithUnpredicatedExpr2(expr, self)
+
+    def inside_passing_if(self) -> "PassingUnpredicatedIfCondition":
+        return PassingUnpredicatedIfCondition(self)
+
+    def inside_passing_while(self) -> "PassingWhileLoopWithUnpredicatedExpr":
+        return PassingWhileLoopWithUnpredicatedExpr(self)
+
+    def as_first_expression_of_passing_if_else(
+        self, expr2: IncompleteExpression
+    ) -> "IfElseCondition":
+        return PassingIfElseConditionWithUnpredicatedExpr(self, expr2)
+
+    def as_second_expression_of_failing_if_else(
+        self, expr1: IncompleteExpression
+    ) -> "IfElseCondition":
+        return FailingIfElseConditionWithUnpredicatedExpr(expr1, self)
+
+
+@dataclass(frozen=True)
+class ReadyExpression(IncompleteExpression, PredicatedExpression):
+    @abstractmethod
+    def advance(self) -> Union["IncompleteExpression", "CompleteExpression"]:
         pass
 
     @abstractmethod
-    def update(self, passing: bool) -> "Expression":
+    def subtask(self) -> "Subtask":
         pass
+
+    def followed_by(self, expr: "ReadyExpression") -> "SequenceWithReadyExpr1":
+        return SequenceWithReadyExpr1(self, expr)
+
+    def inside_passing_while(self) -> "PassingWhileLoopWithReadyExpr":
+        return PassingWhileLoopWithReadyExpr(self)
+
+    def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
+        return SequenceWithReadyExpr2(expr, self)
+
+    def inside_passing_if(self) -> "PassingReadyIfCondition":
+        return PassingReadyIfCondition(self)
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return self
+
+    def as_first_expression_of_passing_if_else(
+        self, expr2: IncompleteExpression
+    ) -> "PassingIfElseConditionWithReadyExpr":
+        return PassingIfElseConditionWithReadyExpr(self, expr2)
+
+    def as_second_expression_of_failing_if_else(
+        self, expr1: IncompleteExpression
+    ) -> "FailingIfElseConditionWithReadyExpr":
+        return FailingIfElseConditionWithReadyExpr(expr1, self)
+
+
+@dataclass(frozen=True)
+class CompleteExpression(PredicatedExpression, ABC):
+    def followed_by(self, expr: "Expression") -> "Sequence":
+        return expr.preceded_by_complete(self)
+
+    def preceded_by_complete(self, expr: "CompleteExpression") -> "CompleteSequence":
+        return CompleteSequence(expr, self)
+
+    def complete(self) -> bool:
+        return True
+
+    def inside_passing_if(self) -> "IfCondition":
+        return PassingCompleteIfCondition(self)
+
+    def as_first_expression_of_passing_if_else(
+        self, expr2: IncompleteExpression
+    ) -> "CompleteIfElseCondition":
+        return CompleteIfElseCondition(self, expr2)
+
+    def as_second_expression_of_failing_if_else(
+        self, expr1: IncompleteExpression
+    ) -> "CompleteIfElseCondition":
+        return CompleteIfElseCondition(expr1, self)
+
+    def inside_passing_while(self) -> "UnpredicatedWhileLoop":
+        return UnpredicatedWhileLoop(self.reset())
+
+
+@dataclass(frozen=True)
+class Subtask(PredicatedExpression, Line, ABC):
+    id: int
+
+    @staticmethod
+    def random(rng: RandomState) -> "IncompleteSubtask":
+        return IncompleteSubtask(id=rng.randint(MAX_SUBTASK))
+
+    def reset(self) -> "IncompleteExpression":
+        return IncompleteSubtask(id=self.id)
+
+
+@dataclass(frozen=True)
+class IncompleteSubtask(Subtask, ReadyExpression):
+    def __iter__(self) -> Generator[Line, None, None]:
+        yield self
+
+    def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
+        return SequenceWithReadyExpr2(expr, self)
+
+    def advance(self) -> "CompleteSubtask":
+        return CompleteSubtask(id=self.id)
+
+    def subtask(self) -> "Subtask":
+        return self
+
+
+@dataclass(frozen=True)
+class CompleteSubtask(Subtask, CompleteExpression):
+    def __iter__(self) -> Generator[Line, None, None]:
+        yield self
 
 
 @dataclass(frozen=True)
 class MultiLineExpression(Expression):
     @staticmethod
     @abstractmethod
-    def random(length: int, rng: RandomState) -> "Expression":
-        pass
-
-    @staticmethod
-    @abstractmethod
     def required_lines() -> int:
         pass
 
 
 @dataclass(frozen=True)
-class Sequence(MultiLineExpression):
+class Sequence(MultiLineExpression, ABC):
     expr1: Expression
     expr2: Expression
 
     def __iter__(self) -> Generator[Line, None, None]:
-        for expr in [self.expr1, self.expr2]:
-            yield from expr
-
-    def is_complete(self) -> bool:
-        return self.expr1.is_complete() and self.expr2.is_complete()
-
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
-        subtask = self.expr1.next_subtask(passing)
-        if subtask is not None:
-            return subtask
-        return self.expr2.next_subtask(passing)
+        yield from self.expr1
+        yield from self.expr2
 
     @staticmethod
     def random(length: int, rng: RandomState) -> "Expression":
-        n1 = rng.randint(1, length)  # {1,...,length-1}
+        n1 = rng.randint(1, length + 1)  # {1,...,length}
         n2 = length - n1
-        return Sequence(Expression.random(n1, rng), Expression.random(n2, rng))
-
-    @abstractmethod
-    def reset(self) -> "Sequence":
-        return replace(self, expr1=self.expr1.reset(), expr2=self.expr2.reset())
+        return MultiLineExpression.random(n1, rng).followed_by(
+            MultiLineExpression.random(n2, rng)
+        )
 
     @staticmethod
     def required_lines() -> int:
         return 2
 
-    def update(self, passing: bool) -> "Sequence":
-        if not self.expr1.is_complete():
-            return replace(self, expr1=self.expr1.update(passing))
-        else:
-            return replace(self, expr2=self.expr2.update(passing))
+    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+        return self.expr1.reset().followed_by(self.expr2.reset())
 
 
 @dataclass(frozen=True)
-class Subtask(Expression, Line):
-    id: int
-    complete: bool = False
-
-    def __iter__(self) -> Generator[Line, None, None]:
-        yield self
-
-    def is_complete(self) -> bool:
-        return self.complete
-
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
-        return self
-
-    @staticmethod
-    def random(rng: RandomState) -> "Subtask":
-        return Subtask(rng.randint(MAX_SUBTASK))
-
-    def reset(self) -> "Subtask":
-        return replace(self, complete=False)
-
-    def update(self, passing: bool) -> "Expression":
-        return replace(self, complete=True)
-
-
-@dataclass(frozen=True)
-class While(Line):
-    pass
-
-
-@unique
-class Predicate(Enum):
-    PASSED = auto()
-    FAILED = auto()
-    NOT_TESTED = auto()
-
-
-@dataclass(frozen=True)
-class Condition(MultiLineExpression, ABC):
-    predicate: Predicate
+class SequenceWithUnpredicatedExpr1(Sequence, UnpredicatedExpression):
+    expr1: UnpredicatedExpression
+    expr2: UnpredicatedExpression
 
     @staticmethod
     def required_lines() -> int:
-        return 3
+        return 2
 
-    def tested(self):
-        return self.predicate is not Predicate.NOT_TESTED
+    def set_predicate(self, passing: bool) -> "SequenceWithReadyExpr1":
+        return SequenceWithReadyExpr1(
+            expr1=self.expr1.set_predicate(passing),
+            expr2=self.expr2.set_predicate(passing),
+        )
 
 
 @dataclass(frozen=True)
-class SingleExpressionCondition(Condition, ABC):
-    expr: Expression
+class SequenceWithReadyExpr1(Sequence, ReadyExpression):
+    expr1: ReadyExpression
+    expr2: Expression
 
-    @abstractmethod
-    def needs_test(self) -> bool:
+    def advance(self) -> "Expression":
+        return self.expr1.advance().followed_by(self.expr2)
+
+    def subtask(self) -> "Subtask":
+        return self.expr1.subtask()
+
+
+@dataclass(frozen=True)
+class SequenceWithUnpredicatedExpr2(Sequence, UnpredicatedExpression):
+    expr1: CompleteExpression
+    expr2: UnpredicatedExpression
+
+    def set_predicate(self, passing: bool) -> "ReadyExpression":
+        return SequenceWithReadyExpr2(self.expr1, self.expr2.set_predicate(passing))
+
+
+@dataclass(frozen=True)
+class SequenceWithReadyExpr2(Sequence, ReadyExpression):
+    expr1: CompleteExpression
+    expr2: ReadyExpression
+
+    def advance(self) -> "Expression":
+        return self.expr1.followed_by(self.expr2.advance())
+
+    def subtask(self) -> "Subtask":
+        return self.expr2.subtask()
+
+
+@dataclass(frozen=True)
+class CompleteSequence(Sequence, CompleteExpression):
+    expr1: CompleteExpression
+    expr2: CompleteExpression
+
+    def __iter__(self) -> Generator[Line, None, None]:
         pass
 
-    def reset(self) -> "SingleExpressionCondition":
-        return replace(self, expr=self.expr.reset(), predicate=Predicate.NOT_TESTED)
-
 
 @dataclass(frozen=True)
-class WhileLoop(SingleExpressionCondition):
-    def __iter__(self) -> Generator[Line, None, None]:
-        yield While()
-        yield from self.expr
-        yield EndWhile()
+class IfCondition(MultiLineExpression, ABC):
+    expr: Expression
 
-    def is_complete(self) -> bool:
-        return self.predicate is Predicate.FAILED
-
-    def needs_test(self) -> bool:
-        return not self.tested() or self.expr.is_complete()
-
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
-        if self.needs_test() and not passing:
-            return None
-        return self.expr.next_subtask(passing)
-
-    @staticmethod
-    def random(length: int, rng: RandomState) -> "Expression":
-        expr = Expression.random(length - 2, rng)  # 2 for While and EndWhile
-        return WhileLoop(expr=expr, predicate=Predicate.NOT_TESTED)
-
-    def update(self, passing: bool) -> "Condition":
-        if self.needs_test():
-            if passing:
-                expr = self.expr.update(passing)
-                predicate = Predicate.PASSED
-            else:
-                expr = self.expr
-                predicate = Predicate.FAILED
-        else:
-            expr = self.expr.update(passing)
-            predicate = self.predicate
-        if expr.is_complete():
-            expr = expr.reset()
-            predicate = Predicate.NOT_TESTED
-
-        # inside loop
-        return replace(self, expr=expr, predicate=predicate)
-
-
-@dataclass(frozen=True)
-class EndWhile(Line):
-    pass
-
-
-@dataclass(frozen=True)
-class IfCondition(SingleExpressionCondition):
     def __iter__(self) -> Generator[Line, None, None]:
         yield If()
         yield from self.expr
         yield EndIf()
 
-    def is_complete(self) -> bool:
-        return not self.predicate or self.expr.is_complete()
-
-    def needs_test(self) -> bool:
-        return not self.tested()
-
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
-        if self.needs_test() and not passing or self.predicate is Predicate.FAILED:
-            return None
-        return self.expr.next_subtask(passing)
-
     @staticmethod
     def random(length: int, rng: RandomState) -> "Expression":
-        return IfCondition(
-            expr=Expression.random(length - 2, rng), predicate=Predicate.NOT_TESTED
-        )
+        return UnpredicatedIfCondition(MultiLineExpression.random(length - 2, rng))
 
-    def update(self, passing: bool) -> "Condition":
-        if self.needs_test():
-            if passing:
-                expr = self.expr.update(passing)
-                return replace(self, predicate=Predicate.PASSED, expr=expr)
-            else:
-                return replace(self, predicate=Predicate.FAILED)
-        # inside loop
-        return replace(self, expr=self.expr.update(passing))
+    @staticmethod
+    def required_lines() -> int:
+        return 3
+
+    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+        return UnpredicatedIfCondition(self.expr.reset())
 
 
 @dataclass(frozen=True)
-class If(Line):
-    pass
+class UnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
+    expr: IncompleteExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        if passing:
+            return self.expr.set_predicate(passing).inside_passing_if()
+        else:
+            return FailingIfCondition(self.expr)
 
 
 @dataclass(frozen=True)
-class EndIf(Line):
-    pass
+class PassingIfCondition(IfCondition, PredicatedExpression, ABC):
+    def complete(self) -> bool:
+        return self.expr.complete()
 
 
 @dataclass(frozen=True)
-class IfElseCondition(Condition):
+class PassingUnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
+    expr: UnpredicatedExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return PassingReadyIfCondition(self.expr.set_predicate(passing))
+
+
+@dataclass(frozen=True)
+class PassingReadyIfCondition(IfCondition, ReadyExpression):
+    expr: ReadyExpression
+
+    def advance(self) -> "Expression":
+        return self.expr.advance().inside_passing_if()
+
+    def subtask(self) -> "Subtask":
+        return self.expr.subtask()
+
+
+@dataclass(frozen=True)
+class PassingCompleteIfCondition(IfCondition, CompleteExpression):
+    expr: CompleteExpression
+
+    def reset(self) -> "IncompleteExpression":
+        return UnpredicatedIfCondition(self.expr.reset())
+
+
+@dataclass(frozen=True)
+class FailingIfCondition(IfCondition, CompleteExpression):
+    expr: IncompleteExpression
+
+    def reset(self) -> "IncompleteExpression":
+        return UnpredicatedIfCondition(self.expr.reset())
+
+
+@dataclass(frozen=True)
+class IfElseCondition(MultiLineExpression, ABC):
     expr1: Expression
     expr2: Expression
 
@@ -294,68 +440,160 @@ class IfElseCondition(Condition):
         yield from self.expr2
         yield EndIf()
 
-    def is_complete(self) -> bool:
-        return self.expr1.is_complete() or self.expr2.is_complete()
-
-    def next_subtask_if_not_complete(self, passing: bool) -> Optional["Subtask"]:
-        if self.predicate is Predicate.NOT_TESTED:
-            return (self.expr1 if passing else self.expr2).next_subtask(passing)
-        if self.predicate is Predicate.PASSED:
-            return self.expr1.next_subtask(passing)
-        if self.predicate is Predicate.FAILED:
-            return self.expr2.next_subtask(passing)
-        raise RuntimeError
-
     @staticmethod
     def random(length: int, rng: RandomState) -> "Expression":
         expr1_length = rng.randint(1, length - 3)
         # {1,...,length-4} (4 for If, Else, Expr2, EndIf)
 
         expr2_length = length - expr1_length
-        return IfElseCondition(
+        return UnpredicatedIfElseCondition(
             expr1=Expression.random(expr1_length, rng),
             expr2=Expression.random(expr2_length, rng),
-            predicate=Predicate.NOT_TESTED,
         )
 
     @staticmethod
     def required_lines() -> int:
         return 5
 
-    def reset(self) -> "Expression":
-        pass
-
-    def update(self, passing: bool) -> "Expression":
-        if self.predicate is Predicate.NOT_TESTED:
-            if passing:
-                expr1 = self.expr1.update(passing)
-                return replace(self, predicate=Predicate.PASSED, expr1=expr1)
-            else:
-                expr2 = self.expr2.update(passing)
-                return replace(self, predicate=Predicate.FAILED, expr2=expr2)
-        if self.predicate is Predicate.PASSED:
-            return replace(self, expr1=self.expr1.update(passing))
-        if self.predicate is Predicate.FAILED:
-            return replace(self, expr2=self.expr2.update(passing))
-        raise RuntimeError
+    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+        return UnpredicatedIfElseCondition(self.expr1.reset(), self.expr2.reset())
 
 
 @dataclass(frozen=True)
-class Else(Line):
-    pass
+class UnpredicatedIfElseCondition(IfElseCondition, UnpredicatedExpression):
+    expr1: IncompleteExpression
+    expr2: IncompleteExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        if passing:
+            return self.expr1.set_predicate(
+                passing
+            ).as_first_expression_of_passing_if_else(self.expr2)
+        else:
+            return self.expr2.set_predicate(
+                passing
+            ).as_second_expression_of_failing_if_else(self.expr1)
 
 
-#
-# @dataclass(frozen=True)
-# class Action(data_types.RawAction):
-#     @staticmethod
-#     def parse(*xs) -> "Action":
-#         delta, gate, ptr, extrinsic = xs
-#         return Action(delta, gate, ptr, extrinsic)
-#
-#     @property
-#     def is_op(self):
-#         return self.extrinsic is not None
+@dataclass(frozen=True)
+class PassingIfElseConditionWithUnpredicatedExpr(
+    IfElseCondition, UnpredicatedExpression
+):
+    expr1: UnpredicatedExpression
+    expr2: IncompleteExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return PassingIfElseConditionWithReadyExpr(
+            self.expr1.set_predicate(passing), self.expr2
+        )
+
+
+@dataclass(frozen=True)
+class PassingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
+    expr1: ReadyExpression
+    expr2: IncompleteExpression
+
+    def advance(self) -> "Expression":
+        return self.expr1.advance().as_first_expression_of_passing_if_else(self.expr2)
+
+    def subtask(self) -> "Subtask":
+        pass
+
+
+@dataclass(frozen=True)
+class FailingIfElseConditionWithUnpredicatedExpr(
+    IfElseCondition, UnpredicatedExpression
+):
+    expr1: IncompleteExpression
+    expr2: UnpredicatedExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return FailingIfElseConditionWithReadyExpr(
+            self.expr1, self.expr2.set_predicate(passing)
+        )
+
+
+@dataclass(frozen=True)
+class FailingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
+    expr1: IncompleteExpression
+    expr2: ReadyExpression
+
+    def advance(self) -> "Expression":
+        return self.expr2.advance().as_second_expression_of_failing_if_else(self.expr1)
+
+    def subtask(self) -> "Subtask":
+        pass
+
+
+@dataclass(frozen=True)
+class CompleteIfElseCondition(IfElseCondition, CompleteExpression):
+    expr1: Expression
+    expr2: Expression
+
+
+@dataclass(frozen=True)
+class WhileLoop(MultiLineExpression, ABC):
+    expr: Expression
+
+    def __iter__(self) -> Generator[Line, None, None]:
+        yield While()
+        yield from self.expr
+        yield EndWhile()
+
+    @staticmethod
+    def random(length: int, rng: RandomState) -> "Expression":
+        return UnpredicatedWhileLoop(MultiLineExpression.random(length - 2, rng))
+
+    @staticmethod
+    def required_lines() -> int:
+        return 3
+
+    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+        return UnpredicatedWhileLoop(self.expr.reset())
+
+
+@dataclass(frozen=True)
+class UnpredicatedWhileLoop(WhileLoop, UnpredicatedExpression):
+    expr: IncompleteExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        if passing:
+            return self.expr.set_predicate(passing).inside_passing_while()
+        return FailingWhileLoop(self.expr)
+
+
+@dataclass(frozen=True)
+class PassingWhileLoopWithUnpredicatedExpr(WhileLoop, UnpredicatedExpression):
+    expr: UnpredicatedExpression
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return PassingWhileLoopWithReadyExpr(self.expr.set_predicate(passing))
+
+
+@dataclass(frozen=True)
+class PassingWhileLoopWithReadyExpr(WhileLoop, ReadyExpression):
+    expr: ReadyExpression
+
+    def advance(self) -> "Expression":
+        return self.expr.advance().inside_passing_while()
+
+    def subtask(self) -> "Subtask":
+        return self.expr.subtask()
+
+
+@dataclass(frozen=True)
+class FailingWhileLoop(WhileLoop, CompleteExpression):
+    expr: IncompleteExpression
 
 
 if __name__ == "__main__":
@@ -367,31 +605,18 @@ if __name__ == "__main__":
     parser.add_argument("seed", type=int)
     args = parser.parse_args()
 
-    rng, _ = np_random(args.seed)
+    random, _ = np_random(args.seed)
     for cls in Expression.multi_line_expressions():
         assert issubclass(cls, MultiLineExpression)
         if cls.required_lines() <= args.length:
-            ex = cls.random(args.length, rng)
-            print("ex")
+            ex = cls.random(args.length, random)
             print(ex)
-            print("ex.next_subtask(True)")
-            print(ex.next_subtask(True))
-            print("ex.next_subtask(False)")
-            print(ex.next_subtask(False))
-            ex_true = ex.update(True)
-            print("ex_true")
-            print(ex_true)
-            print("ex_true.next_subtask(True)")
-            print(ex_true.next_subtask(True))
-            print("ex_true.next_subtask(False)")
-            print(ex_true.next_subtask(False))
-            ex_false = ex.update(False)
-            print("ex_false")
-            print(ex_false)
-            breakpoint()
-            print("ex_false.next_subtask(False)")
-            print(ex_false.next_subtask(False))
-            print("ex_false.next_subtask(False)")
-            print(ex_false.next_subtask(False))
-            breakpoint()
-            ex.update(True)
+            for pred in [True, False]:
+                ex_pred = ex.set_predicate(True)
+                print(f"ex{pred}")
+                print(ex_pred)
+                print(f"ex{pred}.subtask()")
+                print(ex_pred.subtask())
+                ex2 = ex_pred.advance()
+                print(f"ex{pred}2")
+                breakpoint()

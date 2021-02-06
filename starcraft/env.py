@@ -355,7 +355,7 @@ class Env(gym.Env):
                 success = i["success"]
 
                 if not self.evaluating:
-                    i.update(
+                    i.set_predicate(
                         {
                             f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
                             for k, v in i.items()
@@ -379,7 +379,7 @@ class Env(gym.Env):
                     except Full:
                         pass
 
-                i.update({"used failure buffer": use_failure_buf})
+                i.set_predicate({"used failure buffer": use_failure_buf})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -800,7 +800,7 @@ class Env(gym.Env):
                 new_action = action.from_input(building_positions)
             elif isinstance(raw_action, RawAction):
                 extrinsic, ptr = map(int, raw_action.extrinsic), int(raw_action.pointer)
-                new_action = action.update(
+                new_action = action.set_predicate(
                     *extrinsic, building_positions=building_positions
                 )
             else:

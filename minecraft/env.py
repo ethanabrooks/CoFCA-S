@@ -126,7 +126,7 @@ class Env(gym.Env):
                 success = i["success"]
 
                 if not self.evaluating:
-                    i.update(
+                    i.set_predicate(
                         {
                             f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
                             for k, v in i.items()
@@ -150,7 +150,7 @@ class Env(gym.Env):
                     except Full:
                         pass
 
-                i.update({"used failure buffer": use_failure_buf})
+                i.set_predicate({"used failure buffer": use_failure_buf})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -610,7 +610,7 @@ class Env(gym.Env):
             obs = Obs(
                 action_mask=[*actions.mask(self.action_nvec.a)],
                 active=self.n_lines if state.ptr is None else state.ptr,
-                can_open_gate=[*actions.active.is_complete(self.action_nvec.a)],
+                can_open_gate=[*actions.active._is_complete(self.action_nvec.a)],
                 lines=preprocessed_lines,
                 mask=mask,
                 obs=[[obs]],
@@ -632,7 +632,7 @@ class Env(gym.Env):
             }
             raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
             raw_action = RawAction(*raw_action)
-            actions = actions.update(raw_action.a)
+            actions = actions.set_predicate(raw_action.a)
             agent_ptr = raw_action.pointer
 
             info = dict(
