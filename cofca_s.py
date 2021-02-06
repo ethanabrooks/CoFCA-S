@@ -9,9 +9,10 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import AgentOutputs, NNBase
-from data_types import RecurrentState, RawAction, CompoundAction
+from starcraft.data_types import CompoundAction
+from data_types import RawAction, RecurrentState
 from starcraft import Obs
-from layers import MultiEmbeddingBag, IntEncoding
+from layers import MultiEmbeddingBag
 from utils import astuple, init_
 
 
@@ -346,7 +347,7 @@ class Agent(NNBase):
         M = self.embed_instruction(
             instructions.view(-1, self.obs_spaces.instructions.nvec[0].size)
         ).view(N, -1, self.instruction_embed_size)
-        p = state.ptr.long().flatten()
+        p = state.pointer.long().flatten()
         R = torch.arange(N, device=p.device)
 
         x = self.conv(state.obs)
@@ -451,7 +452,7 @@ class Agent(NNBase):
         d = action.delta.clone() - self.max_backward_jump
         self.print("action.delta, delta", action.delta, d)
 
-        if action.ptr is None:
+        if action.pointer is None:
             action = replace(action, ptr=p + d)
 
         def compute_metric(raw: RawAction):
@@ -475,7 +476,7 @@ class Agent(NNBase):
                     action,
                     gate=action.gate.unsqueeze(-1),
                     delta=action.delta.unsqueeze(-1),
-                    ptr=action.ptr.unsqueeze(-1),
+                    ptr=action.pointer.unsqueeze(-1),
                 )
             ),
             dim=-1,

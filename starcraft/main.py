@@ -11,7 +11,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-import data_types
+from starcraft import data_types
 import starcraft
 import osx_queue
 import trainer
@@ -26,11 +26,12 @@ import unstructured_memory
 # noinspection PyUnresolvedReferences
 import olsk
 from config import BaseConfig
+from starcraft.env import EnvConfig, Env
 from wrappers import VecPyTorch
 
 
 @dataclass
-class OurConfig(BaseConfig, starcraft.EnvConfig, cofca_s.AgentConfig):
+class OurConfig(BaseConfig, EnvConfig, cofca_s.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 20
@@ -44,7 +45,7 @@ class Trainer(trainer.Trainer):
         mapping = super().args_to_methods()
         mapping["agent_args"] += [cofca_s.Agent.__init__]
         mapping["env_args"] += [
-            starcraft.Env.__init__,
+            Env.__init__,
             trainer.Trainer.make_vec_envs,
         ]
         mapping["run_args"] += [trainer.Trainer.run]

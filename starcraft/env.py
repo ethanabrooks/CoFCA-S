@@ -6,7 +6,6 @@ import sys
 import typing
 from collections import Counter, OrderedDict
 from dataclasses import astuple, asdict, dataclass, field
-from functools import lru_cache
 from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
@@ -297,13 +296,6 @@ class Env(gym.Env):
                 lambda: None,
             )
 
-    @staticmethod
-    def dump(name: str, x) -> Path:
-        path = Path(f"{name}.pkl")
-        with path.open("wb") as f:
-            pickle.dump(x, f)
-        return path.absolute()
-
     def failure_buffer_wrapper(self, iterator):
         use_failure_buf = False
         size = self.failure_buffer.qsize()
@@ -475,7 +467,7 @@ class Env(gym.Env):
                 print(
                     "{:2}{}{} {}".format(
                         i,
-                        "-" if i == state.pointer else " ",
+                        "-" if i == state.agent_pointer else " ",
                         "*"
                         if line in [*required_buildings, *state.required_units]
                         else " ",
@@ -519,7 +511,7 @@ class Env(gym.Env):
                         instructions=(np.array([*map(self.preprocess_line, padded)])),
                         obs=world,
                         partial_action=(np.array([*state.action.to_ints()])),
-                        ptr=np.clip(state.pointer, 0, self.max_lines - 1),
+                        ptr=np.clip(state.agent_pointer, 0, self.max_lines - 1),
                         resources=(np.array([state.resources[r] for r in Resource])),
                     )
                 )
@@ -807,7 +799,7 @@ class Env(gym.Env):
             if raw_action is None:
                 new_action = action.from_input(building_positions)
             elif isinstance(raw_action, RawAction):
-                extrinsic, ptr = map(int, raw_action.extrinsic), int(raw_action.ptr)
+                extrinsic, ptr = map(int, raw_action.extrinsic), int(raw_action.pointer)
                 new_action = action.update(
                     *extrinsic, building_positions=building_positions
                 )
