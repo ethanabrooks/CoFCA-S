@@ -16,7 +16,6 @@ NUM_SUBTASKS = 10
 class State:
     action: "Action"
     agent_pointer: int
-    env_pointer: int
     success: bool
     wrong_move: bool
     condition_bit: bool

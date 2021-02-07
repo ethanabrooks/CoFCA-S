@@ -361,7 +361,6 @@ class Env(gym.Env):
         self,
         instructions: Expression,
     ) -> Generator[State, Optional[Action], None]:
-        pointer = 0
         action: Optional[Action] = Action.parse(extrinsic=0)
         time_remaining = self.time_per_line * len(instructions)
         wrong_move = False
@@ -371,7 +370,8 @@ class Env(gym.Env):
 
             def render():
                 print("bit:", condition_bit)
-                print(instructions)
+                for i, string in enumerate(instructions.strings()):
+                    print("-" if i == action.pointer else " ", string, sep="")
 
             instructions = instructions.set_predicate(condition_bit)
 
@@ -380,7 +380,6 @@ class Env(gym.Env):
             action = (
                 yield State(
                     action=action,
-                    env_pointer=pointer,
                     agent_pointer=0 if action is None else action.pointer,
                     success=success,
                     wrong_move=wrong_move,
