@@ -1,10 +1,11 @@
 #!/usr/bin/env zsh
 
 new_config="/tmp/config.yaml"
-${0:a:h}/fix_config $1
-${0:a:h}/fix_config $1 > $new_config
+run_id=$(echo $1 | sed 's/ethanabrooks\/[^\/]*\/\(.*\)/\1/')
+${0:a:h}/fix_config $run_id
+${0:a:h}/fix_config $run_id > $new_config
 
-load=$(${0:a:h}/search $1 checkpoint.pt)
-cmd="python main.py --config-path=/tmp load_path=$(pwd)/$load use_wandb=False ${@:2}"
+load=$(${0:a:h}/search $run_id checkpoint.pt)
+cmd="python $2 --config-path=/tmp load_path=$(pwd)/$load use_wandb=False ${@:3}"
 echo "$cmd\n"
 eval "$cmd"
