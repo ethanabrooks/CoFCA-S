@@ -65,20 +65,21 @@ class Env(gym.Env):
         self.random, _ = seeding.np_random(self.random_seed)
         self.non_failure_random = self.random.get_state()
         self.render_thunk = None
+        num_actions = Action.space().n
         self.act_spaces = RawAction(
             delta=2 * self.max_lines,
             gate=2,
             pointer=self.max_lines,
-            extrinsic=self.num_subtasks,
+            extrinsic=num_actions
         )
         self.obs_spaces = Obs(
-            action_mask=MultiBinary(self.num_subtasks),
+            action_mask=MultiBinary(num_actions),
             destroyed_unit=Discrete(1),
-            gate_openers=MultiDiscrete(1 + np.arange(self.num_subtasks).reshape(-1, 1)),
+            gate_openers=MultiDiscrete(1 + np.arange(num_actions).reshape(-1, 1)),
             instructions=MultiDiscrete([Line.space().n] * self.max_lines),
             instruction_mask=MultiBinary(self.max_lines),
             obs=Box(high=1, low=0, shape=(1, 1, 1)),
-            partial_action=MultiDiscrete([self.num_subtasks]),
+            partial_action=MultiDiscrete([num_actions]),
             resources=MultiDiscrete([]),
             pointer=Discrete(self.max_lines),
         )
@@ -270,12 +271,13 @@ class Env(gym.Env):
             pass
 
         while True:
+            num_actions = self.act_spaces.extrinsic
             obs = OrderedDict(
                 asdict(
                     Obs(
-                        action_mask=np.ones(self.num_subtasks),
+                        action_mask=np.ones(num_actions),
                         destroyed_unit=0,
-                        gate_openers=np.arange(self.num_subtasks).reshape(-1, 1),
+                        gate_openers=np.arange(num_actions).reshape(-1, 1),
                         instruction_mask=[int(p == Pad()) for p in padded],
                         instructions=[l.to_int() for l in padded],
                         obs=[[[state.condition_bit]]],

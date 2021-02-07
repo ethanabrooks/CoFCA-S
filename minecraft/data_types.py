@@ -869,6 +869,10 @@ class Action(RawAction):
             self, extrinsic=0 if self.extrinsic is None else self.extrinsic + 1
         )
 
+    @staticmethod
+    def space() -> Discrete:
+        return Discrete(NUM_SUBTASKS + 1)
+
 
 NonSubtaskLines = [If, Else, EndIf, While, EndWhile, Pad]
 
