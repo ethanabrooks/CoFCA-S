@@ -390,14 +390,12 @@ class Env(gym.Env):
                 render,
             )
 
-            if instructions.complete():
-                success = not action.is_op()
-                continue
-            wrong_move = (
-                action.is_op() and action.extrinsic != instructions.subtask().id
-            )
             time_remaining -= 1
+            if instructions.complete():
+                success = True
+                continue
             if action.is_op():
+                wrong_move = action.extrinsic != instructions.subtask().id
                 instructions = instructions.advance()
 
     def step(self, action: Union[np.ndarray, RawAction]):
