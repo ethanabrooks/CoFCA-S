@@ -15,16 +15,9 @@ from starcraft import data_types
 import starcraft
 import osx_queue
 import trainer
-import cofca_s
 
 # noinspection PyUnresolvedReferences
-import cofca
-
-# noinspection PyUnresolvedReferences
-import unstructured_memory
-
-# noinspection PyUnresolvedReferences
-import olsk
+from architectures import cofca_s, cofca, olsk, unstructured_memory
 from config import BaseConfig
 from starcraft.env import EnvConfig, Env
 from wrappers import VecPyTorch

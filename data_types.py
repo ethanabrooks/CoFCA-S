@@ -46,5 +46,5 @@ class Obs:
     instructions: Any
     obs: Any
     partial_action: Any
-    ptr: Any
+    pointer: Any
     resources: Any

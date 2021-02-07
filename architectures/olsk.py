@@ -1,11 +1,6 @@
 from dataclasses import dataclass
-import torch.nn.functional as F
 
-import torch
-import torch.nn as nn
-
-import cofca
-import cofca_s
+from architectures import cofca
 
 
 @dataclass

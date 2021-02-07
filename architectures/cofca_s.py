@@ -9,14 +9,21 @@ import torch.nn.functional as F
 from gym import spaces
 
 from agents import AgentOutputs, NNBase
-from starcraft.data_types import CompoundAction
-from data_types import RawAction, RecurrentState
-from starcraft import Obs
+from data_types import RawAction, RecurrentState, Obs
 from layers import MultiEmbeddingBag
 from utils import astuple, init_
 
 
 class Categorical(torch.distributions.Categorical):
+    def rsample(self, sample_shape=torch.Size()):
+        raise NotImplementedError
+
+    def cdf(self, value):
+        raise NotImplementedError
+
+    def icdf(self, value):
+        raise NotImplementedError
+
     def log_prob(self, value: torch.Tensor):
         if self._validate_args:
             self._validate_sample(value)
@@ -75,6 +82,7 @@ class AgentConfig:
     transformer: bool = False
 
 
+# noinspection PyPep8Naming
 @dataclass
 class Agent(NNBase):
     activation_name: str
@@ -155,11 +163,7 @@ class Agent(NNBase):
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
-        compound_action_size = CompoundAction.input_space().nvec.size
-        self.gate_openers_shape = (
-            self.obs_spaces.gate_openers.nvec.size // compound_action_size,
-            compound_action_size,
-        )
+        self.gate_openers_shape = self.obs_spaces.gate_openers.nvec.shape
 
         d, h, w = self.obs_spaces.obs.shape
         self.obs_dim = d
@@ -300,7 +304,7 @@ class Agent(NNBase):
     def delta_size(self):
         return self.max_backward_jump + 1 + self.max_forward_jump
 
-    # PyAttributeOutsideInit
+    # noinspection PyAttributeOutsideInit
     @contextmanager
     def evaluating(self, eval_obs_space):
         obs_spaces = self.obs_spaces
@@ -318,9 +322,7 @@ class Agent(NNBase):
         self.state_sizes = state_sizes
         self.train_lines = train_lines
 
-    def forward(
-        self, inputs, rnn_hxs, masks, deterministic=False, action=None, **kwargs
-    ):
+    def forward(self, inputs, rnn_hxs, masks, action=None):
         N, dim = inputs.shape
 
         dists = RawAction.parse(None, None, None, None)
@@ -401,10 +403,10 @@ class Agent(NNBase):
         #         pass
 
         gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
-        matches: torch.Tensor = gate_openers == action.extrinsic.unsqueeze(1)
+        matches = gate_openers == action.extrinsic.unsqueeze(1)
         assert isinstance(matches, torch.Tensor)
-        # noinspection PyArgumentList
         more_than_1_line = (1 - instruction_mask[p, R]).sum(-1) > 1
+        # noinspection PyArgumentList
         can_open_gate = matches.all(-1).any(-1) * more_than_1_line
         gate, gate_dist = self.get_gate(
             can_open_gate=can_open_gate,
@@ -453,11 +455,11 @@ class Agent(NNBase):
         self.print("action.delta, delta", action.delta, d)
 
         if action.pointer is None:
-            action = replace(action, ptr=p + d)
+            action = replace(action, pointer=p + d)
 
         def compute_metric(raw: RawAction):
             raw = astuple(replace(raw, extrinsic=raw.extrinsic.sum(1)))
-            return sum([x for x in raw if x is not None])
+            return sum([y for y in raw if y is not None])
 
         action_log_probs = RawAction(
             *[
@@ -476,7 +478,7 @@ class Agent(NNBase):
                     action,
                     gate=action.gate.unsqueeze(-1),
                     delta=action.delta.unsqueeze(-1),
-                    ptr=action.pointer.unsqueeze(-1),
+                    pointer=action.pointer.unsqueeze(-1),
                 )
             ),
             dim=-1,
@@ -616,7 +618,7 @@ class Agent(NNBase):
         return hash(tuple(x for x in astuple(self) if isinstance(x, Hashable)))
 
     def init_(self, m):
-        return init_(m, nn.ReLU)
+        return init_(m, type(self.activation))
 
     @property
     def is_recurrent(self):

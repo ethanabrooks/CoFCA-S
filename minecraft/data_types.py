@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Generator, Optional, Union
 
 from colored import fg
+from gym.spaces import Discrete
 from numpy.random.mtrand import RandomState
 
 from data_types import RawAction
@@ -13,7 +14,7 @@ NUM_SUBTASKS = 10
 
 @dataclass(frozen=True)
 class State:
-    action: Optional[int]
+    action: "Action"
     agent_pointer: int
     env_pointer: int
     success: bool
@@ -26,6 +27,10 @@ class State:
 class Line:
     def __eq__(self, other):
         return type(self) == type(other)
+
+    @staticmethod
+    def space() -> Discrete:
+        return Discrete(len(NonSubtaskLines) + NUM_SUBTASKS)
 
     @classmethod
     def to_int(cls) -> int:
@@ -858,6 +863,11 @@ class Action(RawAction):
 
     def is_op(self) -> bool:
         return self.extrinsic is not None
+
+    def to_ints(self) -> "Action":
+        return replace(
+            self, extrinsic=0 if self.extrinsic is None else self.extrinsic + 1
+        )
 
 
 NonSubtaskLines = [If, Else, EndIf, While, EndWhile, Pad]

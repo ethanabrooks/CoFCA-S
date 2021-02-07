@@ -1,6 +1,6 @@
 import pickle
 from collections import OrderedDict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, astuple
 from multiprocessing import Queue
 from pathlib import Path
 from queue import Full, Empty
@@ -18,13 +18,13 @@ from omegaconf import DictConfig
 import keyboard_control
 import osx_queue
 from data_types import RawAction, Obs
-from minecraft import instructions
-from minecraft.instructions import State, Expression, Action, Pad, Line
+from minecraft import data_types
+from minecraft.data_types import State, Expression, Action, Pad, Line
 from utils import RESET
 
 
 @dataclass
-class Config:
+class EnvConfig:
     break_on_fail: bool = False
     bucket_size: int = 5
     check_spaces: bool = False
@@ -59,27 +59,29 @@ class Env(gym.Env):
     success_with_failure_buf_avg = 0.5
 
     def __post_init__(self):
-        instructions.NUM_SUBTASKS = self.num_subtasks
+        data_types.NUM_SUBTASKS = self.num_subtasks
         self.random, _ = seeding.np_random(self.random_seed)
         self.non_failure_random = self.random.get_state()
         self.render_thunk = None
         self.act_spaces = RawAction(
             delta=[2 * self.max_lines],
-            gate=(2),
-            pointer=Discrete(self.max_lines),
-            extrinsic=Discrete(self.num_subtasks),
+            gate=[2],
+            pointer=[self.max_lines],
+            extrinsic=[self.num_subtasks],
         )
         self.obs_spaces = Obs(
             action_mask=MultiBinary(self.num_subtasks),
             destroyed_unit=Discrete(1),
-            gate_openers=MultiDiscrete(self.num_subtasks),
-            instructions=MultiDiscrete([self.num_subtasks] * self.max_lines),
+            gate_openers=MultiDiscrete(1 + np.arange(self.num_subtasks).reshape(-1, 1)),
+            instructions=MultiDiscrete([Line.space().n] * self.max_lines),
             instruction_mask=MultiBinary(self.max_lines),
             obs=Box(high=1, low=0, shape=(1, 1, 1)),
-            partial_action=MultiDiscrete([]),
+            partial_action=MultiDiscrete([1]),
             resources=MultiDiscrete([]),
-            ptr=Discrete(self.max_lines),
+            pointer=Discrete(self.max_lines),
         )
+        self.action_space = MultiDiscrete(np.array(astuple(self.act_spaces)))
+        self.observation_space = gym.spaces.Dict(asdict(self.obs_spaces))
 
     @staticmethod
     def done_generator():
@@ -261,13 +263,13 @@ class Env(gym.Env):
                 asdict(
                     Obs(
                         action_mask=np.ones(self.num_subtasks),
-                        destroyed_unit=[1],
-                        gate_openers=np.arange(self.num_subtasks),
+                        destroyed_unit=0,
+                        gate_openers=np.arange(self.num_subtasks).reshape(-1, 1),
                         instruction_mask=[int(p == Pad()) for p in padded],
                         instructions=[l.to_int() for l in padded],
                         obs=[[[state.condition_bit]]],
-                        partial_action=[state.action],
-                        ptr=[state.agent_pointer],
+                        partial_action=[state.action.to_ints().extrinsic],
+                        pointer=state.agent_pointer,
                         resources=[],
                     )
                 )
@@ -314,7 +316,7 @@ class Env(gym.Env):
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
         instructions = Expression.random(self.max_lines, self.random, self.max_depth)
-        assert len(instructions) >= 2
+        assert len(instructions) <= self.max_lines
         obs_iterator = self.obs_generator(instructions)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
@@ -360,14 +362,12 @@ class Env(gym.Env):
         instructions: Expression,
     ) -> Generator[State, Optional[Action], None]:
         pointer = 0
-        action: Optional[Action] = None
+        action: Optional[Action] = Action.parse(extrinsic=0)
         time_remaining = self.time_per_line * len(instructions)
         wrong_move = False
         success = False
         condition_bit = bool(self.random.choice(2))
         while True:
-            if action is None or action.is_op():
-                condition_bit = bool(self.random.choice(2))
 
             def render():
                 print("bit:", condition_bit)
@@ -379,7 +379,7 @@ class Env(gym.Env):
             # noinspection PyTypeChecker
             action = (
                 yield State(
-                    action=None,
+                    action=action,
                     env_pointer=pointer,
                     agent_pointer=0 if action is None else action.pointer,
                     success=success,
@@ -397,6 +397,7 @@ class Env(gym.Env):
             if action.is_op():
                 wrong_move = action.extrinsic != instructions.subtask().id
                 instructions = instructions.advance()
+                condition_bit = bool(self.random.choice(2))
 
     def step(self, action: Union[np.ndarray, RawAction]):
         if isinstance(action, np.ndarray):
@@ -421,7 +422,7 @@ def app(cfg: DictConfig) -> None:
 if __name__ == "__main__":
 
     @dataclass
-    class Config(Config):
+    class Config(EnvConfig):
         random_seed: int = 0
 
     cs = ConfigStore.instance()

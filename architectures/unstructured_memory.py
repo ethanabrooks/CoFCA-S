@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-import cofca_s
+from architectures import cofca_s
 
 
 @dataclass
