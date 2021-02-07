@@ -192,7 +192,7 @@ class Env(gym.Env):
                 self.non_failure_random = self.random.get_state()
             action = yield s, r, t, i
 
-    def info_generator(self, *lines):
+    def info_generator(self, instructions):
         state: State
         done: bool
         state, done = yield
@@ -202,21 +202,21 @@ class Env(gym.Env):
         while True:
             if done:
                 if self.evaluating:
-                    lower = (len(lines) - 1) // self.bucket_size * self.bucket_size + 1
+                    lower = (len(instructions) - 1) // self.bucket_size * self.bucket_size + 1
                     upper = (
-                        1 + (len(lines) - 1) // self.bucket_size
+                        1 + (len(instructions) - 1) // self.bucket_size
                     ) * self.bucket_size
                     key = (
                         f"success on instructions length-{lower} through length-{upper}"
                     )
                 else:
-                    key = f"success on length-{len(lines)} instructions"
+                    key = f"success on length-{len(instructions)} instructions"
                 info.update(
                     {
                         f"success": float(state.success),
                         key: float(state.success),
-                        "instruction length": len(lines),
-                        "time per line": elapsed_time / len(lines),
+                        "instruction length": len(instructions),
+                        "time per line": elapsed_time / len(instructions),
                     },
                 )
 
