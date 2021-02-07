@@ -7,21 +7,16 @@ from pprint import pprint
 from queue import Empty, Full
 from typing import Optional, Dict
 
-import sys
-
-from config import BaseConfig
-
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-# noinspection PyUnresolvedReferences
-from architectures import cofca_s, cofca, olsk, unstructured_memory
-
 import osx_queue
 import trainer
 
-from minecraft import data_types
+# noinspection PyUnresolvedReferences
+from architectures import cofca_s, cofca, olsk, unstructured_memory
+from config import BaseConfig
 from minecraft.env import EnvConfig, Env
 from wrappers import VecPyTorch
 

@@ -11,14 +11,14 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-from starcraft import data_types
-import starcraft
 import osx_queue
+import starcraft
 import trainer
 
 # noinspection PyUnresolvedReferences
 from architectures import cofca_s, cofca, olsk, unstructured_memory
 from config import BaseConfig
+from starcraft import data_types
 from starcraft.env import EnvConfig, Env
 from wrappers import VecPyTorch
 
@@ -29,7 +29,7 @@ class OurConfig(BaseConfig, EnvConfig, cofca_s.AgentConfig):
     failure_buffer_size: int = 10000
     max_eval_lines: int = 20
     min_eval_lines: int = 2
-    architecture: str = "cofi_s"
+    architecture: str = "cofca_s"
 
 
 class Trainer(trainer.Trainer):
@@ -50,7 +50,10 @@ class Trainer(trainer.Trainer):
             observation_space=envs.observation_space,
             action_space=envs.action_space,
         )
-        return importlib.import_module(architecture).Agent(**agent_args)
+        # noinspection PyUnresolvedReferences
+        return importlib.import_module(f"architectures.{architecture}").Agent(
+            **agent_args
+        )
 
     @staticmethod
     def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
@@ -96,7 +99,7 @@ class Trainer(trainer.Trainer):
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        return starcraft.Env(**kwargs)
+        return starcraft.env.Env(**kwargs)
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -135,7 +138,7 @@ class Trainer(trainer.Trainer):
 @hydra.main(config_name="config")
 def app(cfg: DictConfig) -> None:
     pprint(dict(**cfg))
-    Trainer.main(cfg, proect="starcraft")
+    Trainer.main(cfg, project="starcraft")
 
 
 def main(_app):

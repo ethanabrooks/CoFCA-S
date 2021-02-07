@@ -164,7 +164,7 @@ class Env(gym.Env):
         )
         partial_action = CompoundAction.representation_space()
         resources = spaces.MultiDiscrete([sys.maxsize] * 2)
-        ptr = spaces.Discrete(self.max_lines)
+        pointer = spaces.Discrete(self.max_lines)
         # noinspection PyTypeChecker
         self.obs_spaces = Obs(
             action_mask=action_mask,
@@ -175,7 +175,7 @@ class Env(gym.Env):
             obs=obs,
             partial_action=partial_action,
             resources=resources,
-            ptr=ptr,
+            pointer=pointer,
         )
         self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
@@ -468,7 +468,7 @@ class Env(gym.Env):
                 print(
                     "{:2}{}{} {}".format(
                         i,
-                        "-" if i == state.agent_pointer else " ",
+                        "-" if i == state.pointer else " ",
                         "*"
                         if line in [*required_buildings, *state.required_units]
                         else " ",
@@ -499,9 +499,10 @@ class Env(gym.Env):
             unpadded_gate_openers = state.action.gate_openers()
             gate_openers[: len(unpadded_gate_openers)] = unpadded_gate_openers
 
-            destroyed_unit = (
-                0 if state.destroyed_unit is None else 1 + state.destroyed_unit.to_int()
-            )
+            if state.destroyed_unit is None:
+                destroyed_unit = 0
+            else:
+                destroyed_unit = 1 + state.destroyed_unit.to_int()
             obs = OrderedDict(
                 asdict(
                     Obs(
@@ -512,7 +513,7 @@ class Env(gym.Env):
                         instructions=(np.array([*map(self.preprocess_line, padded)])),
                         obs=world,
                         partial_action=(np.array([*state.action.to_ints()])),
-                        ptr=np.clip(state.agent_pointer, 0, self.max_lines - 1),
+                        pointer=np.clip(state.pointer, 0, self.max_lines - 1),
                         resources=(np.array([state.resources[r] for r in Resource])),
                     )
                 )
