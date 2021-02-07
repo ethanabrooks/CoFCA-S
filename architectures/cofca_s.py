@@ -177,7 +177,7 @@ class Agent(NNBase):
         #     ),
         #     self.activation,
         # )
-        self.z_size = self.conv_hidden_size + self.hidden_size
+        self.z_size = self.conv_hidden_size
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -237,7 +237,7 @@ class Agent(NNBase):
 
     @property
     def zg_size(self):
-        return self.z_size + self.hidden_size
+        return self.za_size + 2 * self.instruction_embed_size
 
     def build_g_gru(self):
         gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
@@ -372,9 +372,15 @@ class Agent(NNBase):
             masks=masks,
         )
 
-        z = torch.cat([x, ha], dim=-1)
+        # z = torch.cat([x, ha], dim=-1)
+        z = x
+        assert z.size(-1) == self.z_size
+
         za = torch.cat([z, m], dim=-1)
-        zg = self.get_zg(z, hg, za)
+        assert za.size(-1) == self.za_size
+        # zg = self.get_zg(za, hg, za)
+        zg = self.get_zg(za, g.reshape(N, 2 * self.instruction_embed_size), za)
+        assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R, zg)
