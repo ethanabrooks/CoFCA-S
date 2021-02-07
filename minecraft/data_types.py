@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
-from enum import Enum, unique, auto
-from pprint import pprint
+from dataclasses import dataclass
 from typing import List, Generator, Optional, Union
 
 # noinspection PyShadowingBuiltins
@@ -11,10 +9,6 @@ from numpy.random.mtrand import RandomState
 from utils import RESET
 
 MAX_SUBTASK = 10
-
-
-def sample(random, _min, _max, p=0.5):
-    return min(_min + random.geometric(p) - 1, _max)
 
 
 @dataclass(frozen=True)
@@ -120,18 +114,20 @@ class Expression:
         pass
 
     @classmethod
-    def random(cls, length: int, rng: RandomState) -> "IncompleteExpression":
+    def random(
+        cls, length: int, rng: RandomState, max_depth: int = float("inf")
+    ) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         if length == 1:
             return Subtask.random(rng)
         elif length > 1:
 
-            def short_enough(t: type):
+            def possible(t: type):
                 assert issubclass(t, MultiLineExpression)
-                return t.required_lines() <= length
+                return t.required_lines() <= length and t.required_depth() <= max_depth
 
-            expr = rng.choice([*filter(short_enough, cls.multi_line_expressions())])
+            expr = rng.choice([*filter(possible, cls.multi_line_expressions())])
             assert issubclass(expr, MultiLineExpression)
-            return expr.random(length, rng)
+            return expr.random(length=length, rng=rng, max_depth=max_depth)
         else:
             raise RuntimeError
 
@@ -192,8 +188,7 @@ class UnpredicatedExpression(IncompleteExpression, ABC):
         pass
 
     def strings(self) -> Generator[str, None, None]:
-        for string in self._strings():
-            yield f"{fg('light_gray')}{string}{RESET}"
+        yield from self._strings()
 
 
 @dataclass(frozen=True)
@@ -331,6 +326,11 @@ class MultiLineExpression(Expression):
     def required_lines() -> int:
         pass
 
+    @staticmethod
+    @abstractmethod
+    def required_depth() -> int:
+        pass
+
 
 @dataclass(frozen=True)
 class Sequence(MultiLineExpression, ABC):
@@ -346,16 +346,22 @@ class Sequence(MultiLineExpression, ABC):
         yield from self.expr2.strings()
 
     @staticmethod
-    def random(length: int, rng: RandomState) -> "Sequence":
+    def random(
+        length: int, rng: RandomState, max_depth: int = float("inf")
+    ) -> "IncompleteExpression":
         n1 = rng.randint(1, length)  # {1,...,length-1}
         n2 = length - n1
-        expr1 = MultiLineExpression.random(n1, rng)
-        expr2 = MultiLineExpression.random(n2, rng)
+        expr1 = MultiLineExpression.random(n1, rng, max_depth)
+        expr2 = MultiLineExpression.random(n2, rng, max_depth)
         return expr1.followed_by(expr2)
 
     @staticmethod
     def required_lines() -> int:
         return 2
+
+    @staticmethod
+    def required_depth() -> int:
+        return 0
 
     def reset(self) -> "SequenceWithUnpredicatedExpr1":
         return self.expr1.reset().followed_by(self.expr2.reset())
@@ -369,6 +375,10 @@ class SequenceWithUnpredicatedExpr1(Sequence, UnpredicatedExpression):
     @staticmethod
     def required_lines() -> int:
         return 2
+
+    @staticmethod
+    def required_depth() -> int:
+        return 1
 
     def set_predicate(self, passing: bool) -> "SequenceWithReadyExpr1":
         return self.expr1.set_predicate(passing).followed_by(
@@ -430,12 +440,20 @@ class IfCondition(MultiLineExpression, ABC):
         yield EndIf()
 
     @staticmethod
-    def random(length: int, rng: RandomState) -> "Expression":
-        return UnpredicatedIfCondition(MultiLineExpression.random(length - 2, rng))
+    def random(
+        length: int, rng: RandomState, max_depth: int = float("inf")
+    ) -> "IncompleteExpression":
+        return UnpredicatedIfCondition(
+            MultiLineExpression.random(length - 2, rng, max_depth=max_depth - 1)
+        )
 
     @staticmethod
     def required_lines() -> int:
         return 3
+
+    @staticmethod
+    def required_depth() -> int:
+        return 1
 
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         return UnpredicatedIfCondition(self.expr.reset())
@@ -537,19 +555,25 @@ class IfElseCondition(MultiLineExpression, ABC):
         yield EndIf()
 
     @staticmethod
-    def random(length: int, rng: RandomState) -> "Expression":
+    def random(
+        length: int, rng: RandomState, max_depth: int = float("inf")
+    ) -> "Expression":
         expr1_length = rng.randint(1, length - 3)
         # {1,...,length-4} (4 for If, Else, Expr2, EndIf)
 
         expr2_length = length - expr1_length
         return UnpredicatedIfElseCondition(
-            expr1=Expression.random(expr1_length, rng),
-            expr2=Expression.random(expr2_length, rng),
+            expr1=Expression.random(expr1_length, rng, max_depth=max_depth - 1),
+            expr2=Expression.random(expr2_length, rng, max_depth=max_depth - 1),
         )
 
     @staticmethod
     def required_lines() -> int:
         return 5
+
+    @staticmethod
+    def required_depth() -> int:
+        return 1
 
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         return UnpredicatedIfElseCondition(self.expr1.reset(), self.expr2.reset())
@@ -675,12 +699,20 @@ class WhileLoop(MultiLineExpression, ABC):
         yield EndWhile()
 
     @staticmethod
-    def random(length: int, rng: RandomState) -> "Expression":
-        return UnpredicatedWhileLoop(MultiLineExpression.random(length - 2, rng))
+    def random(
+        length: int, rng: RandomState, max_depth: int = float("inf")
+    ) -> "IncompleteExpression":
+        return UnpredicatedWhileLoop(
+            MultiLineExpression.random(length - 2, rng=rng, max_depth=max_depth - 1)
+        )
 
     @staticmethod
     def required_lines() -> int:
         return 3
+
+    @staticmethod
+    def required_depth() -> int:
+        return 1
 
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         return UnpredicatedWhileLoop(self.expr.reset())
@@ -761,7 +793,7 @@ def main(seed, length):
             print(instruction)
 
         if instruction is None:
-            instruction = Expression.random(length, random)
+            instruction = Expression.random(length, random, max_depth=1)
         predicate = random.choice([True, False])
         instruction2 = instruction.set_predicate(predicate)
         if instruction2.complete():
@@ -769,6 +801,7 @@ def main(seed, length):
             instruction = None
         else:
             print_instruction()
+            breakpoint()
             instruction = instruction2.advance()
 
 
