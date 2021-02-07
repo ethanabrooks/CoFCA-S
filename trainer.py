@@ -127,8 +127,8 @@ class Trainer:
         return VecPyTorch(envs)
 
     @classmethod
-    def main(cls, cfg: DictConfig):
-        return cls.run(**cls.structure_config(cfg))
+    def main(cls, cfg: DictConfig, project):
+        return cls.run(**cls.structure_config(cfg), project=project)
 
     @staticmethod
     def make_env(env, seed, rank, evaluating, **kwargs):
@@ -159,20 +159,21 @@ class Trainer:
         load_path: Path,
         log_interval: int,
         name: str,
-        use_wandb: bool,
         num_frames: Optional[int],
         num_processes: int,
+        project: str,
         ppo_args: dict,
         render: bool,
         render_eval: bool,
         rollouts_args: dict,
-        seed: int,
         save_interval: int,
+        seed: int,
         train_steps: int,
+        use_wandb: bool,
     ):
 
         if use_wandb:
-            wandb.init(group=group, name=name, project="ppo")
+            wandb.init(group=group, name=name, project=project)
             os.symlink(
                 os.path.abspath(".hydra/config.yaml"),
                 os.path.join(wandb.run.dir, "hydra-config.yaml"),

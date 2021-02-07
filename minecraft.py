@@ -138,7 +138,7 @@ class Trainer(trainer.Trainer):
 @hydra.main(config_name="config")
 def app(cfg: DictConfig) -> None:
     pprint(dict(**cfg))
-    Trainer.main(cfg)
+    Trainer.main(cfg, project="minecraft")
 
 
 def main(_app):
