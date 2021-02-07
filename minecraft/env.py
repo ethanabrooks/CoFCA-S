@@ -1,10 +1,8 @@
 import pickle
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from dataclasses import asdict, dataclass
-from itertools import zip_longest
 from multiprocessing import Queue
 from pathlib import Path
-from pprint import pprint
 from queue import Full, Empty
 from typing import Union, Generator, Tuple, List, Optional
 
@@ -12,15 +10,30 @@ import gym
 import hydra
 import numpy as np
 from colored import fg
+from gym.spaces import Discrete, MultiBinary, MultiDiscrete, Box
 from gym.utils import seeding
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import keyboard_control
-from minecraft import data_types
-from minecraft.data_types import State, Expression, Line, Action
-from data_types import RawAction
+import osx_queue
+from data_types import RawAction, Obs
+from minecraft import instructions
+from minecraft.instructions import State, Expression, Action, Pad, Line
 from utils import RESET
+
+
+@dataclass
+class Config:
+    break_on_fail: bool = False
+    bucket_size: int = 5
+    check_spaces: bool = False
+    max_depth: int = 1
+    max_lines: int = 10
+    min_lines: int = 1
+    num_subtasks: int = 10
+    tgt_success_rate: float = 1
+    time_per_line: int = 25
 
 
 @dataclass
@@ -29,13 +42,14 @@ class Env(gym.Env):
     bucket_size: int
     check_spaces: bool
     failure_buffer: Queue
+    max_depth: int
     max_lines: int
     min_lines: int
+    num_subtasks: int
     rank: int
     random_seed: int
     tgt_success_rate: float
     time_per_line: int
-    world_size: int
     alpha: float = 0.05
     evaluating: bool = None
     i: int = 0
@@ -45,8 +59,27 @@ class Env(gym.Env):
     success_with_failure_buf_avg = 0.5
 
     def __post_init__(self):
-        data_types.WORLD_SIZE = self.world_size
+        instructions.NUM_SUBTASKS = self.num_subtasks
         self.random, _ = seeding.np_random(self.random_seed)
+        self.non_failure_random = self.random.get_state()
+        self.render_thunk = None
+        self.act_spaces = RawAction(
+            delta=[2 * self.max_lines],
+            gate=(2),
+            pointer=Discrete(self.max_lines),
+            extrinsic=Discrete(self.num_subtasks),
+        )
+        self.obs_spaces = Obs(
+            action_mask=MultiBinary(self.num_subtasks),
+            destroyed_unit=Discrete(1),
+            gate_openers=MultiDiscrete(self.num_subtasks),
+            instructions=MultiDiscrete([self.num_subtasks] * self.max_lines),
+            instruction_mask=MultiBinary(self.max_lines),
+            obs=Box(high=1, low=0, shape=(1, 1, 1)),
+            partial_action=MultiDiscrete([]),
+            resources=MultiDiscrete([]),
+            ptr=Discrete(self.max_lines),
+        )
 
     @staticmethod
     def done_generator():
@@ -56,7 +89,7 @@ class Env(gym.Env):
         while True:
             # noinspection PyTypeChecker
             state = (
-                yield state.success or not state.time_remaining,
+                yield state.success or state.wrong_move or not state.time_remaining,
                 lambda: None,
             )
 
@@ -126,7 +159,7 @@ class Env(gym.Env):
                 success = i["success"]
 
                 if not self.evaluating:
-                    i.set_predicate(
+                    i.update(
                         {
                             f"{k} ({'with' if use_failure_buf else 'without'} failure buffer)": v
                             for k, v in i.items()
@@ -150,7 +183,7 @@ class Env(gym.Env):
                     except Full:
                         pass
 
-                i.set_predicate({"used failure buffer": use_failure_buf})
+                i.update({"used failure buffer": use_failure_buf})
 
             if t:
                 # noinspection PyAttributeOutsideInit
@@ -196,71 +229,46 @@ class Env(gym.Env):
             return pickle.load(f)
 
     def main(self):
-        keyboard_control.run(self, lambda: None)
+        def action_fn():
+            while True:
+                action = input("go:")
+                try:
+                    action = int(action) + 1
+                    return Action.parse(extrinsic=action)
+                except ValueError:
+                    return Action.parse(extrinsic=0)
+
+        keyboard_control.run(self, action_fn)
 
     def obs_generator(
         self,
-        *lines: Expression,
+        instructions: Expression,
     ):
         state: State
         state = yield
 
-        padded: List[Optional[Expression]] = [
-            *lines,
-            *[None] * (self.max_lines - len(lines)),
+        instruction_list: List[Line] = [*instructions]
+        padded: List[Line] = [
+            *instruction_list,
+            *[Pad()] * (self.max_lines - len(instruction_list)),
         ]
 
         def render():
-            for i, line in enumerate(lines):
-                print(
-                    "{:2}{}{} {}".format(
-                        i,
-                        "-" if i == state.agent_pointer else " ",
-                        "*"
-                        if line in [*required_buildings, *state.required_units]
-                        else " ",
-                        repr(line),
-                    )
-                )
-            print("Obs:")
-            for string in self.room_strings(world):
-                print(string, end="")
-
-        def coords():
-            yield from state.positions.items()
-            for p, b in state.building_positions.items():
-                yield b, p
+            pass
 
         while True:
-            world = np.zeros(self.obs_spaces.obs.shape)
-            for o, p in coords():
-                world[(WorldObjects.index(o), *p)] = 1
-            for p in state.destroyed_buildings.keys():
-                world[(-1, *p)] = 1
-            assert isinstance(state.action, ActionStage)
-
-            gate_openers: np.ndarray = self.obs_spaces.gate_openers.nvec.copy().reshape(
-                -1, CompoundAction.input_space().nvec.size
-            )
-            gate_openers -= 1
-            unpadded_gate_openers = state.action.gate_openers()
-            gate_openers[: len(unpadded_gate_openers)] = unpadded_gate_openers
-
-            destroyed_unit = (
-                0 if state.destroyed_unit is None else 1 + state.destroyed_unit.to_int()
-            )
             obs = OrderedDict(
                 asdict(
                     Obs(
-                        action_mask=state.action.mask(unit_dependencies).ravel(),
-                        destroyed_unit=destroyed_unit,
-                        gate_openers=gate_openers.ravel(),
-                        instruction_mask=(np.array([int(p is None) for p in padded])),
-                        instructions=(np.array([*map(self.preprocess_line, padded)])),
-                        obs=world,
-                        partial_action=(np.array([*state.action.to_ints()])),
-                        ptr=np.clip(state.agent_pointer, 0, self.max_lines - 1),
-                        resources=(np.array([state.resources[r] for r in Resource])),
+                        action_mask=np.ones(self.num_subtasks),
+                        destroyed_unit=[1],
+                        gate_openers=np.arange(self.num_subtasks),
+                        instruction_mask=[int(p == Pad()) for p in padded],
+                        instructions=[l.to_int() for l in padded],
+                        obs=[[[state.condition_bit]]],
+                        partial_action=[state.action],
+                        ptr=[state.agent_pointer],
+                        resources=[],
                     )
                 )
             )
@@ -276,65 +284,6 @@ class Env(gym.Env):
             # noinspection PyTypeChecker
             state = yield obs, lambda: render()  # perform time-step
 
-    def place_objects(
-        self, n_lines: int
-    ) -> Generator[Tuple[WorldObject, np.ndarray], None, None]:
-        nexus = self.random.choice(self.world_size, size=2)
-        yield Nexus(), nexus
-        for w in Worker:
-            yield w, nexus
-        resource_offsets = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
-        resource_locations = [
-            *filter(
-                self.world_space.contains,
-                nexus + resource_offsets,
-            )
-        ]
-        minerals, gas = self.random.choice(
-            len(resource_locations), size=2, replace=False
-        )
-        minerals = resource_locations[minerals]
-        gas = resource_locations[gas]
-        yield Resource.MINERALS, minerals
-        yield Resource.GAS, gas
-
-        occupied = [nexus, minerals, gas]
-        occupied_indices = np.sort(
-            np.ravel_multi_index(np.stack(occupied, axis=-1), self.world_shape)
-        )
-
-        max_initial_buildings = max(0, (self.world_size ** 2 - len(occupied) - n_lines))
-        if max_initial_buildings > 0:
-            num_initial_buildings = self.random.randint(max_initial_buildings + 1)
-            initial_index = self.random.choice(
-                self.world_size ** 2 - len(occupied),
-                size=num_initial_buildings,
-                replace=False,
-            )
-            for i in occupied_indices:
-                initial_index[initial_index >= i] += 1
-            initial_pos = np.stack(
-                np.unravel_index(initial_index, self.world_shape), axis=-1
-            )
-            initial_buildings = self.random.choice(
-                Buildings,
-                size=num_initial_buildings,
-            )
-            for b, p in zip(initial_buildings, initial_pos):
-                # assert not any(np.array_equal(p, p_) for p_ in occupied)
-                # occupied += [p]
-                yield b, gas if isinstance(b, Assimilator) else p
-
-    @staticmethod
-    def preprocess_line(line: Optional[Expression]) -> int:
-        if line is None:
-            return 0
-        if isinstance(line, Building):
-            return 1 + line.to_int()
-        if isinstance(line, Unit):
-            return 1 + Building.space().n + line.to_int()
-        raise RuntimeError
-
     def render(self, mode="human", pause=True):
         self.render_thunk()
         if pause:
@@ -346,44 +295,15 @@ class Env(gym.Env):
         s, r, t, i = next(self.iterator)
         return s
 
-    def room_strings(self, room):
-        max_symbol_size = max(
-            [
-                len(multi_worker_symbol(len(Worker))),
-                *[len(strip_color(str(x.symbol))) for x in WorldObjects],
-            ]
-        )
-        max_symbols_per_grid = 3
-        for i, row in enumerate(room.transpose((1, 2, 0)).astype(int)):
-            for j, channel in enumerate(row):
-                (nonzero,) = channel[: len(WorldObjects)].nonzero()
-                objects = [WorldObjects[k] for k in nonzero]
-                worker_symbol = None
-                if len(objects) > max_symbols_per_grid:
-                    worker_symbol = f"w{sum([isinstance(o, Worker) for o in objects])}"
-                    objects = [o for o in objects if not isinstance(o, Worker)]
-                symbols = [o.symbol for o in objects]
-                if worker_symbol is not None:
-                    symbols += [worker_symbol]
-
-                for _, symbol in zip_longest(range(max_symbols_per_grid), symbols):
-                    if symbol is None:
-                        symbol = " " * max_symbol_size
-                    else:
-                        symbol += " " * (max_symbol_size - len(strip_color(symbol)))
-                    yield from symbol
-                yield RESET
-                yield "|"
-            grid_size = max_symbols_per_grid * max_symbol_size
-            yield f"\n" + ("-" * (grid_size) + "+") * self.world_size + "\n"
-
     @staticmethod
     def reward_generator():
         state: State
         state = yield
 
         while True:
-            reward = float(state.success)
+            reward = float(
+                state.success or not state.time_remaining
+            )  # you win if you run down the clock
             # noinspection PyTypeChecker
             state = yield reward, lambda: print("Reward:", reward)
 
@@ -392,26 +312,14 @@ class Env(gym.Env):
 
     def srti_generator(
         self,
-    ) -> Generator[Tuple[any, float, bool, dict], Optional[RawAction], None]:
-        (
-            instructions,
-            building_dependencies,
-            unit_dependencies,
-        ) = self.build_instructions_and_dependencies()
+    ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
+        instructions = Expression.random(self.max_lines, self.random, self.max_depth)
         assert len(instructions) >= 2
-        obs_iterator = self.obs_generator(
-            *instructions,
-            building_dependencies=building_dependencies,
-            unit_dependencies=unit_dependencies,
-        )
+        obs_iterator = self.obs_generator(instructions)
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
-        info_iterator = self.info_generator(*instructions)
-        state_iterator = self.state_generator(
-            *instructions,
-            building_dependencies=building_dependencies,
-            unit_dependencies=unit_dependencies,
-        )
+        info_iterator = self.info_generator(instructions)
+        state_iterator = self.state_generator(instructions)
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
@@ -419,8 +327,6 @@ class Env(gym.Env):
         state, render_state = next(state_iterator)
 
         def render():
-            # for tree in self.build_trees(building_dependencies):
-            #     tree.show()
 
             if t:
                 print(fg("green") if i["success"] else fg("red"))
@@ -444,241 +350,57 @@ class Env(gym.Env):
 
             self.render_thunk = render
 
-            a: Optional[RawAction]
+            a: RawAction
             # noinspection PyTypeChecker
             a = yield s, r, t, i
-
             state, render_state = state_iterator.send(a)
-
-    @staticmethod
-    def line_generator(lines):
-        line_transitions = defaultdict(list)
-
-        def get_transitions():
-            conditions = []
-            for i, line in enumerate(lines):
-                yield from line.transitions(i, conditions)
-
-        for _from, _to in get_transitions():
-            line_transitions[_from].append(_to)
-        i = 0
-        if_evaluations = []
-        while True:
-            condition_bit = yield None if i >= len(lines) else i
-            if type(lines[i]) is Else:
-                evaluation = not if_evaluations.pop()
-            else:
-                evaluation = bool(condition_bit)
-            if type(lines[i]) is If:
-                if_evaluations.append(evaluation)
-            i = line_transitions[i][evaluation]
-
-    def generator(self):
-        while True:
-            n_lines = self.random.random_integers(self.min_lines, self.max_lines)
-            if self.long_jump:
-                assert self.evaluating
-                len_jump = self.random.randint(
-                    self.min_eval_lines - 3, self.max_eval_lines - 3
-                )
-                use_if = self.random.random() < 0.5
-                line_types = [
-                    If if use_if else While,
-                    *(Subtask for _ in range(len_jump)),
-                    EndIf if use_if else EndWhile,
-                    Subtask,
-                ]
-            elif self.single_control_flow_type and self.evaluating:
-                assert n_lines >= 6
-                while True:
-                    line_types = list(
-                        Expression.generate_types(
-                            n_lines,
-                            remaining_depth=self.max_nesting_depth,
-                            random=self.random,
-                            legal_lines=self.control_flow_types,
-                        )
-                    )
-                    criteria = [
-                        Else in line_types,  # Else
-                        While in line_types,  # While
-                        line_types.count(If) > line_types.count(Else),  # If
-                    ]
-                    if sum(criteria) >= 2:
-                        break
-            else:
-                legal_lines = (
-                    [
-                        self.random.choice(
-                            list(set(self.control_flow_types) - {Subtask})
-                        ),
-                        Subtask,
-                    ]
-                    if (self.single_control_flow_type and not self.evaluating)
-                    else self.control_flow_types
-                )
-
-                line_types = list(
-                    Expression.generate_types(
-                        n_lines,
-                        remaining_depth=self.max_nesting_depth,
-                        random=self.random,
-                        legal_lines=legal_lines,
-                    )
-                )
-            lines = list(self.assign_line_ids(line_types))
-            assert self.max_nesting_depth == 1
-            result = self.populate_world(lines)
-            if result is not None:
-                _agent_pos, objects = result
-                break
-        state_iterator = self.state_generator(objects, _agent_pos, lines)
-        state = next(state_iterator)
-
-        subtasks_complete = 0
-        agent_ptr = 0
-        info = {}
-        term = False
-
-        lower_level_action = None
-        actions = VariableActions()
-        agent_ptr = 0
-        while True:
-            success = state.ptr is None
-            self.success_count += success
-
-            term = term or success or state.term
-            reward = int(success)
-            subtasks_complete += state.subtask_complete
-            if term:
-                if not success and self.break_on_fail:
-                    import ipdb
-
-                    ipdb.set_trace()
-
-                info.update(
-                    instruction_len=len(lines),
-                )
-                if not use_failure_buf:
-                    info.update(success_without_failure_buf=success)
-                if success:
-                    info.update(success_line=len(lines), progress=1)
-                else:
-                    info.update(
-                        success_line=state.prev, progress=state.prev / len(lines)
-                    )
-                subtasks_attempted = subtasks_complete + (not success)
-                info.update(
-                    subtasks_complete=subtasks_complete,
-                    subtasks_attempted=subtasks_attempted,
-                )
-
-            info.update(
-                subtask_complete=state.subtask_complete,
-            )
-
-            def render():
-                self.render_instruction(
-                    term=term,
-                    success=success,
-                    lines=lines,
-                    state=state,
-                    agent_ptr=agent_ptr,
-                )
-                self.render_world(
-                    state=state,
-                    action=actions,
-                    reward=reward,
-                )
-
-            self._render = render
-            obs = state.obs
-            pads = [Padding(0)] * (self.n_lines - len(lines))
-            padded = lines + pads
-            preprocessed_lines = [self.preprocess_line(p) for p in padded]
-            mask = [int(not isinstance(l, Padding)) for l in padded]
-            truthy = [
-                self.evaluate_line(l, None, state.counts)
-                if agent_ptr < len(lines)
-                else 2
-                for l in lines
-            ]
-            truthy = [2 if t is None else int(t) for t in truthy]
-            truthy += [3] * (self.n_lines - len(truthy))
-
-            assert issubclass(actions.active, PartialAction)
-            obs = Obs(
-                action_mask=[*actions.mask(self.action_nvec.a)],
-                active=self.n_lines if state.ptr is None else state.ptr,
-                can_open_gate=[*actions.active._is_complete(self.action_nvec.a)],
-                lines=preprocessed_lines,
-                mask=mask,
-                obs=[[obs]],
-                inventory=self.inventory_representation(state),
-                subtask_complete=state.subtask_complete,
-                truthy=truthy,
-                partial_action=[*actions.partial_actions()],
-            )
-            obs = OrderedDict(obs._asdict())
-            # for k, v in self.observation_space.spaces.items():
-            #     if not v.contains(obs[k]):
-            #         import ipdb
-            #
-            #         ipdb.set_trace()
-            #         v.contains(obs[k])
-
-            line_specific_info = {
-                f"{k}_{10 * (len(lines) // 10)}": v for k, v in info.items()
-            }
-            raw_action = (yield obs, reward, term, dict(**info, **line_specific_info))
-            raw_action = RawAction(*raw_action)
-            actions = actions.set_predicate(raw_action.a)
-            agent_ptr = raw_action.pointer
-
-            info = dict(
-                use_failure_buf=use_failure_buf,
-                len_failure_buffer=len(self.failure_buffer),
-            )
-
-            if actions.no_op():
-                n += 1
-                no_op_limit = 200 if self.evaluating else self.no_op_limit
-                if self.no_op_limit is not None and self.no_op_limit < 0:
-                    no_op_limit = len(lines)
-                if n >= no_op_limit:
-                    term = True
-            elif state.ptr is not None:
-                step += 1
-                # noinspection PyUnresolvedReferences
-                state = state_iterator.send(
-                    (actions.verb(), actions.noun(), lower_level_action)
-                )
 
     def state_generator(
         self,
-        *instructions: Line,
+        instructions: Expression,
     ) -> Generator[State, Optional[Action], None]:
         pointer = 0
+        action: Optional[Action] = None
         time_remaining = self.time_per_line * len(instructions)
-        action = Action(delta=0, gate=1, pointer=0, extrinsic=None)
+        wrong_move = False
+        success = False
+        condition_bit = bool(self.random.choice(2))
         while True:
-            success = pointer >= len(instructions)
-            failure = action.is_op and action.extrinsic != instructions[pointer].id
+            if action is None or action.is_op():
+                condition_bit = bool(self.random.choice(2))
 
-            action: Optional[Action]
+            def render():
+                print("bit:", condition_bit)
+                print(instructions)
+
+            instructions = instructions.set_predicate(condition_bit)
+
+            action: Action
             # noinspection PyTypeChecker
-            action = yield State(
-                action=None,
-                env_pointer=pointer,
-                agent_pointer=action.pointer,
-                success=success,
-                failure=failure,
-                time_remaining=time_remaining,
+            action = (
+                yield State(
+                    action=None,
+                    env_pointer=pointer,
+                    agent_pointer=0 if action is None else action.pointer,
+                    success=success,
+                    wrong_move=wrong_move,
+                    condition_bit=condition_bit,
+                    time_remaining=time_remaining,
+                ),
+                render,
             )
-            if action is None:
-                raise NotImplementedError
 
-    def step(self, action: Union[np.ndarray, ActionStage]):
+            if instructions.complete():
+                success = not action.is_op()
+                continue
+            wrong_move = (
+                action.is_op() and action.extrinsic != instructions.subtask().id
+            )
+            time_remaining -= 1
+            if action.is_op():
+                instructions = instructions.advance()
+
+    def step(self, action: Union[np.ndarray, RawAction]):
         if isinstance(action, np.ndarray):
             action = RawAction.parse(*action)
         return self.iterator.send(action)
@@ -701,7 +423,7 @@ def app(cfg: DictConfig) -> None:
 if __name__ == "__main__":
 
     @dataclass
-    class Config(EnvConfig):
+    class Config(Config):
         random_seed: int = 0
 
     cs = ConfigStore.instance()

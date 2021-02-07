@@ -1,17 +1,14 @@
 import typing
 from dataclasses import dataclass, astuple
-from typing import Union, Generator, Generic
-
-import numpy as np
-import torch
+from typing import Generator, Generic, Any
 
 
 @dataclass(frozen=True)
 class RawAction:
-    delta: Union[np.ndarray, torch.Tensor, X]
-    gate: Union[np.ndarray, torch.Tensor, X]
-    pointer: Union[np.ndarray, torch.Tensor, X]
-    extrinsic: Union[np.ndarray, torch.Tensor, X]
+    delta: Any
+    gate: Any
+    pointer: Any
+    extrinsic: Any
 
     @staticmethod
     def parse(*xs) -> "RawAction":
@@ -38,3 +35,16 @@ class RecurrentState(Generic[X]):
     a_probs: X
     d_probs: X
     dg_probs: X
+
+
+@dataclass(frozen=True)
+class Obs:
+    action_mask: Any
+    destroyed_unit: Any
+    gate_openers: Any
+    instruction_mask: Any
+    instructions: Any
+    obs: Any
+    partial_action: Any
+    ptr: Any
+    resources: Any

@@ -2,13 +2,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Generator, Optional, Union
 
-# noinspection PyShadowingBuiltins
 from colored import fg
 from numpy.random.mtrand import RandomState
 
+from data_types import RawAction
 from utils import RESET
 
-MAX_SUBTASK = 10
+NUM_SUBTASKS = 10
 
 
 @dataclass(frozen=True)
@@ -17,13 +17,20 @@ class State:
     agent_pointer: int
     env_pointer: int
     success: bool
-    failure: bool
+    wrong_move: bool
+    condition_bit: bool
     time_remaining: int
 
 
 @dataclass(frozen=True)
 class Line:
-    pass
+    def __eq__(self, other):
+        return type(self) == type(other)
+
+    @classmethod
+    def to_int(cls) -> int:
+        # noinspection PyTypeChecker
+        return NonSubtaskLines.index(cls)
 
 
 @dataclass(frozen=True)
@@ -52,10 +59,15 @@ class EndWhile(Line):
 
 
 @dataclass(frozen=True)
+class Pad(Line):
+    pass
+
+
+@dataclass(frozen=True)
 class Expression:
     @abstractmethod
     def __iter__(self) -> Generator[Line, None, None]:
-        pass
+        raise NotImplementedError
 
     def __len__(self) -> int:
         return sum(1 for _ in self)
@@ -69,31 +81,31 @@ class Expression:
 
     @abstractmethod
     def complete(self) -> bool:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def inside_passing_if(self) -> "IfCondition":
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def inside_passing_while(self) -> "WhileLoop":
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def as_first_expression_of_passing_if_else(
         self, expr2: "IncompleteExpression"
     ) -> "IfElseCondition":
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def as_second_expression_of_failing_if_else(
         self, expr1: "IncompleteExpression"
     ) -> "IfElseCondition":
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def followed_by(self, expr: "Expression") -> "Sequence":
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def preceded_by_complete(
@@ -103,15 +115,15 @@ class Expression:
         "SequenceWithReadyExpr2",
         "CompleteSequence",
     ]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def predicated(self) -> bool:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
-        pass
+        raise NotImplementedError
 
     @classmethod
     def random(
@@ -135,11 +147,15 @@ class Expression:
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def strings(self) -> Generator[str, None, None]:
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def to_ints(self) -> Generator[int, None, None]:
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -185,7 +201,7 @@ class UnpredicatedExpression(IncompleteExpression, ABC):
 
     @abstractmethod
     def _strings(self) -> Generator[str, None, None]:
-        pass
+        raise NotImplementedError
 
     def strings(self) -> Generator[str, None, None]:
         yield from self._strings()
@@ -195,11 +211,11 @@ class UnpredicatedExpression(IncompleteExpression, ABC):
 class ReadyExpression(IncompleteExpression, PredicatedExpression):
     @abstractmethod
     def advance(self) -> Union["IncompleteExpression", "CompleteExpression"]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def subtask(self) -> "Subtask":
-        pass
+        raise NotImplementedError
 
     def followed_by(self, expr: "ReadyExpression") -> "SequenceWithReadyExpr1":
         return SequenceWithReadyExpr1(self, expr)
@@ -230,7 +246,7 @@ class ReadyExpression(IncompleteExpression, PredicatedExpression):
 
     @abstractmethod
     def _strings(self) -> Generator[str, None, None]:
-        pass
+        raise NotImplementedError
 
     def strings(self) -> Generator[str, None, None]:
         yield from self._strings()
@@ -276,7 +292,7 @@ class CompleteExpression(PredicatedExpression, ABC):
 
     @abstractmethod
     def _strings(self) -> Generator[str, None, None]:
-        pass
+        raise NotImplementedError
 
     def strings(self) -> Generator[str, None, None]:
         for string in self._strings():
@@ -287,15 +303,24 @@ class CompleteExpression(PredicatedExpression, ABC):
 class Subtask(PredicatedExpression, Line, ABC):
     id: int
 
+    def __eq__(self, other):
+        return super().__eq__(other) and self.id == other.id
+
     @staticmethod
     def random(rng: RandomState) -> "IncompleteSubtask":
-        return IncompleteSubtask(id=rng.randint(MAX_SUBTASK))
+        return IncompleteSubtask(id=rng.randint(NUM_SUBTASKS))
 
     def reset(self) -> "IncompleteExpression":
         return IncompleteSubtask(id=self.id)
 
     def _strings(self) -> Generator[str, None, None]:
         yield f"Subtask {self.id}"
+
+    def to_int(self) -> int:
+        return len(NonSubtaskLines) + self.id
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield self.to_int()
 
 
 @dataclass(frozen=True)
@@ -324,12 +349,12 @@ class MultiLineExpression(Expression):
     @staticmethod
     @abstractmethod
     def required_lines() -> int:
-        pass
+        raise NotImplementedError
 
     @staticmethod
     @abstractmethod
     def required_depth() -> int:
-        pass
+        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -365,6 +390,10 @@ class Sequence(MultiLineExpression, ABC):
 
     def reset(self) -> "SequenceWithUnpredicatedExpr1":
         return self.expr1.reset().followed_by(self.expr2.reset())
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield from self.expr1.to_ints()
+        yield from self.expr2.to_ints()
 
 
 @dataclass(frozen=True)
@@ -426,9 +455,6 @@ class CompleteSequence(Sequence, CompleteExpression):
     expr1: CompleteExpression
     expr2: CompleteExpression
 
-    def __iter__(self) -> Generator[Line, None, None]:
-        pass
-
 
 @dataclass(frozen=True)
 class IfCondition(MultiLineExpression, ABC):
@@ -457,6 +483,11 @@ class IfCondition(MultiLineExpression, ABC):
 
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         return UnpredicatedIfCondition(self.expr.reset())
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield If.to_int()
+        yield from self.expr.to_ints()
+        yield EndIf.to_int()
 
 
 @dataclass(frozen=True)
@@ -578,6 +609,13 @@ class IfElseCondition(MultiLineExpression, ABC):
     def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
         return UnpredicatedIfElseCondition(self.expr1.reset(), self.expr2.reset())
 
+    def to_ints(self) -> Generator[int, None, None]:
+        yield If.to_int()
+        yield from self.expr1.to_ints()
+        yield Else.to_int()
+        yield from self.expr2.to_ints()
+        yield EndIf.to_int()
+
 
 @dataclass(frozen=True)
 class UnpredicatedIfElseCondition(IfElseCondition, UnpredicatedExpression):
@@ -633,7 +671,7 @@ class PassingIfElseConditionWithReadyExpr(PassingIfElseCondition, ReadyExpressio
         return self.expr1.advance().as_first_expression_of_passing_if_else(self.expr2)
 
     def subtask(self) -> "Subtask":
-        pass
+        return self.expr1.subtask()
 
 
 @dataclass(frozen=True)
@@ -674,7 +712,7 @@ class FailingIfElseConditionWithReadyExpr(FailingIfElseCondition, ReadyExpressio
         return self.expr2.advance().as_second_expression_of_failing_if_else(self.expr1)
 
     def subtask(self) -> "Subtask":
-        pass
+        return self.expr2.subtask()
 
 
 @dataclass(frozen=True)
@@ -722,6 +760,11 @@ class WhileLoop(MultiLineExpression, ABC):
         for string in self.expr.strings():
             yield f"  {string}"
         yield "EndWhile"
+
+    def to_ints(self) -> Generator[int, None, None]:
+        yield While.to_int()
+        yield from self.expr.to_ints()
+        yield EndWhile.to_int()
 
 
 @dataclass(frozen=True)
@@ -801,9 +844,23 @@ def main(seed, length):
             instruction = None
         else:
             print_instruction()
-            breakpoint()
             instruction = instruction2.advance()
 
+
+@dataclass(frozen=True)
+class Action(RawAction):
+    @staticmethod
+    def parse(
+        delta: int = 0, gate: int = 1, pointer: int = 0, extrinsic: int = 0
+    ) -> "Action":
+        extrinsic = None if extrinsic == 0 else extrinsic - 1
+        return Action(delta, gate, pointer, extrinsic)
+
+    def is_op(self) -> bool:
+        return self.extrinsic is not None
+
+
+NonSubtaskLines = [If, Else, EndIf, While, EndWhile, Pad]
 
 if __name__ == "__main__":
     from gym.utils.seeding import np_random

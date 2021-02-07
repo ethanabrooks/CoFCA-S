@@ -11,7 +11,7 @@ import torch
 from colored import fg
 from gym import spaces
 
-from data_types import X
+from data_types import X, Obs
 from utils import RESET
 
 CoordType = Tuple[int, int]
@@ -377,19 +377,6 @@ class DoNothing(Assignment):
 Command = Union[BuildOrder, Resource]
 
 O = typing.TypeVar("O", torch.Tensor, np.ndarray, int, gym.Space)
-
-
-@dataclass(frozen=True)
-class Obs(typing.Generic[O]):
-    action_mask: O
-    destroyed_unit: O
-    gate_openers: O
-    instruction_mask: O
-    instructions: O
-    obs: O
-    partial_action: O
-    ptr: O
-    resources: O
 
 
 @dataclass(frozen=True)

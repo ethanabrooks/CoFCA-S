@@ -26,7 +26,7 @@ from treelib import Tree
 import data_types
 import keyboard_control
 import osx_queue
-from data_types import (
+from starcraft.data_types import (
     Assignee,
     Unit,
     Units,
@@ -48,11 +48,12 @@ from data_types import (
     State,
     Line,
     ActionStage,
-    RawAction,
     Buildings,
     Assimilator,
     Nexus,
+    CoordType,
 )
+from data_types import RawAction
 from utils import RESET, Discrete
 
 BuildingDependencies = Dict[Building, Building]
@@ -125,7 +126,7 @@ class Env(gym.Env):
                     RawAction(
                         delta=[2 * self.max_lines],
                         gate=[2],
-                        ptr=[self.max_lines],
+                        pointer=[self.max_lines],
                         extrinsic=action_components_space.nvec,
                     )
                 )
@@ -179,7 +180,7 @@ class Env(gym.Env):
         self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
     def attack(self, building_positions: BuildingPositions) -> BuildingPositions:
-        destructible: List[data_types.CoordType] = [
+        destructible: List[CoordType] = [
             c for c, b in building_positions.items() if not isinstance(b, Nexus)
         ]
         buildings = {}
