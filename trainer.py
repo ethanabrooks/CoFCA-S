@@ -298,12 +298,12 @@ class Trainer:
                 cls.report(**report)
                 train_report.reset()
                 train_infos.reset()
-                time_spent["logging"].set_predicate()
-                time_per["iter"].set_predicate()
+                time_spent["logging"].update()
+                time_per["iter"].update()
 
                 time_spent["dumping failure buffer"].tick()
                 cls.dump_failure_buffer(failure_buffer, log_dir)
-                time_spent["dumping failure buffer"].set_predicate()
+                time_spent["dumping failure buffer"].update()
 
                 if eval_interval and (
                     i == 0 or done or frames["since_eval"] > eval_interval
@@ -353,7 +353,7 @@ class Trainer:
                     rollouts.obs[0].copy_(train_envs.reset())
                     rollouts.masks[0] = 1
                     rollouts.recurrent_hidden_states[0] = 0
-                    time_spent["evaluating"].set_predicate()
+                    time_spent["evaluating"].update()
                     train_report = EpisodeAggregator()
                     train_infos = cls.build_infos_aggregator()
 
@@ -366,7 +366,7 @@ class Trainer:
                     agent=agent,
                     step=i,
                 )
-                time_spent["saving"].set_predicate()
+                time_spent["saving"].update()
 
             if done:
                 break
@@ -399,7 +399,7 @@ class Trainer:
                     since_log=num_processes,
                     since_eval=num_processes,
                 )
-                time_per["frame"].set_predicate()
+                time_per["frame"].update()
 
             curriculum.send((train_envs, train_infos))
 
@@ -413,7 +413,7 @@ class Trainer:
             rollouts.compute_returns(next_value.detach())
             train_results = ppo.update(rollouts)
             rollouts.after_update()
-            time_per["update"].set_predicate()
+            time_per["update"].update()
 
     @staticmethod
     def save_checkpoint(save_path: Path, ppo: PPO, agent: Agent, step: int):

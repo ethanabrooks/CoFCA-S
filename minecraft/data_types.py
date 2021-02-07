@@ -597,7 +597,7 @@ class IfElseCondition(MultiLineExpression, ABC):
         expr1_length = rng.randint(1, length - 3)
         # {1,...,length-4} (4 for If, Else, Expr2, EndIf)
 
-        expr2_length = length - expr1_length
+        expr2_length = length - expr1_length - 3
         return UnpredicatedIfElseCondition(
             expr1=Expression.random(expr1_length, rng, max_depth=max_depth - 1),
             expr2=Expression.random(expr2_length, rng, max_depth=max_depth - 1),

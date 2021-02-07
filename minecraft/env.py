@@ -64,10 +64,10 @@ class Env(gym.Env):
         self.non_failure_random = self.random.get_state()
         self.render_thunk = None
         self.act_spaces = RawAction(
-            delta=[2 * self.max_lines],
-            gate=[2],
-            pointer=[self.max_lines],
-            extrinsic=[self.num_subtasks],
+            delta=2 * self.max_lines,
+            gate=2,
+            pointer=self.max_lines,
+            extrinsic=self.num_subtasks,
         )
         self.obs_spaces = Obs(
             action_mask=MultiBinary(self.num_subtasks),
@@ -76,7 +76,7 @@ class Env(gym.Env):
             instructions=MultiDiscrete([Line.space().n] * self.max_lines),
             instruction_mask=MultiBinary(self.max_lines),
             obs=Box(high=1, low=0, shape=(1, 1, 1)),
-            partial_action=MultiDiscrete([1]),
+            partial_action=MultiDiscrete([self.num_subtasks]),
             resources=MultiDiscrete([]),
             pointer=Discrete(self.max_lines),
         )
@@ -401,7 +401,7 @@ class Env(gym.Env):
 
     def step(self, action: Union[np.ndarray, RawAction]):
         if isinstance(action, np.ndarray):
-            action = RawAction.parse(*action)
+            action = Action.parse(*action)
         return self.iterator.send(action)
 
 
