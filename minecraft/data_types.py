@@ -5,7 +5,10 @@ from pprint import pprint
 from typing import List, Generator, Optional, Union
 
 # noinspection PyShadowingBuiltins
+from colored import fg
 from numpy.random.mtrand import RandomState
+
+from utils import RESET
 
 MAX_SUBTASK = 10
 
@@ -99,7 +102,17 @@ class Expression:
         pass
 
     @abstractmethod
-    def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
+    def preceded_by_complete(
+        self, expr: "CompleteExpression"
+    ) -> Union[
+        "SequenceWithUnpredicatedExpr2",
+        "SequenceWithReadyExpr2",
+        "CompleteSequence",
+    ]:
+        pass
+
+    @abstractmethod
+    def predicated(self) -> bool:
         pass
 
     @abstractmethod
@@ -141,11 +154,15 @@ class IncompleteExpression(Expression, ABC):
 
 @dataclass(frozen=True)
 class PredicatedExpression(Expression, ABC):
-    pass
+    def predicated(self) -> bool:
+        return True
 
 
 @dataclass(frozen=True)
 class UnpredicatedExpression(IncompleteExpression, ABC):
+    def predicated(self) -> bool:
+        return False
+
     def followed_by(
         self, expr: "UnpredicatedExpression"
     ) -> "SequenceWithUnpredicatedExpr1":
@@ -176,7 +193,7 @@ class UnpredicatedExpression(IncompleteExpression, ABC):
 
     def strings(self) -> Generator[str, None, None]:
         for string in self._strings():
-            yield f"{string} (unpredicated)"
+            yield f"{fg('light_gray')}{string}{RESET}"
 
 
 @dataclass(frozen=True)
@@ -226,7 +243,13 @@ class ReadyExpression(IncompleteExpression, PredicatedExpression):
 
 @dataclass(frozen=True)
 class CompleteExpression(PredicatedExpression, ABC):
-    def followed_by(self, expr: "Expression") -> "Sequence":
+    def followed_by(
+        self, expr: "Expression"
+    ) -> Union[
+        "SequenceWithUnpredicatedExpr2",
+        "SequenceWithReadyExpr2",
+        "CompleteSequence",
+    ]:
         return expr.preceded_by_complete(self)
 
     def preceded_by_complete(self, expr: "CompleteExpression") -> "CompleteSequence":
@@ -262,7 +285,7 @@ class CompleteExpression(PredicatedExpression, ABC):
 
     def strings(self) -> Generator[str, None, None]:
         for string in self._strings():
-            yield f"{string} (complete)"
+            yield f"{fg('dark_gray')}{string}{RESET}"
 
 
 @dataclass(frozen=True)
@@ -323,18 +346,18 @@ class Sequence(MultiLineExpression, ABC):
         yield from self.expr2.strings()
 
     @staticmethod
-    def random(length: int, rng: RandomState) -> "Expression":
+    def random(length: int, rng: RandomState) -> "Sequence":
         n1 = rng.randint(1, length)  # {1,...,length-1}
         n2 = length - n1
-        return MultiLineExpression.random(n1, rng).followed_by(
-            MultiLineExpression.random(n2, rng)
-        )
+        expr1 = MultiLineExpression.random(n1, rng)
+        expr2 = MultiLineExpression.random(n2, rng)
+        return expr1.followed_by(expr2)
 
     @staticmethod
     def required_lines() -> int:
         return 2
 
-    def reset(self) -> Union["UnpredicatedExpression", "ReadyExpression"]:
+    def reset(self) -> "SequenceWithUnpredicatedExpr1":
         return self.expr1.reset().followed_by(self.expr2.reset())
 
 
@@ -348,9 +371,8 @@ class SequenceWithUnpredicatedExpr1(Sequence, UnpredicatedExpression):
         return 2
 
     def set_predicate(self, passing: bool) -> "SequenceWithReadyExpr1":
-        return SequenceWithReadyExpr1(
-            expr1=self.expr1.set_predicate(passing),
-            expr2=self.expr2.set_predicate(passing),
+        return self.expr1.set_predicate(passing).followed_by(
+            self.expr2.set_predicate(passing)
         )
 
 
@@ -359,7 +381,7 @@ class SequenceWithReadyExpr1(Sequence, ReadyExpression):
     expr1: ReadyExpression
     expr2: Expression
 
-    def advance(self) -> "Expression":
+    def advance(self) -> "Sequence":
         return self.expr1.advance().followed_by(self.expr2)
 
     def subtask(self) -> "Subtask":
@@ -371,8 +393,10 @@ class SequenceWithUnpredicatedExpr2(Sequence, UnpredicatedExpression):
     expr1: CompleteExpression
     expr2: UnpredicatedExpression
 
-    def set_predicate(self, passing: bool) -> "ReadyExpression":
-        return SequenceWithReadyExpr2(self.expr1, self.expr2.set_predicate(passing))
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["SequenceWithReadyExpr2", "CompleteSequence"]:
+        return self.expr1.followed_by(self.expr2.set_predicate(passing))
 
 
 @dataclass(frozen=True)
@@ -380,7 +404,7 @@ class SequenceWithReadyExpr2(Sequence, ReadyExpression):
     expr1: CompleteExpression
     expr2: ReadyExpression
 
-    def advance(self) -> "Expression":
+    def advance(self) -> "Sequence":
         return self.expr1.followed_by(self.expr2.advance())
 
     def subtask(self) -> "Subtask":
@@ -455,7 +479,7 @@ class PassingUnpredicatedIfCondition(PassingIfCondition, UnpredicatedExpression)
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
-        return PassingReadyIfCondition(self.expr.set_predicate(passing))
+        return self.expr.set_predicate(passing).inside_passing_if()
 
 
 @dataclass(frozen=True)
@@ -540,13 +564,11 @@ class UnpredicatedIfElseCondition(IfElseCondition, UnpredicatedExpression):
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
         if passing:
-            return self.expr1.set_predicate(
-                passing
-            ).as_first_expression_of_passing_if_else(self.expr2)
+            expr1 = self.expr1.set_predicate(passing)
+            return expr1.as_first_expression_of_passing_if_else(self.expr2)
         else:
-            return self.expr2.set_predicate(
-                passing
-            ).as_second_expression_of_failing_if_else(self.expr1)
+            expr2 = self.expr2.set_predicate(passing)
+            return expr2.as_second_expression_of_failing_if_else(self.expr1)
 
 
 @dataclass(frozen=True)
@@ -574,9 +596,8 @@ class PassingIfElseConditionWithUnpredicatedExpr(
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
-        return PassingIfElseConditionWithReadyExpr(
-            self.expr1.set_predicate(passing), self.expr2
-        )
+        expr1 = self.expr1.set_predicate(passing)
+        return expr1.as_first_expression_of_passing_if_else(self.expr2)
 
 
 @dataclass(frozen=True)
@@ -616,9 +637,8 @@ class FailingIfElseConditionWithUnpredicatedExpr(
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
-        return FailingIfElseConditionWithReadyExpr(
-            self.expr1, self.expr2.set_predicate(passing)
-        )
+        expr2 = self.expr2.set_predicate(passing)
+        return expr2.as_second_expression_of_failing_if_else(self.expr1)
 
 
 @dataclass(frozen=True)
@@ -680,7 +700,8 @@ class UnpredicatedWhileLoop(WhileLoop, UnpredicatedExpression):
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
         if passing:
-            return self.expr.set_predicate(passing).inside_passing_while()
+            predicate = self.expr.set_predicate(passing)
+            return predicate.inside_passing_while()
         return FailingWhileLoop(self.expr)
 
 
@@ -702,7 +723,10 @@ class PassingWhileLoopWithUnpredicatedExpr(PassingWhileLoop, UnpredicatedExpress
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
-        return PassingWhileLoopWithReadyExpr(self.expr.set_predicate(passing))
+        new = self.expr.set_predicate(passing).inside_passing_while()
+        if new.predicated():
+            return new
+        return new.set_predicate(passing)
 
 
 @dataclass(frozen=True)
@@ -727,16 +751,8 @@ class FailingWhileLoop(WhileLoop, CompleteExpression):
         yield "EndWhile"
 
 
-if __name__ == "__main__":
-    from gym.utils.seeding import np_random
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("length", type=int)
-    parser.add_argument("seed", type=int)
-    args = parser.parse_args()
-
-    random, _ = np_random(args.seed)
+def main(seed, length):
+    random, _ = np_random(seed)
     instruction = None
     while True:
 
@@ -745,13 +761,23 @@ if __name__ == "__main__":
             print(instruction)
 
         if instruction is None:
-            instruction = Expression.random(args.length, random)
+            instruction = Expression.random(length, random)
         predicate = random.choice([True, False])
-        instruction = instruction.set_predicate(predicate)
-        if instruction.complete():
+        instruction2 = instruction.set_predicate(predicate)
+        if instruction2.complete():
             print_instruction()
             instruction = None
         else:
             print_instruction()
-            breakpoint()
-            instruction = instruction.advance()
+            instruction = instruction2.advance()
+
+
+if __name__ == "__main__":
+    from gym.utils.seeding import np_random
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("length", type=int)
+    parser.add_argument("seed", type=int)
+    args = parser.parse_args()
+    main(**vars(args))
