@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from enum import Enum, unique, auto
+from pprint import pprint
 from typing import List, Generator, Optional, Union
 
 # noinspection PyShadowingBuiltins
@@ -106,7 +107,7 @@ class Expression:
     def random(cls, length: int, rng: RandomState) -> "IncompleteExpression":
         if length == 1:
             return Subtask.random(rng)
-        else:
+        elif length > 1:
 
             def short_enough(t: type):
                 assert issubclass(t, MultiLineExpression)
@@ -115,18 +116,20 @@ class Expression:
             expr = rng.choice([*filter(short_enough, cls.multi_line_expressions())])
             assert issubclass(expr, MultiLineExpression)
             return expr.random(length, rng)
-
-
-@dataclass(frozen=True)
-class IncompleteExpression(Expression, ABC):
-    def complete(self) -> bool:
-        return False
+        else:
+            raise RuntimeError
 
     @abstractmethod
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
         pass
+
+
+@dataclass(frozen=True)
+class IncompleteExpression(Expression, ABC):
+    def complete(self) -> bool:
+        return False
 
 
 @dataclass(frozen=True)
@@ -215,21 +218,29 @@ class CompleteExpression(PredicatedExpression, ABC):
 
     def as_first_expression_of_passing_if_else(
         self, expr2: IncompleteExpression
-    ) -> "CompleteIfElseCondition":
-        return CompleteIfElseCondition(self, expr2)
+    ) -> "CompletePassingIfElseCondition":
+        return CompletePassingIfElseCondition(self, expr2)
 
     def as_second_expression_of_failing_if_else(
         self, expr1: IncompleteExpression
-    ) -> "CompleteIfElseCondition":
-        return CompleteIfElseCondition(expr1, self)
+    ) -> "CompleteFailingIfElseCondition":
+        return CompleteFailingIfElseCondition(expr1, self)
 
     def inside_passing_while(self) -> "UnpredicatedWhileLoop":
         return UnpredicatedWhileLoop(self.reset())
+
+    def set_predicate(
+        self, passing: bool
+    ) -> Union["ReadyExpression", "CompleteExpression"]:
+        return self
 
 
 @dataclass(frozen=True)
 class Subtask(PredicatedExpression, Line, ABC):
     id: int
+
+    def __str__(self):
+        return f"Subtask {self.id}"
 
     @staticmethod
     def random(rng: RandomState) -> "IncompleteSubtask":
@@ -243,6 +254,9 @@ class Subtask(PredicatedExpression, Line, ABC):
 class IncompleteSubtask(Subtask, ReadyExpression):
     def __iter__(self) -> Generator[Line, None, None]:
         yield self
+
+    def __str__(self):
+        return f"{Subtask(self.id)} (incomplete)"
 
     def preceded_by_complete(self, expr: "CompleteExpression") -> "Sequence":
         return SequenceWithReadyExpr2(expr, self)
@@ -258,6 +272,9 @@ class IncompleteSubtask(Subtask, ReadyExpression):
 class CompleteSubtask(Subtask, CompleteExpression):
     def __iter__(self) -> Generator[Line, None, None]:
         yield self
+
+    def __str__(self):
+        return f"{Subtask(self.id)} (complete)"
 
 
 @dataclass(frozen=True)
@@ -277,9 +294,14 @@ class Sequence(MultiLineExpression, ABC):
         yield from self.expr1
         yield from self.expr2
 
+    def __str__(self):
+        return f"""\
+{self.expr1}
+{self.expr2}"""
+
     @staticmethod
     def random(length: int, rng: RandomState) -> "Expression":
-        n1 = rng.randint(1, length + 1)  # {1,...,length}
+        n1 = rng.randint(1, length)  # {1,...,length-1}
         n2 = length - n1
         return MultiLineExpression.random(n1, rng).followed_by(
             MultiLineExpression.random(n2, rng)
@@ -376,6 +398,13 @@ class IfCondition(MultiLineExpression, ABC):
 class UnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
     expr: IncompleteExpression
 
+    def __str__(self):
+        return f"""\
+If (unpredicated)
+    {self.expr}
+EndIf
+"""
+
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
@@ -387,12 +416,19 @@ class UnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
 
 @dataclass(frozen=True)
 class PassingIfCondition(IfCondition, PredicatedExpression, ABC):
+    def __str__(self):
+        return f"""\
+If (passing)
+    {self.expr}
+EndIf
+"""
+
     def complete(self) -> bool:
         return self.expr.complete()
 
 
 @dataclass(frozen=True)
-class PassingUnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
+class PassingUnpredicatedIfCondition(PassingIfCondition, UnpredicatedExpression):
     expr: UnpredicatedExpression
 
     def set_predicate(
@@ -402,7 +438,7 @@ class PassingUnpredicatedIfCondition(IfCondition, UnpredicatedExpression):
 
 
 @dataclass(frozen=True)
-class PassingReadyIfCondition(IfCondition, ReadyExpression):
+class PassingReadyIfCondition(PassingIfCondition, ReadyExpression):
     expr: ReadyExpression
 
     def advance(self) -> "Expression":
@@ -413,7 +449,7 @@ class PassingReadyIfCondition(IfCondition, ReadyExpression):
 
 
 @dataclass(frozen=True)
-class PassingCompleteIfCondition(IfCondition, CompleteExpression):
+class PassingCompleteIfCondition(PassingIfCondition, CompleteExpression):
     expr: CompleteExpression
 
     def reset(self) -> "IncompleteExpression":
@@ -424,6 +460,13 @@ class PassingCompleteIfCondition(IfCondition, CompleteExpression):
 class FailingIfCondition(IfCondition, CompleteExpression):
     expr: IncompleteExpression
 
+    def __str__(self):
+        return f"""\
+If (failing)
+    {self.expr}
+EndIf
+"""
+
     def reset(self) -> "IncompleteExpression":
         return UnpredicatedIfCondition(self.expr.reset())
 
@@ -432,6 +475,15 @@ class FailingIfCondition(IfCondition, CompleteExpression):
 class IfElseCondition(MultiLineExpression, ABC):
     expr1: Expression
     expr2: Expression
+
+    def __str__(self):
+        return f"""\
+If
+    {self.expr1}
+Else
+    {self.expr2}
+EndIf
+"""
 
     def __iter__(self) -> Generator[Line, None, None]:
         yield If()
@@ -464,6 +516,15 @@ class UnpredicatedIfElseCondition(IfElseCondition, UnpredicatedExpression):
     expr1: IncompleteExpression
     expr2: IncompleteExpression
 
+    def __str__(self):
+        return f"""\
+If (unpredicated)
+    {self.expr1}
+Else
+    {self.expr2}
+EndIf
+"""
+
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
@@ -478,8 +539,23 @@ class UnpredicatedIfElseCondition(IfElseCondition, UnpredicatedExpression):
 
 
 @dataclass(frozen=True)
+class PassingIfElseCondition(IfElseCondition, ABC):
+    expr1: Expression
+    expr2: Expression
+
+    def __str__(self):
+        return f"""\
+If (passing)
+    {self.expr1}
+Else
+    {self.expr2}
+EndIf
+"""
+
+
+@dataclass(frozen=True)
 class PassingIfElseConditionWithUnpredicatedExpr(
-    IfElseCondition, UnpredicatedExpression
+    PassingIfElseCondition, UnpredicatedExpression
 ):
     expr1: UnpredicatedExpression
     expr2: IncompleteExpression
@@ -493,7 +569,7 @@ class PassingIfElseConditionWithUnpredicatedExpr(
 
 
 @dataclass(frozen=True)
-class PassingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
+class PassingIfElseConditionWithReadyExpr(PassingIfElseCondition, ReadyExpression):
     expr1: ReadyExpression
     expr2: IncompleteExpression
 
@@ -505,8 +581,23 @@ class PassingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
 
 
 @dataclass(frozen=True)
+class FailingIfElseCondition(IfElseCondition, ABC):
+    expr1: Expression
+    expr2: Expression
+
+    def __str__(self):
+        return f"""\
+If (failing)
+    {self.expr1}
+Else
+    {self.expr2}
+EndIf
+"""
+
+
+@dataclass(frozen=True)
 class FailingIfElseConditionWithUnpredicatedExpr(
-    IfElseCondition, UnpredicatedExpression
+    FailingIfElseCondition, UnpredicatedExpression
 ):
     expr1: IncompleteExpression
     expr2: UnpredicatedExpression
@@ -520,7 +611,7 @@ class FailingIfElseConditionWithUnpredicatedExpr(
 
 
 @dataclass(frozen=True)
-class FailingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
+class FailingIfElseConditionWithReadyExpr(FailingIfElseCondition, ReadyExpression):
     expr1: IncompleteExpression
     expr2: ReadyExpression
 
@@ -532,7 +623,13 @@ class FailingIfElseConditionWithReadyExpr(IfElseCondition, ReadyExpression):
 
 
 @dataclass(frozen=True)
-class CompleteIfElseCondition(IfElseCondition, CompleteExpression):
+class CompletePassingIfElseCondition(PassingIfElseCondition, CompleteExpression):
+    expr1: Expression
+    expr2: Expression
+
+
+@dataclass(frozen=True)
+class CompleteFailingIfElseCondition(FailingIfElseCondition, CompleteExpression):
     expr1: Expression
     expr2: Expression
 
@@ -562,6 +659,13 @@ class WhileLoop(MultiLineExpression, ABC):
 class UnpredicatedWhileLoop(WhileLoop, UnpredicatedExpression):
     expr: IncompleteExpression
 
+    def __str__(self):
+        return f"""\
+While (unpredicated)
+    {self.expr}
+EndWhile
+"""
+
     def set_predicate(
         self, passing: bool
     ) -> Union["ReadyExpression", "CompleteExpression"]:
@@ -571,8 +675,27 @@ class UnpredicatedWhileLoop(WhileLoop, UnpredicatedExpression):
 
 
 @dataclass(frozen=True)
-class PassingWhileLoopWithUnpredicatedExpr(WhileLoop, UnpredicatedExpression):
+class PassingWhileLoop(WhileLoop):
+    expr: Expression
+
+    def __str__(self):
+        return f"""\
+While (passing)
+    {self.expr}
+EndWhile
+"""
+
+
+@dataclass(frozen=True)
+class PassingWhileLoopWithUnpredicatedExpr(PassingWhileLoop, UnpredicatedExpression):
     expr: UnpredicatedExpression
+
+    def __str__(self):
+        return f"""\
+While (passing)
+    {self.expr}
+EndWhile
+"""
 
     def set_predicate(
         self, passing: bool
@@ -581,7 +704,7 @@ class PassingWhileLoopWithUnpredicatedExpr(WhileLoop, UnpredicatedExpression):
 
 
 @dataclass(frozen=True)
-class PassingWhileLoopWithReadyExpr(WhileLoop, ReadyExpression):
+class PassingWhileLoopWithReadyExpr(PassingWhileLoop, ReadyExpression):
     expr: ReadyExpression
 
     def advance(self) -> "Expression":
@@ -595,6 +718,13 @@ class PassingWhileLoopWithReadyExpr(WhileLoop, ReadyExpression):
 class FailingWhileLoop(WhileLoop, CompleteExpression):
     expr: IncompleteExpression
 
+    def __str__(self):
+        return f"""\
+While (failing)
+    {self.expr}
+EndWhile
+"""
+
 
 if __name__ == "__main__":
     from gym.utils.seeding import np_random
@@ -606,17 +736,21 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     random, _ = np_random(args.seed)
-    for cls in Expression.multi_line_expressions():
-        assert issubclass(cls, MultiLineExpression)
-        if cls.required_lines() <= args.length:
-            ex = cls.random(args.length, random)
-            print(ex)
-            for pred in [True, False]:
-                ex_pred = ex.set_predicate(True)
-                print(f"ex{pred}")
-                print(ex_pred)
-                print(f"ex{pred}.subtask()")
-                print(ex_pred.subtask())
-                ex2 = ex_pred.advance()
-                print(f"ex{pred}2")
-                breakpoint()
+    instruction = None
+    while True:
+
+        def print_instruction():
+            print("predicate", predicate)
+            print(instruction)
+
+        if instruction is None:
+            instruction = Expression.random(args.length, random)
+        predicate = random.choice([True, False])
+        instruction = instruction.set_predicate(predicate)
+        if instruction.complete():
+            print_instruction()
+            instruction = None
+        else:
+            print_instruction()
+            breakpoint()
+            instruction = instruction.advance()
