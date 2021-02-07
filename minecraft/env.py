@@ -383,6 +383,8 @@ class Env(gym.Env):
 
             def render():
                 print("action:", action.extrinsic)
+                print("time remaining:", time_remaining)
+                print("no-ops remaining:", no_ops_remaining)
                 print("bit:", condition_bit)
                 for i, string in enumerate(instructions.strings()):
                     print("-" if i == action.pointer else " ", string, sep="")
