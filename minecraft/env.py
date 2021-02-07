@@ -202,7 +202,9 @@ class Env(gym.Env):
         while True:
             if done:
                 if self.evaluating:
-                    lower = (len(instructions) - 1) // self.bucket_size * self.bucket_size + 1
+                    lower = (
+                        len(instructions) - 1
+                    ) // self.bucket_size * self.bucket_size + 1
                     upper = (
                         1 + (len(instructions) - 1) // self.bucket_size
                     ) * self.bucket_size
@@ -315,7 +317,8 @@ class Env(gym.Env):
     def srti_generator(
         self,
     ) -> Generator[Tuple[any, float, bool, dict], RawAction, None]:
-        instructions = Expression.random(self.max_lines, self.random, self.max_depth)
+        n_lines = self.random.randint(1, self.max_lines + 1)
+        instructions = Expression.random(n_lines, self.random, self.max_depth)
         assert len(instructions) <= self.max_lines
         obs_iterator = self.obs_generator(instructions)
         reward_iterator = self.reward_generator()
