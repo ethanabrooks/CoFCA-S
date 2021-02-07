@@ -20,6 +20,7 @@ class State:
     wrong_move: bool
     condition_bit: bool
     time_remaining: int
+    no_ops_remaining: int
 
 
 @dataclass(frozen=True)

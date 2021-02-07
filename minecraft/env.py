@@ -33,7 +33,8 @@ class EnvConfig:
     min_lines: int = 1
     num_subtasks: int = 10
     tgt_success_rate: float = 1
-    time_per_line: int = 25
+    time_per_line: int = 10
+    no_ops_per_line: int = 2
 
 
 @dataclass
@@ -50,6 +51,7 @@ class Env(gym.Env):
     random_seed: int
     tgt_success_rate: float
     time_per_line: int
+    no_ops_per_line: int
     alpha: float = 0.05
     evaluating: bool = None
     i: int = 0
@@ -91,7 +93,14 @@ class Env(gym.Env):
         while True:
             # noinspection PyTypeChecker
             state = (
-                yield state.success or state.wrong_move or not state.time_remaining,
+                yield any(
+                    (
+                        state.success,
+                        state.wrong_move,
+                        not state.time_remaining,
+                        not state.no_ops_remaining,
+                    )
+                ),
                 lambda: None,
             )
 
@@ -366,6 +375,7 @@ class Env(gym.Env):
     ) -> Generator[State, Optional[Action], None]:
         action: Optional[Action] = Action.parse(extrinsic=0)
         time_remaining = self.time_per_line * len(instructions)
+        no_ops_remaining = self.no_ops_per_line * len(instructions)
         wrong_move = False
         success = False
         condition_bit = bool(self.random.choice(2))
@@ -389,11 +399,11 @@ class Env(gym.Env):
                     wrong_move=wrong_move,
                     condition_bit=condition_bit,
                     time_remaining=time_remaining,
+                    no_ops_remaining=no_ops_remaining,
                 ),
                 render,
             )
 
-            time_remaining -= 1
             if instructions.complete():
                 success = True
                 continue
@@ -401,6 +411,9 @@ class Env(gym.Env):
                 wrong_move = action.extrinsic != instructions.subtask().id
                 instructions = instructions.advance()
                 condition_bit = bool(self.random.choice(2))
+                time_remaining -= 1
+            else:
+                no_ops_remaining -= 1
 
     def step(self, action: Union[np.ndarray, RawAction]):
         if isinstance(action, np.ndarray):
