@@ -111,8 +111,8 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.action_gru = nn.GRU(recurrent_input_size, hidden_size)
-            for name, param in self.action_gru.named_parameters():
+            self.gru = nn.GRU(recurrent_input_size, hidden_size)
+            for name, param in self.gru.named_parameters():
                 print("zeroed out", name)
                 if "bias" in name:
                     nn.init.constant_(param, 0)
@@ -152,7 +152,7 @@ class NNBase(nn.Module):
 
     def _forward_gru(self, x, hxs, masks, gru=None):
         if gru is None:
-            gru = self.action_gru
+            gru = self.gru
         if x.size(0) == hxs.size(0):
             x, hxs = gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)

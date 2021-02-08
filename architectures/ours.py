@@ -140,10 +140,13 @@ class Agent(NNBase):
             embedding_dim=self.instruction_embed_size,
         )
 
-        self.action_gru = nn.GRU(
-            self.action_embed_size + self.destroyed_unit_embed_size, self.hidden_size
+        self.gru = nn.GRU(
+            self.conv_hidden_size
+            + self.action_embed_size
+            + self.destroyed_unit_embed_size,
+            self.hidden_size,
         )
-        self.action_gru.reset_parameters()
+        self.gru.reset_parameters()
 
         self.g_gru = self.build_g_gru()
 
@@ -177,7 +180,7 @@ class Agent(NNBase):
         #     ),
         #     self.activation,
         # )
-        self.z_size = self.conv_hidden_size
+        self.z_size = self.hidden_size
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -332,7 +335,7 @@ class Agent(NNBase):
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
 
-        action_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
+        # action_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -363,17 +366,18 @@ class Agent(NNBase):
         G, g = self.get_G_g(rolled)
         m = self.build_m(M, R, p)
 
-        ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
-            embedded_action=embedded_action,
-            destroyed_unit=destroyed_unit,
-            action_rnn_hxs=action_rnn_hxs,
-            g=g,
-            g_rnn_hxs=g_rnn_hxs,
-            masks=masks,
-        )
+        # ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
+        #     embedded_action=embedded_action,
+        #     destroyed_unit=destroyed_unit,
+        #     action_rnn_hxs=action_rnn_hxs,
+        #     g=g,
+        #     g_rnn_hxs=g_rnn_hxs,
+        #     masks=masks,
+        # )
 
         # z = torch.cat([x, ha], dim=-1)
-        z = x
+        y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
+        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
         assert z.size(-1) == self.z_size
 
         za = torch.cat([z, m], dim=-1)
@@ -490,7 +494,7 @@ class Agent(NNBase):
             dim=-1,
         )
 
-        rnn_hxs = self.combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs)
+        # rnn_hxs = self.combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,
@@ -512,7 +516,7 @@ class Agent(NNBase):
             torch.cat([embedded_action, destroyed_unit], dim=-1),
             action_rnn_hxs,
             masks,
-            gru=self.action_gru,
+            gru=self.gru,
         )
         hg, g_rnn_hxs = self._forward_gru(
             g.reshape(g.size(0), 2 * self.instruction_embed_size),
@@ -646,4 +650,4 @@ class Agent(NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return 2 * self.hidden_size
+        return self.hidden_size

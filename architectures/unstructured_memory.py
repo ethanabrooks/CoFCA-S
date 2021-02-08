@@ -70,7 +70,7 @@ class Agent(ours.Agent):
             torch.cat([embedded_action, destroyed_unit], dim=-1),
             action_rnn_hxs,
             masks,
-            gru=self.action_gru,
+            gru=self.gru,
         )
         return ha, action_rnn_hxs, None, None
 
