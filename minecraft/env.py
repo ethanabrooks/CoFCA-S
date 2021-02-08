@@ -98,6 +98,7 @@ class Env(gym.Env):
                     (
                         state.success,
                         state.wrong_move,
+                        not state.time_remaining,
                         not state.no_ops_remaining,
                     )
                 ),
@@ -315,7 +316,9 @@ class Env(gym.Env):
         state = yield
 
         while True:
-            reward = float(state.success)
+            reward = float(
+                state.success or not state.time_remaining
+            )  # you win if you run down the clock
             # noinspection PyTypeChecker
             state = yield reward, lambda: print("Reward:", reward)
 
@@ -405,9 +408,7 @@ class Env(gym.Env):
                 render,
             )
 
-            if (
-                instructions.complete() or not time_remaining
-            ):  # you win if you run down the clock
+            if instructions.complete():
                 success = True
                 continue
             if action.is_op():
