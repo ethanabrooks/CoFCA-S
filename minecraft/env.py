@@ -210,7 +210,6 @@ class Env(gym.Env):
         elapsed_time = -1
 
         while True:
-            success = state.success or not state.time_remaining
             if done:
                 if self.evaluating:
                     lower = (
@@ -226,8 +225,8 @@ class Env(gym.Env):
                     key = f"success on length-{len(instructions)} instructions"
                 info.update(
                     {
-                        f"success": float(success),
-                        key: float(success),
+                        f"success": float(state.success),
+                        key: float(state.success),
                         "instruction length": len(instructions),
                         "time per line": elapsed_time / len(instructions),
                     },
