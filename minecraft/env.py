@@ -70,7 +70,7 @@ class Env(gym.Env):
             delta=2 * self.max_lines,
             gate=2,
             pointer=self.max_lines,
-            extrinsic=num_actions
+            extrinsic=num_actions,
         )
         self.obs_spaces = Obs(
             action_mask=MultiBinary(num_actions),

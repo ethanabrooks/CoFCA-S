@@ -5,7 +5,7 @@ from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
 from queue import Empty, Full
-from typing import Optional, Dict
+from typing import Any, Dict, List, Optional
 
 import hydra
 from hydra.core.config_store import ConfigStore
@@ -16,10 +16,10 @@ import starcraft
 import trainer
 
 # noinspection PyUnresolvedReferences
-from architectures import cofca_s, cofca, olsk, unstructured_memory
+from architectures import cofca, cofca_s, olsk, unstructured_memory
 from config import BaseConfig
 from starcraft import data_types
-from starcraft.env import EnvConfig, Env
+from starcraft.env import Env, EnvConfig
 from wrappers import VecPyTorch
 
 
@@ -34,7 +34,7 @@ class OurConfig(BaseConfig, EnvConfig, cofca_s.AgentConfig):
 
 class Trainer(trainer.Trainer):
     @classmethod
-    def args_to_methods(cls):
+    def args_to_methods(cls) -> Dict[str, List[Any]]:
         mapping = super().args_to_methods()
         mapping["agent_args"] += [cofca_s.Agent.__init__]
         mapping["env_args"] += [
@@ -45,15 +45,15 @@ class Trainer(trainer.Trainer):
         return mapping
 
     @staticmethod
-    def build_agent(envs: VecPyTorch, architecture: str, **agent_args):
+    def build_agent(envs: VecPyTorch, architecture: str, **agent_args):  # type: ignore
         agent_args.update(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
         )
         # noinspection PyUnresolvedReferences
-        return importlib.import_module(f"architectures.{architecture}").Agent(
-            **agent_args
-        )
+        return getattr(
+            importlib.import_module(f"architectures.{architecture}"), "Agent"
+        )(**agent_args)
 
     @staticmethod
     def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
@@ -99,7 +99,7 @@ class Trainer(trainer.Trainer):
         **kwargs,
     ):
         kwargs.update(rank=rank, random_seed=seed + rank)
-        return starcraft.env.Env(**kwargs)
+        return Env(**kwargs)
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -131,7 +131,7 @@ class Trainer(trainer.Trainer):
         )
 
     @classmethod
-    def structure_config(cls, cfg: DictConfig) -> Dict[str, any]:
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, Any]:
         return super().structure_config(cfg)
 
 

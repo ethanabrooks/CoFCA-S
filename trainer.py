@@ -1,36 +1,35 @@
 import inspect
 import itertools
 import os
-from collections import namedtuple, Counter
+from collections import Counter, namedtuple
 from multiprocessing import Queue
 from pathlib import Path
 from pprint import pprint
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import gym
 import hydra
 import numpy as np
 import torch
 import torch.nn as nn
+import wandb
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-import wandb
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
-
 from agents import Agent, AgentOutputs, MLPBase
 from aggregator import (
-    EpisodeAggregator,
-    InfosAggregator,
-    TotalTimeKeeper,
     AverageTimeKeeper,
+    EpisodeAggregator,
     EvalEpisodeAggregator,
     EvalInfosAggregator,
+    InfosAggregator,
+    TotalTimeKeeper,
 )
 from config import Config, flatten
 from ppo import PPO
 from rollouts import RolloutStorage
-from wrappers import VecPyTorch, RenderWrapper
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from wrappers import RenderWrapper, VecPyTorch
 
 EpochOutputs = namedtuple("EpochOutputs", "obs reward done infos act masks")
 CHECKPOINT_NAME = "checkpoint.pt"
@@ -38,7 +37,7 @@ CHECKPOINT_NAME = "checkpoint.pt"
 
 class Trainer:
     @classmethod
-    def args_to_methods(cls):
+    def args_to_methods(cls) -> Dict[str, List[Any]]:
         return dict(
             agent_args=[
                 cls.build_agent,

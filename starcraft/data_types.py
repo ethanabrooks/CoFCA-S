@@ -3,7 +3,7 @@ from abc import abstractmethod, ABC, ABCMeta
 from dataclasses import dataclass, astuple, replace, fields
 from enum import unique, Enum, auto, EnumMeta
 from functools import lru_cache
-from typing import Tuple, Union, List, Generator, Dict, Generic, Optional
+from typing import Tuple, Union, List, Generator, Dict, Optional
 
 import gym
 import numpy as np
@@ -11,7 +11,7 @@ import torch
 from colored import fg
 from gym import spaces
 
-from data_types import X, Obs
+from data_types import Obs, RawAction
 from utils import RESET
 
 CoordType = Tuple[int, int]
@@ -103,14 +103,16 @@ class Building(
         return self.__class__.__name__
 
     def __repr__(self):
-        return f"({Buildings.index(self)}) {str(self)}"
+        return str(self)
+
+    #     return f"({Buildings.index(self)}) {str(self)}"
 
     @property
     @abstractmethod
     def cost(self) -> "Resources":
         pass
 
-    def on(self, coord: "CoordType", building_positions: "BuildingPositions"):
+    def on(self, coord: "CoordType", building_positions: "BuildingCounter"):
         return self == building_positions.get(coord)
 
     @staticmethod
@@ -136,11 +138,11 @@ class Assignment:
         self,
         assignee: "Assignee",
         assignments: "Assignments",
-        building_positions: "BuildingPositions",
+        building_positions: "BuildingCounter",
         carrying: "Carrying",
         deployed_units: "UnitCounter",
         pending_costs: "ResourceCounter",
-        pending_positions: "BuildingPositions",
+        pending_positions: "BuildingCounter",
         positions: "Positions",
         resources: "ResourceCounter",
     ) -> None:
@@ -223,7 +225,7 @@ class Resource(WorldObject, Assignment, Enum):
     def execute(
         self,
         assignee: "Assignee",
-        building_positions: "BuildingPositions",
+        building_positions: "BuildingCounter",
         carrying: "Carrying",
         positions: "Positions",
         resources: "ResourceCounter",
@@ -238,21 +240,22 @@ class Resource(WorldObject, Assignment, Enum):
             worker_pos = positions[assignee]
             if worker_pos == resource_pos:
                 carrying[assignee] = self
-        else:
-            nexus_positions: List[CoordType] = [
-                p for p, b in building_positions.items() if isinstance(b, Nexus)
-            ]
-            nexus = get_nearest(nexus_positions, to=worker_pos)
-            positions[assignee] = move_from(
-                worker_pos,
-                toward=nexus,
-            )
-            if positions[assignee] == nexus:
-                resource = carrying[assignee]
-                assert isinstance(resource, Resource)
-                resources[resource] += 100
-                carrying[assignee] = None
-        return None
+        raise NotImplementedError
+        # else:
+        #     nexus_positions: List[CoordType] = [
+        #         p for p, b in building_positions.items() if isinstance(b, Nexus)
+        #     ]
+        #     nexus = get_nearest(nexus_positions, to=worker_pos)
+        #     positions[assignee] = move_from(
+        #         worker_pos,
+        #         toward=nexus,
+        #     )
+        #     if positions[assignee] == nexus:
+        #         resource = carrying[assignee]
+        #         assert isinstance(resource, Resource)
+        #         resources[resource] += 100
+        #         carrying[assignee] = None
+        # return None
 
     def on(
         self,
@@ -322,7 +325,8 @@ class Coord(ActionComponent):
         yield 0
 
 
-BuildingPositions = Dict[CoordType, Building]
+# BuildingPositions = Dict[CoordType, Building]
+BuildingCounter = typing.Counter[Building]
 Positions = Dict[Union[Resource, Worker], CoordType]
 Carrying = Dict[Worker, Optional[Resource]]
 Assignments = Dict[Assignee, Assignment]
@@ -337,13 +341,13 @@ class BuildOrder(Assignment):
         self,
         assignee: "Assignee",
         assignments: "Assignments",
-        building_positions: "BuildingPositions",
+        building_positions: "BuildingCounter",
         pending_costs: "ResourceCounter",
         positions: "Positions",
         resources: "ResourceCounter",
         **kwargs,
     ) -> None:
-        if True:  # positions[assignee] == self.coord:
+        if positions[assignee] == self.coord:
             building_positions[self.coord] = self.building
             resources.subtract(pending_costs)
             assignments[assignee] = DoNothing()
@@ -377,6 +381,76 @@ class DoNothing(Assignment):
 Command = Union[BuildOrder, Resource]
 
 O = typing.TypeVar("O", torch.Tensor, np.ndarray, int, gym.Space)
+
+
+@dataclass(frozen=True)
+class Action(RawAction):
+    def is_op(self):
+        return self.extrinsic is not None
+
+    @classmethod
+    def parse(
+        cls, delta: int = 0, gate: int = 1, pointer: int = 0, extrinsic: int = None
+    ) -> "Action":
+        return Action(
+            delta=delta,
+            gate=gate,
+            pointer=pointer,
+            extrinsic=cls.parse_extrinsic(extrinsic),
+        )
+
+    @staticmethod
+    def parse_extrinsic(extrinsic: int) -> Optional[Union[Building, "Unit"]]:
+        if not extrinsic:
+            return None
+        else:
+            extrinsic -= 1
+            if Building.space().contains(extrinsic):
+                return Building.parse(extrinsic)
+            else:
+                extrinsic -= Building.space().n
+                return Unit.parse(extrinsic)
+
+    @staticmethod
+    def extrinsic_space() -> spaces.Discrete:
+        return spaces.Discrete(1 + Building.space().n + Unit.space().n)
+
+    @staticmethod
+    def mask(
+        unit_dependencies: Dict["Unit", Building], buildings: BuildingCounter
+    ) -> np.ndarray:
+        def mask():
+            for _ in Buildings:
+                yield 0
+            for unit in Units:
+                yield int(not buildings[unit_dependencies[unit]])
+
+        return np.array([0, *mask()])
+
+    def int_representation(self) -> int:
+        if self.extrinsic is None:
+            rep = 0
+        elif isinstance(self.extrinsic, Building):
+            rep = 1 + self.extrinsic.to_int()
+        elif isinstance(self.extrinsic, Unit):
+            rep = 1 + Building.space().n + self.extrinsic.to_int()
+        else:
+            raise RuntimeError
+        assert self.parse_extrinsic(rep) == self.extrinsic
+        return rep
+
+    def invalid(
+        self,
+        unit_dependencies: Dict["Unit", Building],
+        building_dependencies: Dict[Building, Building],
+        buildings: BuildingCounter,
+    ) -> Optional[str]:
+        if isinstance(self.extrinsic, Building):
+            dependency = building_dependencies.get(self.extrinsic)
+            if dependency is not None and not buildings[dependency]:
+                return "Dependency not built"
+        if isinstance(self.extrinsic, Unit):
+            assert buildings[unit_dependencies[self.extrinsic]]
 
 
 @dataclass(frozen=True)
@@ -423,6 +497,7 @@ class CompoundAction:
 
     @classmethod
     def representation_space(cls):
+        # noinspection PyUnresolvedReferences
         return spaces.MultiDiscrete([1 + c.space().n for c in cls.component_classes()])
 
     def to_input_int(self) -> IntGenerator:
@@ -486,7 +561,7 @@ class ActionStage:
     @staticmethod
     @abstractmethod
     def _update(
-        action: CompoundAction, building_positions: BuildingPositions
+        action: CompoundAction, building_positions: BuildingCounter
     ) -> "ActionStage":
         pass
 
@@ -498,7 +573,7 @@ class ActionStage:
     def assignment(self, positions: Positions) -> Optional[Assignment]:
         pass
 
-    def from_input(self, building_positions: BuildingPositions) -> "ActionStage":
+    def from_input(self, building_positions: BuildingCounter) -> "ActionStage":
         compound_action = None
         while compound_action is None:
             string = input(self._prompt() + "\n")
@@ -538,9 +613,9 @@ class ActionStage:
         self,
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
+        building_positions: BuildingCounter,
         pending_costs: ResourceCounter,
-        pending_positions: BuildingPositions,
+        pending_positions: BuildingCounter,
         positions: Positions,
         unit_dependencies: Dict["Unit", Building],
     ) -> Optional[str]:
@@ -549,26 +624,26 @@ class ActionStage:
     def mask(self, unit_dependencies: Dict["Unit", Building]) -> np.ndarray:
         nvec = CompoundAction.input_space().nvec
         mask = np.ones((len(nvec), max(nvec)))
-        R = np.arange(len(nvec))
+        r = np.arange(len(nvec))
         for permitted_values in [
             *self._permitted_values(unit_dependencies),
             CompoundAction(),
         ]:
             unmask = [*permitted_values.to_input_int()]
-            mask[R, unmask] = 0
+            mask[r, unmask] = 0
         return mask
 
     def to_ints(self):
         return self.compound_action().to_representation_ints()
 
     def update(
-        self, *components: int, building_positions: BuildingPositions
+        self, *components: int, building_positions: BuildingCounter
     ) -> "ActionStage":
         compound_action = CompoundAction.parse(*components)
         return self.__update(compound_action, building_positions)
 
     def __update(
-        self, compound_action: CompoundAction, building_positions: BuildingPositions
+        self, compound_action: CompoundAction, building_positions: BuildingCounter
     ):
         if not any(astuple(compound_action)):
             return InitialAction()
@@ -617,7 +692,7 @@ class InitialAction(ActionStage):
         return "Worker or Coord:"
 
     def _update(
-        self, action: CompoundAction, building_positions: BuildingPositions
+        self, action: CompoundAction, building_positions: BuildingCounter
     ) -> Union["WorkerAction", "BuildingAction", "InitialAction"]:
         if action.worker is not None:
             return WorkerAction(action.worker)
@@ -680,7 +755,7 @@ class WorkerAction(HasWorker, CoordCanOpenGate):
         )
 
     def _update(
-        self, action: CompoundAction, building_positions: BuildingPositions
+        self, action: CompoundAction, building_positions: BuildingCounter
     ) -> "ActionStage":
         if (action.coord, action.building) == (None, None):
             assert action.worker is None
@@ -731,7 +806,7 @@ class BuildingAction(ActionStage):
         )
 
     def _update(
-        self, action: CompoundAction, building_positions: BuildingPositions
+        self, action: CompoundAction, building_positions: BuildingCounter
     ) -> "ActionStage":
         if action.unit is None:
             return InitialAction()
@@ -748,7 +823,7 @@ class BuildingAction(ActionStage):
 
     def invalid(
         self,
-        building_positions: BuildingPositions,
+        building_positions: BuildingCounter,
         **kwargs,
     ) -> Optional[str]:
         if self.building not in building_positions.values():
@@ -772,7 +847,7 @@ class WorkerCoordAction(HasWorker, InitialAction):
 
     def invalid(
         self,
-        building_positions: BuildingPositions,
+        building_positions: BuildingCounter,
         positions: Positions,
         **kwargs,
     ) -> Optional[str]:
@@ -807,7 +882,7 @@ class WorkerBuildingAction(HasWorker, CoordCanOpenGate):
         return "Coord"
 
     def _update(
-        self, action: CompoundAction, building_positions: BuildingPositions
+        self, action: CompoundAction, building_positions: BuildingCounter
     ) -> "ActionStage":
         assert not any([action.worker, action.building])
         if action.coord is None:
@@ -826,7 +901,7 @@ class WorkerBuildingAction(HasWorker, CoordCanOpenGate):
         self,
         resources: typing.Counter[Resource],
         dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
+        building_positions: BuildingCounter,
         pending_costs: ResourceCounter,
         **kwargs,
     ) -> Optional[str]:
@@ -864,8 +939,8 @@ class BuildingCoordAction(HasWorker, InitialAction):
     def invalid(
         self,
         dependencies: Dict[Building, Building],
-        building_positions: BuildingPositions,
-        pending_positions: BuildingPositions,
+        building_positions: BuildingCounter,
+        pending_positions: BuildingCounter,
         positions: Positions,
         **kwargs,
     ) -> Optional[str]:
@@ -914,24 +989,16 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 @dataclass
 class State:
-    action: ActionStage
-    building_positions: BuildingPositions
-    destroyed_buildings: BuildingPositions
-    destroyed_unit: Optional["Unit"]
-    pending_positions: BuildingPositions
-    pointer: int
-    positions: Dict[Union[Resource, Worker], CoordType]
-    required_units: "UnitCounter"
-    resources: typing.Counter[Resource]
+    action: "Action"
+    agent_pointer: int
     success: bool
+    unnecessary_deployment: bool
+    buildings: BuildingCounter
+    required_units: "UnitCounter"
+    resources: ResourceCounter
+    destroyed_unit: Optional["Unit"]
     time_remaining: int
-    valid: bool
-
-
-@dataclass
-class ParsedInput(Generic[X]):
-    obs: X
-    actions: X
+    no_ops_remaining: int
 
 
 def get_nearest(
@@ -1118,17 +1185,17 @@ class Unit(ActionComponent, Assignment, ABC, metaclass=ActionComponentABCMeta):
         return self.__class__.__name__
 
     def __repr__(self):
-        return f"({Units.index(self)}) {str(self)}"
+        return str(self)
 
     def execute(
         self,
         assignee: "Assignee",
         assignments: "Assignments",
-        building_positions: "BuildingPositions",
+        building_positions: "BuildingCounter",
         carrying: "Carrying",
         deployed_units: "UnitCounter",
         pending_costs: ResourceCounter,
-        pending_positions: "BuildingPositions",
+        pending_positions: "BuildingCounter",
         positions: "Positions",
         resources: "ResourceCounter",
     ) -> None:
