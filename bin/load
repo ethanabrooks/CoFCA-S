@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 new_config="/tmp/config.yaml"
-run_id=$(echo $1 | sed 's/ethanabrooks\/[^\/]*\/\(.*\)/\1/')
+run_id=$1
 ${0:a:h}/fix_config $run_id
 ${0:a:h}/fix_config $run_id > $new_config
 
