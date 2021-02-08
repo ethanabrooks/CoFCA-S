@@ -144,7 +144,7 @@ class Env(gym.Env):
         destroyed_unit = spaces.Discrete(Unit.space().n + 1)  # +1 for None
         gate_openers = spaces.MultiDiscrete(
             1
-            + np.arange(extrinsic_space.n)
+            + np.arange(extrinsic_space.n).reshape(-1, 1)
             # np.array(
             #     [CompoundAction.input_space().nvec] * ActionStage.gate_opener_max_size()
             # ).flatten()
@@ -527,7 +527,7 @@ class Env(gym.Env):
                     Obs(
                         action_mask=action_mask,
                         destroyed_unit=destroyed_unit,
-                        gate_openers=np.arange(num_actions),
+                        gate_openers=np.arange(num_actions).reshape(-1, 1),
                         # gate_openers=gate_openers.ravel(),
                         instruction_mask=np.array([int(p is None) for p in padded]),
                         instructions=np.array([*map(self.preprocess_line, padded)]),
