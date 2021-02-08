@@ -225,8 +225,8 @@ class Trainer:
         cuda &= torch.cuda.is_available()
 
         # reproducibility
-        # if cuda_deterministic:
-        #     torch.set_deterministic(True)
+        if cuda_deterministic:
+            torch.set_deterministic(True)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         np.random.seed(seed)
