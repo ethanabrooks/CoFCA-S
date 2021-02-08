@@ -11,3 +11,4 @@ omegaconf~=2.0.5
 colored~=1.4.2
 treelib~=1.6.1
 wandb~=0.10.14
+hydra-core==1.0.4
