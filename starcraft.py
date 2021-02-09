@@ -16,7 +16,7 @@ import starcraft
 import trainer
 
 # noinspection PyUnresolvedReferences
-from architectures import cofca, cofca_s, olsk, unstructured_memory
+from architectures import cofca, ours, olsk, unstructured_memory
 from config import BaseConfig
 from starcraft import data_types
 from starcraft.env import Env, EnvConfig
@@ -24,19 +24,19 @@ from wrappers import VecPyTorch
 
 
 @dataclass
-class OurConfig(BaseConfig, EnvConfig, cofca_s.AgentConfig):
+class OurConfig(BaseConfig, EnvConfig, ours.AgentConfig):
     failure_buffer_load_path: Optional[str] = None
     failure_buffer_size: int = 10000
     max_eval_lines: int = 20
     min_eval_lines: int = 2
-    architecture: str = "cofca_s"
+    architecture: str = "ours"
 
 
 class Trainer(trainer.Trainer):
     @classmethod
     def args_to_methods(cls) -> Dict[str, List[Any]]:
         mapping = super().args_to_methods()
-        mapping["agent_args"] += [cofca_s.Agent.__init__]
+        mapping["agent_args"] += [ours.Agent.__init__]
         mapping["env_args"] += [
             Env.__init__,
             trainer.Trainer.make_vec_envs,
