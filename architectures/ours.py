@@ -66,6 +66,7 @@ class AgentConfig:
     add_gate_layer: bool = False
     add_upsilon_layer: bool = False
     b_dot_product: bool = False
+    bidirectional_beta_inputs: bool = False
     conv_hidden_size: int = 100
     debug: bool = False
     destroyed_unit_embed_size: int = 100
@@ -92,6 +93,7 @@ class Agent(NNBase):
     add_gate_layer: bool
     add_upsilon_layer: bool
     b_dot_product: bool
+    bidirectional_beta_inputs: bool
     entropy_coef: float
     action_space: spaces.MultiDiscrete
     conv_hidden_size: int
@@ -259,10 +261,15 @@ class Agent(NNBase):
 
     def build_beta(self):
         beta_in_size = self.zg_size + (
-            0 if self.b_dot_product else self.instruction_embed_size
+            0
+            if self.b_dot_product
+            else self.instruction_embed_size
+            * (2 if self.bidirectional_beta_inputs else 1)
         )
         beta_out_size = self.num_edges * (
-            self.instruction_embed_size if self.b_dot_product else 1
+            (2 if self.bidirectional_beta_inputs else 1) * self.instruction_embed_size
+            if self.b_dot_product
+            else 1
         )
         if self.add_beta_layer:
             return nn.Sequential(
@@ -588,11 +595,12 @@ class Agent(NNBase):
 
     def get_P(self, p, G, R, zg):
         N = p.size(0)
+        if self.bidirectional_beta_inputs:
+            G = G.view(N, self.instruction_length, 2, -1)
+            G = torch.cat([G, G.flip(-2)], dim=-1)
         if self.b_dot_product:
             G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
-            beta_out = self.beta(zg).view(
-                N, 1, 1, self.num_edges, self.instruction_embed_size
-            )
+            beta_out = self.beta(zg).view(N, 1, 1, self.num_edges, -1)
             b = torch.sum(beta_out * G, dim=-1)
         else:
             G = G.view(N, self.instruction_length, 2, -1)
