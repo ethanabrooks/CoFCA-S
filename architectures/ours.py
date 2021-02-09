@@ -237,7 +237,9 @@ class Agent(NNBase):
 
     @property
     def zg_size(self):
-        return self.za_size + 2 * self.instruction_embed_size
+        return self.za_size + 2 * self.instruction_embed_size * (
+            self.num_edges if self.b_dot_product else 1
+        )
 
     def build_g_gru(self):
         gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
@@ -247,7 +249,7 @@ class Agent(NNBase):
     def build_encode_G(self):
         return nn.GRU(
             self.instruction_embed_size,
-            self.instruction_embed_size,
+            self.instruction_embed_size * (self.num_edges if self.b_dot_product else 1),
             bidirectional=True,
             batch_first=True,
         )
@@ -379,7 +381,7 @@ class Agent(NNBase):
         za = torch.cat([z, m], dim=-1)
         assert za.size(-1) == self.za_size
         # zg = self.get_zg(za, hg, za)
-        zg = self.get_zg(za, g.reshape(N, 2 * self.instruction_embed_size), za)
+        zg = self.get_zg(za, g.reshape(N, -1), za)
         assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
@@ -582,16 +584,14 @@ class Agent(NNBase):
 
     def get_P(self, p, G, R, zg):
         N = p.size(0)
-        G = G.view(N, self.instruction_length, 2, -1)
         if self.b_dot_product:
-            b = torch.sum(
-                G.unsqueeze(-1)
-                * self.beta(zg).view(
-                    N, 1, 1, self.instruction_embed_size, self.num_edges
-                ),
-                dim=-2,
+            G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
+            beta_out = self.beta(zg).view(
+                N, 1, 1, self.num_edges, self.instruction_embed_size
             )
+            b = torch.sum(beta_out * G, dim=-1)
         else:
+            G = G.view(N, self.instruction_length, 2, -1)
             expanded = zg.view(N, 1, 1, self.zg_size).expand(
                 -1, G.size(1), G.size(2), -1
             )
