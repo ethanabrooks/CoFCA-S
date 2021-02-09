@@ -1,13 +1,10 @@
-from contextlib import contextmanager
-
 import gym
-from gym import spaces
-from gym.spaces import Box, Discrete
 import numpy as np
 import torch
+from gym import spaces
+from gym.spaces import Box
 
-from common.vec_env import VecEnvWrapper
-from common.vec_env.vec_normalize import VecNormalize as VecNormalize_
+from stable_baselines3.common.vec_env import VecEnvWrapper
 
 
 class FlattenObs(gym.ObservationWrapper):
@@ -76,9 +73,6 @@ class VecPyTorch(VecEnvWrapper):
 
     def extract_numpy(self, obs):
         if isinstance(obs, dict):
-            # print("VecPyTorch")
-            # for k, x in obs.items():
-            #     print(k, x.shape)
             return np.hstack([x.reshape(x.shape[0], -1) for x in obs.values()])
         elif not isinstance(obs, (list, tuple)):
             return obs
@@ -89,7 +83,7 @@ class VecPyTorch(VecEnvWrapper):
         obs = self.extract_numpy(self.venv.reset())
         return torch.from_numpy(obs).float().to(self.device)
 
-    def step_async(self, actions):
+    def step_async(self, actions: torch.Tensor):
         actions = actions.cpu().numpy()
         self.venv.step_async(actions)
 
@@ -102,18 +96,8 @@ class VecPyTorch(VecEnvWrapper):
 
     def to(self, device):
         self.device = device
-        self.venv.to(device)
         if self.action_bounds is not None:
             self.action_bounds = [t.to(device) for t in self.action_bounds]
-
-    def evaluate(self):
-        self.venv.evaluate()
-
-    def train(self):
-        self.venv.train()
-
-    def increment_curriculum(self):
-        self.venv.increment_curriculum()
 
     def preprocess(self, action):
         if self.action_bounds is not None:
@@ -122,31 +106,6 @@ class VecPyTorch(VecEnvWrapper):
         if isinstance(self.action_space, spaces.Discrete):
             action = action.squeeze(-1)
         return action
-
-
-class VecNormalize(VecNormalize_):
-    def __init__(self, *args, **kwargs):
-        super(VecNormalize, self).__init__(*args, **kwargs)
-        self.training = True
-
-    def _obfilt(self, obs):
-        if self.ob_rms:
-            if self.training:
-                self.ob_rms.update(obs)
-            obs = np.clip(
-                (obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon),
-                -self.clipob,
-                self.clipob,
-            )
-            return obs
-        else:
-            return obs
-
-    def train(self):
-        self.training = True
-
-    def eval(self):
-        self.training = False
 
 
 class VecPyTorchFrameStack(VecEnvWrapper):
@@ -187,35 +146,6 @@ class VecPyTorchFrameStack(VecEnvWrapper):
 
     def to(self, device):
         self.stacked_obs = self.stacked_obs.to(device)
-        self.venv.to(device)
-
-
-class OneHotWrapper(gym.Wrapper):
-    def wrap_observation(self, obs, observation_space=None):
-        if observation_space is None:
-            observation_space = self.observation_space
-        if isinstance(observation_space, spaces.Discrete):
-            return onehot(obs, observation_space.n)
-        if isinstance(observation_space, spaces.MultiDiscrete):
-            assert observation_space.contains(obs)
-
-            def one_hots():
-                nvec = observation_space.nvec
-                for o, n in zip(
-                    obs.reshape(len(obs), -1).T, nvec.reshape(len(nvec), -1).T
-                ):
-                    yield onehot(o, n)
-
-            return np.concatenate(list(one_hots()), axis=-1)
-
-
-def get_vec_normalize(venv):
-    if isinstance(venv, VecNormalize):
-        return venv
-    elif hasattr(venv, "venv"):
-        return get_vec_normalize(venv.venv)
-
-    return None
 
 
 class TupleActionWrapper(gym.ActionWrapper):
@@ -230,3 +160,81 @@ class TupleActionWrapper(gym.ActionWrapper):
 
     def reverse_action(self, action):
         return np.concatenate(action)
+
+
+class Wrapper(gym.Env):
+    """Wraps the environment to allow a modular transformation.
+
+    This class is the base class for all wrappers. The subclass could override
+    some methods to change the behavior of the original environment without touching the
+    original code.
+
+    .. note::
+
+        Don't forget to call ``super().__init__(env)`` if the subclass overrides :meth:`__init__`.
+
+    """
+
+    def __init__(self, env):
+        self.env = env
+        self.action_space = self.env.action_space
+        self.observation_space = self.env.observation_space
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(
+                "attempted to get missing private attribute '{}'".format(name)
+            )
+        return getattr(self.env, name)
+
+    @property
+    def spec(self):
+        return self.env.spec
+
+    @classmethod
+    def class_name(cls):
+        return cls.__name__
+
+    def step(self, action):
+        return self.env.step(action)
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
+
+    def render(self, mode="human", **kwargs):
+        return self.env.render(mode, **kwargs)
+
+    def close(self):
+        return self.env.close()
+
+    def seed(self, seed=None):
+        return self.env.seed(seed)
+
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        return self.env.compute_reward(achieved_goal, desired_goal, info)
+
+    def __str__(self):
+        return "<{}{}>".format(type(self).__name__, self.env)
+
+    def __repr__(self):
+        return str(self)
+
+    @property
+    def unwrapped(self):
+        return self.env.unwrapped
+
+
+class RenderWrapper(Wrapper):
+    def __init__(self, env, **kwargs):
+        self.kwargs = kwargs
+        super().__init__(env)
+
+    def step(self, action):
+        step = super().step(action)
+        self.render(**self.kwargs)
+        return step
+
+    def reset(self):
+        obs = super().reset()
+        self.render(**self.kwargs)
+        return obs

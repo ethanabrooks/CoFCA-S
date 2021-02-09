@@ -104,7 +104,7 @@ trained_models/
 .idea
 .mypy_cache
 MUJOCO_LOG.TXT
-.runs
+.runs/
 .runsrc
 run.json
 runs.db
@@ -115,3 +115,4 @@ exp.json
 run2.json
 instructions.json
 run.zsh
+wandb/

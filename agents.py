@@ -1,13 +1,9 @@
-import math
 from collections import namedtuple
 from contextlib import contextmanager
-from typing import Union
 
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from gym.spaces import Box, Discrete
+from torch import nn as nn
 
 from distributions import Categorical, DiagGaussian
 from layers import Flatten
@@ -115,10 +111,8 @@ class NNBase(nn.Module):
         self._recurrent = recurrent
 
         if self._recurrent:
-            self.recurrent_module = self.build_recurrent_module(
-                recurrent_input_size, hidden_size
-            )
-            for name, param in self.recurrent_module.named_parameters():
+            self.action_gru = nn.GRU(recurrent_input_size, hidden_size)
+            for name, param in self.action_gru.named_parameters():
                 print("zeroed out", name)
                 if "bias" in name:
                     nn.init.constant_(param, 0)
@@ -128,9 +122,6 @@ class NNBase(nn.Module):
     @contextmanager
     def evaluating(self, *args, **kwargs):
         yield
-
-    def build_recurrent_module(self, input_size, hidden_size):
-        return nn.GRU(input_size, hidden_size)
 
     @property
     def is_recurrent(self):
@@ -146,9 +137,24 @@ class NNBase(nn.Module):
     def output_size(self):
         return self._hidden_size
 
-    def _forward_gru(self, x, hxs, masks):
+    def apply_mask(
+        self, hxs: torch.Tensor, mask: torch.Tensor, initial_hxs: torch.Tensor = None
+    ):
+        try:
+            masked = hxs * mask
+        except RuntimeError:
+            import ipdb
+
+            ipdb.set_trace()
+        if initial_hxs is not None:
+            masked = hxs + (1 - mask) * initial_hxs
+        return masked
+
+    def _forward_gru(self, x, hxs, masks, gru=None):
+        if gru is None:
+            gru = self.action_gru
         if x.size(0) == hxs.size(0):
-            x, hxs = self.recurrent_module(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
+            x, hxs = gru(x.unsqueeze(0), (hxs * masks).unsqueeze(0))
             x = x.squeeze(0)
             hxs = hxs.squeeze(0)
         else:
@@ -184,7 +190,7 @@ class NNBase(nn.Module):
                 start_idx = has_zeros[i]
                 end_idx = has_zeros[i + 1]
 
-                rnn_scores, hxs = self.recurrent_module(
+                rnn_scores, hxs = gru(
                     x[start_idx:end_idx], hxs * masks[start_idx].view(1, -1, 1)
                 )
 
@@ -285,33 +291,3 @@ class MLPBase(NNBase):
         hidden_actor = self.actor(x)
 
         return self.critic_linear(hidden_critic), hidden_actor, rnn_hxs
-
-
-class MultiEmbeddingBag(nn.Module):
-    def __init__(self, nvec: Union[np.ndarray, torch.Tensor], **kwargs):
-        super().__init__()
-        self.embedding = nn.Embedding(num_embeddings=nvec.sum(), **kwargs)
-        self.register_buffer(
-            "offset",
-            F.pad(torch.tensor(nvec[:-1]).cumsum(0), [1, 0]),
-        )
-
-    def forward(self, inputs):
-        return self.embedding(self.offset + inputs).sum(-2)
-
-
-class IntEncoding(nn.Module):
-    def __init__(self, d_model: int):
-        self.d_model = d_model
-        nn.Module.__init__(self)
-        self.div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
-
-    def forward(self, x):
-        shape = x.shape
-        div_term = self.div_term.view(*(1 for _ in shape), -1)
-        x = x.unsqueeze(-1)
-        sins = torch.sin(x * div_term)
-        coss = torch.cos(x * div_term)
-        return torch.stack([sins, coss], dim=-1).view(*shape, self.d_model)

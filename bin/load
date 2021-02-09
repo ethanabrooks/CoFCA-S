@@ -1,8 +1,11 @@
 #!/usr/bin/env zsh
 
-config=$(${0:a:h}/search ${@[2, 3]} params.json)
-load=$(${0:a:h}/search ${@[2, 3]} checkpoint.pt)
-failure_buffer_load_path=$(${0:a:h}/search ${@[2, 3]} failure_buffer.pkl)
-cmd="python $1 --config $config --load $load ${@:4}" # --failure-buffer-load-path $failure_buffer_load_path ${@:4}"
+new_config="/tmp/config.yaml"
+run_id=$1
+${0:a:h}/fix_config $run_id
+${0:a:h}/fix_config $run_id > $new_config
+
+load=$(${0:a:h}/search $run_id checkpoint.pt)
+cmd="python $2 --config-path=/tmp load_path=$(pwd)/$load use_wandb=False ${@:3}"
 echo "$cmd\n"
 eval "$cmd"

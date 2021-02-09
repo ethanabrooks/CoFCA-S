@@ -1,19 +1,20 @@
 # third party
-import csv
-import re
-from collections import namedtuple
-from io import StringIO
-import random
-import subprocess
-
 import argparse
+import csv
+import random
+import re
+import subprocess
+from dataclasses import fields, is_dataclass
+from functools import reduce
+from io import StringIO
+from typing import List, Optional
+
 import numpy as np
 import torch
-from dataclasses import fields, is_dataclass
-from torch import nn as nn
 import torch.jit
 import torch.nn as nn
-from typing import List
+from gym import spaces
+import gym
 
 
 def round(x, dec):
@@ -222,3 +223,50 @@ def asdict(obj):
     if is_dataclass(obj):
         return dict(gen())
     return obj
+
+
+class Discrete(spaces.Discrete):
+    def __init__(self, low: int, high: int):
+        self.low = low
+        self.high = high
+        super().__init__(1 + high - low)
+
+    def sample(self) -> int:
+        return self.low + super().sample()
+
+    def contains(self, x) -> bool:
+        return super().contains(x - self.low)
+
+    def __repr__(self) -> str:
+        return f"Discrete({self.low}, {self.high})"
+
+    def __eq__(self, other) -> bool:
+        return (
+            isinstance(other, Discrete)
+            and self.low == other.low
+            and self.high == other.high
+        )
+
+
+def get_max_shape(*xs) -> np.ndarray:
+    def compare_shape(max_so_far: Optional[np.ndarray], opener: np.ndarray):
+        new = np.array(opener.shape)
+        return new if max_so_far is None else np.maximum(new, max_so_far)
+
+    return reduce(compare_shape, map(np.array, xs), None)
+
+
+def space_shape(space: gym.Space):
+    if isinstance(space, gym.spaces.Box):
+        return space.low.shape
+    if isinstance(space, gym.spaces.Dict):
+        return {k: space_shape(v) for k, v in space.spaces.items()}
+    if isinstance(space, gym.spaces.Tuple):
+        return tuple(space_shape(s) for s in space.spaces)
+    if isinstance(space, gym.spaces.MultiDiscrete):
+        return space.nvec.shape
+    if isinstance(space, gym.spaces.Discrete):
+        return (1,)
+    if isinstance(space, gym.spaces.MultiBinary):
+        return (space.n,)
+    raise NotImplementedError

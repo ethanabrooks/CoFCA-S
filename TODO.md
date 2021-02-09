@@ -1,1 +1,3 @@
-- resources
+- try feeding z to upsilon instead of zeta_input
+- is rldl14 slow??
+- fix the runs-not-terminating bug

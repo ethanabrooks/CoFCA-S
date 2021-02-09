@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
  
-matches=(.runs/logdir/$1/$1/*_$2_*/$3)
+#run_id=${1#"ethanabrooks/*/"}
+run_id=$(echo $1 | sed 's/ethanabrooks\/[^\/]*\/\(.*\)/\1/')
+matches=(wandb/run-*$run_id/files/$2)
 echo ${matches}

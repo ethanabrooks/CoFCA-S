@@ -1,16 +1,21 @@
 name: ppo
 channels:
-  - pytorch
+  - conda-forge
   - defaults
 dependencies:
-  - cudatoolkit=10.2.89=hfd86e86_1
-  - pandas=1.1.3=py38he6710b0_0
-  - pip=20.2.4=py38_0
-  - python=3.8.5=h7579374_1
-  - pytorch=1.7.0=py3.8_cuda10.2.89_cudnn7.6.5_0
+  - colored=1.4.2
+  #- cudatoolkit=11.0
+  - hydra-core=1.0.4
+  - gym=0.17.3
+  - ipdb=0.13.4
+  - ipython=7.19.0
+  - omegaconf=2.0.5
+  - pip=20.2.4
+  - python=3.8.5
+  - pytorch=1.7.1
+  - pyyaml=5.3.1
+  - treelib=1.6.1
   - pip:
-    - colored==1.4.2
-    - gym==0.17.3
-    - tabulate==0.8.7
+      - wandb==0.10.11
+      - stable-baselines3==0.10.0
 prefix: /home/ethanbro/miniconda3/envs/ppo
-

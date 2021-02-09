@@ -1,146 +1,151 @@
+import importlib
 import pickle
-from itertools import islice
+from dataclasses import dataclass
+from multiprocessing import Queue
 from pathlib import Path
+from pprint import pprint
+from queue import Empty, Full
+from typing import Any, Dict, List, Optional
 
-import debug_env as _debug_env
-import env
-import our_agent
-import ours
-from aggregator import InfosAggregator
-from configs import starcraft_default
-from trainer import Trainer
+import hydra
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig
+
+import osx_queue
+import starcraft
+import trainer
+
+# noinspection PyUnresolvedReferences
+from architectures import cofca, cofca_s, olsk, unstructured_memory
+from config import BaseConfig
+from starcraft import data_types
+from starcraft.env import Env, EnvConfig
 from wrappers import VecPyTorch
 
 
-class InfosAggregatorWithFailureBufferWriter(InfosAggregator):
-    def __init__(self):
-        super().__init__()
-        self.failure_buffers = {}
-
-    def update(self, *infos: dict, dones):
-        for i, info in enumerate(infos):
-            try:
-                self.failure_buffers[i] = info.pop("failure_buffer")
-            except KeyError:
-                pass
-
-        super().update(*infos, dones=dones)
-
-    def concat_buffers(self):
-        for buffer in self.failure_buffers.values():
-            yield from buffer
-
-    def items(self):
-        failure_buffer = list(islice(self.concat_buffers(), 50))
-        yield "failure_buffer", failure_buffer
-        yield from super().items()
+@dataclass
+class OurConfig(BaseConfig, EnvConfig, cofca_s.AgentConfig):
+    failure_buffer_load_path: Optional[str] = None
+    failure_buffer_size: int = 10000
+    max_eval_lines: int = 20
+    min_eval_lines: int = 2
+    architecture: str = "cofca_s"
 
 
-class UpperTrainer(Trainer):
-    metric = "reward"
-    default = starcraft_default
+class Trainer(trainer.Trainer):
+    @classmethod
+    def args_to_methods(cls) -> Dict[str, List[Any]]:
+        mapping = super().args_to_methods()
+        mapping["agent_args"] += [cofca_s.Agent.__init__]
+        mapping["env_args"] += [
+            Env.__init__,
+            trainer.Trainer.make_vec_envs,
+        ]
+        mapping["run_args"] += [trainer.Trainer.run]
+        return mapping
 
-    def build_infos_aggregator(self):
-        return InfosAggregatorWithFailureBufferWriter()
-
-    def report_generator(self, log_dir):
-        reporter = super().report_generator(log_dir)
-        next(reporter)
-
-        def report(failure_buffer=None, **kwargs):
-            if failure_buffer is not None:
-                with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
-                    pickle.dump(failure_buffer, f)
-            reporter.send(kwargs)
-
-        while True:
-            msg = yield
-            report(**msg)
-
-    def build_agent(self, envs: VecPyTorch, debug=False, **agent_args):
-        del agent_args["recurrent"]
-        del agent_args["num_layers"]
-        return our_agent.Agent(
+    @staticmethod
+    def build_agent(envs: VecPyTorch, architecture: str, **agent_args):  # type: ignore
+        agent_args.update(
             observation_space=envs.observation_space,
             action_space=envs.action_space,
-            debug=debug,
-            **agent_args,
         )
+        # noinspection PyUnresolvedReferences
+        return getattr(
+            importlib.import_module(f"architectures.{architecture}"), "Agent"
+        )(**agent_args)
+
+    @staticmethod
+    def build_failure_buffer(failure_buffer_load_path: Path, failure_buffer_size: int):
+        failure_buffer = Queue(maxsize=failure_buffer_size)
+        try:
+            failure_buffer.qsize()
+        except NotImplementedError:
+            failure_buffer = osx_queue.Queue()
+        if failure_buffer_load_path:
+            with open(failure_buffer_load_path, "rb") as f:
+                for x in pickle.load(f):
+                    failure_buffer.put_nowait(x)
+
+                print(
+                    f"Loaded failure buffer of length {failure_buffer.qsize()} "
+                    f"from {failure_buffer_load_path}"
+                )
+        return failure_buffer
+
+    @classmethod
+    def dump_failure_buffer(cls, failure_buffer: Queue, log_dir: Path):
+        def gen():
+            while True:
+                try:
+                    item = failure_buffer.get_nowait()
+                except Empty:
+                    return
+                yield item
+                try:
+                    failure_buffer.put_nowait(item)
+                except Full:
+                    pass
+
+        with Path(log_dir, "failure_buffer.pkl").open("wb") as f:
+            buffer_list = [*gen()]
+            pickle.dump(buffer_list, f)
 
     @staticmethod
     def make_env(
-        seed,
-        rank,
-        evaluating,
-        min_lines=None,
-        max_lines=None,
-        min_eval_lines=None,
-        max_eval_lines=None,
-        debug_env=False,
+        rank: int,
+        seed: int,
         env_id=None,
-        **kwargs
+        **kwargs,
     ):
-        # if evaluating:
-        #     min_lines = min_eval_lines
-        #     max_lines = max_eval_lines
-        kwargs.update(
+        kwargs.update(rank=rank, random_seed=seed + rank)
+        return Env(**kwargs)
+
+    # noinspection PyMethodOverriding
+    @classmethod
+    def make_vec_envs(
+        cls,
+        curriculum_setting,
+        evaluating: bool,
+        failure_buffer: Queue,
+        max_eval_lines: int,
+        min_eval_lines: int,
+        max_lines: int,
+        min_lines: int,
+        world_size: int,
+        **kwargs,
+    ):
+        if evaluating:
+            min_lines = min_eval_lines
+            max_lines = max_eval_lines
+        data_types.WORLD_SIZE = world_size
+        mp_kwargs = dict()
+        return super().make_vec_envs(
             evaluating=evaluating,
-            min_lines=min_lines,
+            failure_buffer=failure_buffer,
             max_lines=max_lines,
-            min_eval_lines=min_eval_lines,
-            max_eval_lines=max_eval_lines,
-            rank=rank,
-            random_seed=seed + rank,
+            min_lines=min_lines,
+            mp_kwargs=mp_kwargs,
+            world_size=world_size,
+            **kwargs,
         )
-        if debug_env:
-            return _debug_env.Env(**kwargs)
-        else:
-            return env.Env(**kwargs)
 
     @classmethod
-    def args_to_methods(cls):
-        mapping = super().args_to_methods()
-        mapping["env_args"] += [env.Env.__init__]
-        mapping["agent_args"] += [ours.Recurrence.__init__, our_agent.Agent.__init__]
-        return mapping
+    def structure_config(cls, cfg: DictConfig) -> Dict[str, Any]:
+        return super().structure_config(cfg)
 
-    @classmethod
-    def add_env_arguments(cls, parser):
-        env.Env.add_arguments(parser)
 
-    @classmethod
-    def add_agent_arguments(cls, parser):
-        parser.add_argument("--debug", action="store_true")
-        parser.add_argument("--no-scan", action="store_true")
-        parser.add_argument("--no-roll", action="store_true")
-        parser.add_argument("--no-pointer", action="store_true")
-        parser.add_argument("--olsk", action="store_true")
-        parser.add_argument("--transformer", action="store_true")
-        parser.add_argument("--conv-hidden-size", type=int)
-        parser.add_argument("--task-embed-size", type=int)
-        parser.add_argument("--lower-embed-size", type=int)
-        parser.add_argument("--resources-hidden-size", type=int)
-        parser.add_argument("--num-edges", type=int)
-        parser.add_argument("--gate-coef", type=float)
-        parser.add_argument("--no-op-coef", type=float)
-        parser.add_argument("--kernel-size", type=int)
-        parser.add_argument("--stride", type=int)
+@hydra.main(config_name="config")
+def app(cfg: DictConfig) -> None:
+    pprint(dict(**cfg))
+    Trainer.main(cfg, project="starcraft")
 
-    @classmethod
-    def add_arguments(cls, parser):
-        parser = super().add_arguments(parser)
-        parser.main.add_argument("--min-eval-lines", type=int)
-        parser.main.add_argument("--max-eval-lines", type=int)
-        parser.main.add_argument("--no-eval", action="store_true")
-        env_parser = parser.main.add_argument_group("env_args")
-        cls.add_env_arguments(env_parser)
-        cls.add_agent_arguments(parser.agent)
-        return parser
 
-    @classmethod
-    def launch(cls, env_id, **kwargs):
-        super().launch(env_id="experiment", **kwargs)
+def main(_app):
+    cs = ConfigStore.instance()
+    cs.store(name="config", node=OurConfig)
+    _app()
 
 
 if __name__ == "__main__":
-    UpperTrainer.main()
+    main(app)
