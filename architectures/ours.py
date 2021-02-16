@@ -374,7 +374,8 @@ class Agent(NNBase):
         p = state.pointer.long().flatten()
         R = torch.arange(N, device=p.device)
         rolled = self.get_rolled(M, R, p)
-        assert rolled.size(-1) == self.rolled_size
+        if rolled is not None:
+            assert rolled.size(-1) == self.rolled_size
 
         x = self.conv(state.obs)
         destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
@@ -409,7 +410,7 @@ class Agent(NNBase):
         za = torch.cat([z, m], dim=-1)
         assert za.size(-1) == self.za_size
         # zg = self.get_zg(za, hg, za)
-        zg = self.get_zg(za, g.reshape(N, -1), za)
+        zg = self.get_zg(za, g, za)
         assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
@@ -538,7 +539,7 @@ class Agent(NNBase):
         return z, rnn_hxs
 
     def get_zg(self, z, hg, za):
-        return torch.cat([z, hg], dim=-1)
+        return torch.cat([z, hg.reshape(z.size(0), -1)], dim=-1)
 
     def update_hxs(
         self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
