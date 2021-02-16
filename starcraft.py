@@ -16,7 +16,7 @@ import starcraft
 import trainer
 
 # noinspection PyUnresolvedReferences
-from architectures import cofca, ours, olsk, unstructured_memory
+from architectures import no_scan, ours, olsk, unstructured_memory
 from config import BaseConfig
 from starcraft import data_types
 from starcraft.env import Env, EnvConfig

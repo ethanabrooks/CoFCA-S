@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
-from architectures import cofca
+from architectures import no_scan
 
 
 @dataclass
-class Agent(cofca.Agent):
+class Agent(no_scan.Agent):
     def __post_init__(self):
         super().__post_init__()
 

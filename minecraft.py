@@ -15,7 +15,7 @@ import osx_queue
 import trainer
 
 # noinspection PyUnresolvedReferences
-from architectures import ours, cofca, olsk, unstructured_memory
+from architectures import ours, no_scan, olsk, unstructured_memory
 from config import BaseConfig
 from minecraft.env import EnvConfig, Env
 from wrappers import VecPyTorch
