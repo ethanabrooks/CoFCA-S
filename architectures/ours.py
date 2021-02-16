@@ -154,7 +154,7 @@ class Agent(NNBase):
 
         self.encode_G = self.build_encode_G()
         self.initial_instruction_encoder_hxs = nn.Parameter(
-            torch.randn(self.instruction_embed_size), requires_grad=True
+            torch.randn(self.rolled_size), requires_grad=True
         )
         self.encode_G.reset_parameters()
 
@@ -237,24 +237,28 @@ class Agent(NNBase):
         )
 
     @property
+    def rolled_size(self):
+        return self.instruction_embed_size
+
+    @property
     def za_size(self):
         return self.z_size + self.instruction_embed_size
 
     @property
     def zg_size(self):
-        return self.za_size + 2 * self.instruction_embed_size * (
+        return self.za_size + 2 * self.rolled_size * (
             self.num_edges if self.b_dot_product else 1
         )
 
     def build_g_gru(self):
-        gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
+        gru = nn.GRU(2 * self.rolled_size, self.hidden_size)
         gru.reset_parameters()
         return gru
 
     def build_encode_G(self):
         return nn.GRU(
-            self.instruction_embed_size,
-            self.instruction_embed_size * (self.num_edges if self.b_dot_product else 1),
+            self.rolled_size,
+            self.rolled_size * (self.num_edges if self.b_dot_product else 1),
             bidirectional=True,
             batch_first=True,
         )
@@ -263,11 +267,10 @@ class Agent(NNBase):
         beta_in_size = self.zg_size + (
             0
             if self.b_dot_product
-            else self.instruction_embed_size
-            * (2 if self.bidirectional_beta_inputs else 1)
+            else self.rolled_size * (2 if self.bidirectional_beta_inputs else 1)
         )
         beta_out_size = self.num_edges * (
-            (2 if self.bidirectional_beta_inputs else 1) * self.instruction_embed_size
+            (2 if self.bidirectional_beta_inputs else 1) * self.rolled_size
             if self.b_dot_product
             else 1
         )
@@ -361,8 +364,11 @@ class Agent(NNBase):
         M = self.embed_instruction(
             instructions.view(-1, self.obs_spaces.instructions.nvec[0].size)
         ).view(N, -1, self.instruction_embed_size)
+        assert M.size(-1) == self.instruction_embed_size
         p = state.pointer.long().flatten()
         R = torch.arange(N, device=p.device)
+        rolled = self.get_rolled(M, R, p)
+        assert rolled.size(-1) == self.rolled_size
 
         x = self.conv(state.obs)
         destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
@@ -371,7 +377,6 @@ class Agent(NNBase):
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        rolled = self.get_rolled(M, R, p)
         G, g = self.get_G_g(rolled)
         m = self.build_m(M, R, p)
 
@@ -528,7 +533,7 @@ class Agent(NNBase):
             gru=self.gru,
         )
         hg, g_rnn_hxs = self._forward_gru(
-            g.reshape(g.size(0), 2 * self.instruction_embed_size),
+            g.reshape(g.size(0), 2 * self.rolled_size),
             g_rnn_hxs,
             masks,
             gru=self.g_gru,

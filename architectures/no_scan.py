@@ -54,6 +54,6 @@ class Agent(ours.Agent):
     def get_P(self, *args, **kwargs):
         return None
 
-    def get_g(self, G, R, p):
+    def get_g(self, G, _, __):
         N = G.size(0)
         return G.reshape(N, 2 * self.instruction_embed_size)
