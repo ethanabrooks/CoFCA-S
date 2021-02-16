@@ -242,7 +242,9 @@ class Agent(NNBase):
 
     @property
     def zg_size(self):
-        return self.za_size + self.hidden_size
+        return self.za_size + 2 * self.instruction_embed_size * (
+            self.num_edges if self.b_dot_product else 1
+        )
 
     def build_g_gru(self):
         gru = nn.GRU(2 * self.instruction_embed_size, self.hidden_size)
@@ -342,7 +344,7 @@ class Agent(NNBase):
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
 
-        z_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
+        # action_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
 
         # parse non-action inputs
         state = Obs(*torch.split(inputs, self.obs_sections, dim=-1))
@@ -384,17 +386,13 @@ class Agent(NNBase):
 
         # z = torch.cat([x, ha], dim=-1)
         y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
-        z, z_rnn_hxs = self._forward_gru(y, z_rnn_hxs, masks, self.gru)
+        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
         assert z.size(-1) == self.z_size
-
-        hg, g_rnn_hxs = self._forward_gru(
-            g.reshape(N, -1), g_rnn_hxs, masks, self.g_gru
-        )
 
         za = torch.cat([z, m], dim=-1)
         assert za.size(-1) == self.za_size
         # zg = self.get_zg(za, hg, za)
-        zg = self.get_zg(za, hg, za)
+        zg = self.get_zg(za, g.reshape(N, -1), za)
         assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
@@ -505,7 +503,7 @@ class Agent(NNBase):
             dim=-1,
         )
 
-        rnn_hxs = self.combine_rnn_hxs(z_rnn_hxs, g_rnn_hxs)
+        # rnn_hxs = self.combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs)
         # self.action_space.contains(action.numpy().squeeze(0))
         return AgentOutputs(
             value=value,
@@ -541,8 +539,8 @@ class Agent(NNBase):
         return torch.split(rnn_hxs, self.hidden_size, dim=-1)
 
     @staticmethod
-    def combine_rnn_hxs(z_rnn_hxs, g_rnn_hxs):
-        return torch.cat([z_rnn_hxs, g_rnn_hxs], dim=-1)
+    def combine_rnn_hxs(action_rnn_hxs, g_rnn_hxs):
+        return torch.cat([action_rnn_hxs, g_rnn_hxs], dim=-1)
 
     def get_instruction_mask(self, N, instruction_mask):
         line_mask = instruction_mask.view(N, self.instruction_length)
@@ -660,4 +658,4 @@ class Agent(NNBase):
 
     @property
     def recurrent_hidden_state_size(self):
-        return 2 * self.hidden_size
+        return self.hidden_size
