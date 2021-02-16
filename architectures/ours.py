@@ -143,9 +143,7 @@ class Agent(NNBase):
         )
 
         self.gru = nn.GRU(
-            self.conv_hidden_size
-            + self.action_embed_size
-            + self.destroyed_unit_embed_size,
+            self.gru_in_size,
             self.hidden_size,
         )
         self.gru.reset_parameters()
@@ -234,6 +232,14 @@ class Agent(NNBase):
             v=1,
             dg_probs=2,
             dg=1,
+        )
+
+    @property
+    def gru_in_size(self):
+        return (
+            self.conv_hidden_size
+            + self.action_embed_size
+            + self.destroyed_unit_embed_size
         )
 
     @property
@@ -390,8 +396,14 @@ class Agent(NNBase):
         # )
 
         # z = torch.cat([x, ha], dim=-1)
-        y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
-        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        z, rnn_hxs = self.forward_gru(
+            destroyed_unit=destroyed_unit,
+            embedded_action=embedded_action,
+            m=m,
+            masks=masks,
+            rnn_hxs=rnn_hxs,
+            x=x,
+        )
         assert z.size(-1) == self.z_size
 
         za = torch.cat([z, m], dim=-1)
@@ -519,6 +531,11 @@ class Agent(NNBase):
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
+
+    def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
+        y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
+        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        return z, rnn_hxs
 
     def get_zg(self, z, hg, za):
         return torch.cat([z, hg], dim=-1)
