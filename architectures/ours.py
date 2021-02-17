@@ -308,10 +308,10 @@ class Agent(NNBase):
             return nn.Sequential(
                 self.init_(nn.Linear(self.zg_size, self.hidden_size)),
                 self.activation,
-                self.init_(nn.Linear(self.hidden_size, self.num_edges)),
+                self.init_(nn.Linear(self.hidden_size, 2 * self.num_edges)),
             )
         else:
-            return self.init_(nn.Linear(self.zg_size, self.num_edges))
+            return self.init_(nn.Linear(self.zg_size, 2 * self.num_edges))
 
     @property
     def max_backward_jump(self):
@@ -419,7 +419,8 @@ class Agent(NNBase):
         assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
-        P = self.get_P(p1, G, R, zg)
+        P1 = self.get_P(p1, G, R, zg)
+        P2 = self.get_P(p2, G, R, zg)
 
         self.print("p", p1)
 
@@ -469,7 +470,7 @@ class Agent(NNBase):
             #         except ValueError:
             #             pass
 
-        d_probs = self.get_delta_probs(G, P, zg)
+        d_probs = self.get_delta_probs(G, P1, P2, zg)
         d, d_dist = self.get_delta(
             delta_probs=d_probs,
             dg=action.gate,
@@ -584,9 +585,10 @@ class Agent(NNBase):
         delta = delta_dist.sample()
         return delta, delta_dist
 
-    def get_delta_probs(self, G, P, z):
+    def get_delta_probs(self, G, P1, P2, z):
         u = self.upsilon(z).softmax(dim=-1)
         self.print("u", u)
+        P = torch.cat([P1, P2], dim=-1)
         delta_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs", delta_probs.view(delta_probs.size(0), -1))
         return delta_probs
