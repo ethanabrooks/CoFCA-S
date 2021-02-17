@@ -390,12 +390,18 @@ class Action(RawAction):
 
     @classmethod
     def parse(
-        cls, delta: int = 0, gate: int = 1, pointer: int = 0, extrinsic: int = None
+        cls,
+        delta: int = 0,
+        gate: int = 1,
+        pointer1: int = 0,
+        pointer2: int = 0,
+        extrinsic: int = None,
     ) -> "Action":
         return Action(
             delta=delta,
             gate=gate,
-            pointer=pointer,
+            pointer1=pointer1,
+            pointer2=pointer2,
             extrinsic=cls.parse_extrinsic(extrinsic),
         )
 
@@ -990,7 +996,8 @@ assert tuple(annotations) == tuple(sorted(annotations))
 @dataclass
 class State:
     action: "Action"
-    agent_pointer: int
+    agent_pointer1: int
+    agent_pointer2: int
     success: bool
     unnecessary_deployment: bool
     buildings: BuildingCounter

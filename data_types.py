@@ -7,15 +7,16 @@ from typing import Generator, Generic, Any
 class RawAction:
     delta: Any
     gate: Any
-    pointer: Any
+    pointer1: Any
+    pointer2: Any
     extrinsic: Any
 
     @staticmethod
     def parse(*xs) -> "RawAction":
-        delta, gate, ptr, *extrinsic = xs
+        delta, gate, ptr1, ptr2, *extrinsic = xs
         if extrinsic == [None]:
             extrinsic = None
-        return RawAction(delta, gate, ptr, extrinsic)
+        return RawAction(delta, gate, ptr1, ptr2, extrinsic)
 
     def flatten(self) -> Generator[any, None, None]:
         yield from astuple(self)
@@ -46,5 +47,6 @@ class Obs:
     instructions: Any
     obs: Any
     partial_action: Any
-    pointer: Any
+    pointer1: Any
+    pointer2: Any
     resources: Any

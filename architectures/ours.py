@@ -252,7 +252,7 @@ class Agent(NNBase):
 
     @property
     def zg_size(self):
-        return self.za_size + 2 * self.rolled_size * (
+        return self.za_size + 4 * self.rolled_size * (
             self.num_edges if self.b_dot_product else 1
         )
 
@@ -346,9 +346,9 @@ class Agent(NNBase):
     def forward(self, inputs, rnn_hxs, masks, action=None):
         N, dim = inputs.shape
 
-        dists = RawAction.parse(None, None, None, None)
+        dists = RawAction.parse(None, None, None, None, None)
         if action is None:
-            action = RawAction.parse(None, None, None, None)
+            action = RawAction.parse(None, None, None, None, None)
         else:
             action = RawAction.parse(*action.unbind(-1))
             action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
@@ -371,11 +371,14 @@ class Agent(NNBase):
             instructions.view(-1, self.obs_spaces.instructions.nvec[0].size)
         ).view(N, -1, self.instruction_embed_size)
         assert M.size(-1) == self.instruction_embed_size
-        p = state.pointer.long().flatten()
-        R = torch.arange(N, device=p.device)
-        rolled = self.get_rolled(M, R, p)
-        if rolled is not None:
-            assert rolled.size(-1) == self.rolled_size
+        p1 = state.pointer1.long().flatten()
+        p2 = state.pointer2.long().flatten()
+        R = torch.arange(N, device=p1.device)
+        rolled1 = self.get_rolled(M, R, p1)
+        rolled2 = self.get_rolled(M, R, p2)
+        for rolled in (rolled1, rolled2):
+            if rolled is not None:
+                assert rolled.size(-1) == self.rolled_size
 
         x = self.conv(state.obs)
         destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
@@ -384,8 +387,10 @@ class Agent(NNBase):
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
-        G, g = self.get_G_g(rolled)
-        m = self.build_m(M, R, p)
+        G, g1 = self.get_G_g(rolled1)
+        G, g2 = self.get_G_g(rolled2)
+        m1 = self.build_m(M, R, p1)
+        m2 = self.build_m(M, R, p2)
 
         # ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
         #     embedded_action=embedded_action,
@@ -400,23 +405,23 @@ class Agent(NNBase):
         z, rnn_hxs = self.forward_gru(
             destroyed_unit=destroyed_unit,
             embedded_action=embedded_action,
-            m=m,
+            m=m1,  # TODO
             masks=masks,
             rnn_hxs=rnn_hxs,
             x=x,
         )
         assert z.size(-1) == self.z_size
 
-        za = torch.cat([z, m], dim=-1)
+        za = torch.cat([z, m1], dim=-1)
         assert za.size(-1) == self.za_size
         # zg = self.get_zg(za, hg, za)
-        zg = self.get_zg(za, g, za)
+        zg = self.get_zg(za, g1, g2, za)
         assert zg.size(-1) == self.zg_size
 
         ones = self.ones.expand_as(R)
-        P = self.get_P(p, G, R, zg)
+        P = self.get_P(p1, G, R, zg)
 
-        self.print("p", p)
+        self.print("p", p1)
 
         a_logits = self.actor(za).view(-1, *self.actor_logits_shape)
         mask = state.action_mask.view(-1, *self.actor_logits_shape)
@@ -442,7 +447,7 @@ class Agent(NNBase):
         gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
         matches = gate_openers == action.extrinsic.unsqueeze(1)
         assert isinstance(matches, torch.Tensor)
-        more_than_1_line = (1 - instruction_mask[p, R]).sum(-1) > 1
+        more_than_1_line = (1 - instruction_mask[p1, R]).sum(-1) > 1
         # noinspection PyArgumentList
         can_open_gate = matches.all(-1).any(-1) * more_than_1_line
         gate, gate_dist = self.get_gate(
@@ -468,7 +473,7 @@ class Agent(NNBase):
         d, d_dist = self.get_delta(
             delta_probs=d_probs,
             dg=action.gate,
-            line_mask=instruction_mask[p, R],
+            line_mask=instruction_mask[p1, R],
             ones=ones,
         )
         dists = replace(dists, delta=d_dist)
@@ -491,8 +496,11 @@ class Agent(NNBase):
         d = action.delta.clone() - self.max_backward_jump
         self.print("action.delta, delta", action.delta, d)
 
-        if action.pointer is None:
-            action = replace(action, pointer=p + d)
+        if action.pointer1 is None:
+            action = replace(action, pointer1=p1 + d)
+
+        if action.pointer2 is None:
+            action = replace(action, pointer2=torch.max(p2, action.pointer1))
 
         def compute_metric(raw: RawAction):
             raw = astuple(replace(raw, extrinsic=raw.extrinsic.sum(1)))
@@ -515,7 +523,8 @@ class Agent(NNBase):
                     action,
                     gate=action.gate.unsqueeze(-1),
                     delta=action.delta.unsqueeze(-1),
-                    pointer=action.pointer.unsqueeze(-1),
+                    pointer1=action.pointer1.unsqueeze(-1),
+                    pointer2=action.pointer2.unsqueeze(-1),
                 )
             ),
             dim=-1,
@@ -538,25 +547,10 @@ class Agent(NNBase):
         z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
         return z, rnn_hxs
 
-    def get_zg(self, z, hg, za):
-        return torch.cat([z, hg.reshape(z.size(0), -1)], dim=-1)
-
-    def update_hxs(
-        self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
-    ):
-        ha, action_rnn_hxs = self._forward_gru(
-            torch.cat([embedded_action, destroyed_unit], dim=-1),
-            action_rnn_hxs,
-            masks,
-            gru=self.gru,
+    def get_zg(self, z, g1, g2, za):
+        return torch.cat(
+            [z, g1.reshape(z.size(0), -1), g2.reshape(z.size(0), -1)], dim=-1
         )
-        hg, g_rnn_hxs = self._forward_gru(
-            g.reshape(g.size(0), 2 * self.rolled_size),
-            g_rnn_hxs,
-            masks,
-            gru=self.g_gru,
-        )
-        return ha, action_rnn_hxs, hg, g_rnn_hxs
 
     def split_rnn_hxs(self, rnn_hxs):
         return torch.split(rnn_hxs, self.hidden_size, dim=-1)

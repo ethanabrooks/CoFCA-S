@@ -123,7 +123,8 @@ class Env(gym.Env):
         self.act_spaces = RawAction(
             delta=2 * self.max_lines,
             gate=2,
-            pointer=self.max_lines,
+            pointer1=self.max_lines,
+            pointer2=self.max_lines,
             extrinsic=extrinsic_space.n,
             # extrinsic=action_components_space.nvec,
         )
@@ -175,7 +176,8 @@ class Env(gym.Env):
             obs=obs,
             partial_action=partial_action,
             resources=resources,
-            pointer=pointer,
+            pointer1=pointer,
+            pointer2=pointer,
         )
         self.observation_space = spaces.Dict(asdict(self.obs_spaces))
 
@@ -477,10 +479,16 @@ class Env(gym.Env):
             required_buildings = set(get_required_buildings())
 
             for i, line in enumerate(lines):
+                if i == state.agent_pointer1:
+                    prefix = "="
+                elif i == state.agent_pointer2:
+                    prefix = "-"
+                else:
+                    prefix = " "
                 print(
                     "{:2}{}{} ({}) {}".format(
                         i,
-                        "-" if i == state.agent_pointer else " ",
+                        prefix,
                         "*"
                         if line in [*required_buildings, *state.required_units]
                         else " ",
@@ -533,7 +541,8 @@ class Env(gym.Env):
                         instructions=np.array([*map(self.preprocess_line, padded)]),
                         obs=world,
                         partial_action=np.array([state.action.int_representation()]),
-                        pointer=state.agent_pointer,
+                        pointer1=state.agent_pointer1,
+                        pointer2=state.agent_pointer2,
                         resources=(np.array([state.resources[r] for r in Resource])),
                     )
                 )
@@ -803,7 +812,8 @@ class Env(gym.Env):
             # }
             state = State(
                 action=action,
-                agent_pointer=action.pointer,
+                agent_pointer1=action.pointer1,
+                agent_pointer2=action.pointer2,
                 buildings=buildings,
                 # building_positions=building_positions,
                 # destroyed_buildings=destroyed_buildings,
