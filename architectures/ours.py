@@ -146,6 +146,9 @@ class Agent(NNBase):
             self.gru_in_size,
             self.hidden_size,
         )
+        self.psi = nn.Sequential(
+            nn.Linear(self.gru_in_size, self.hidden_size), self.activation
+        )
         self.gru.reset_parameters()
 
         self.g_gru = self.build_g_gru()
@@ -545,7 +548,8 @@ class Agent(NNBase):
 
     def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
         y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
-        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        # z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        z = self.psi(y)
         return z, rnn_hxs
 
     def get_zg(self, z, g1, g2, za):

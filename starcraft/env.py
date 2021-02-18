@@ -851,16 +851,17 @@ class Env(gym.Env):
                 raise RuntimeError
 
             destroyed_unit = None
-            if deployed and self.random.random() < self.ambush_prob:
-                destroyed_unit = self.random.choice([*deployed])
-                deployed.pop(destroyed_unit)
+            if action.pointer1 == action.pointer2:  # TODO: cheating
+                if deployed and self.random.random() < self.ambush_prob:
+                    destroyed_unit = self.random.choice([*deployed])
+                    deployed.pop(destroyed_unit)
 
-            destroyed_buildings = Counter()
-            if self.random.random() < self.attack_prob:
-                destroyed_buildings = self.attack(buildings)
-                required.subtract([destroyed_unit])
-                for coord in destroyed_buildings.keys():
-                    del buildings[coord]
+                destroyed_buildings = Counter()
+                if self.random.random() < self.attack_prob:
+                    destroyed_buildings = self.attack(buildings)
+                    required.subtract([destroyed_unit])
+                    for coord in destroyed_buildings.keys():
+                        del buildings[coord]
 
     def step(self, action: Union[np.ndarray, Action]):
         if isinstance(action, np.ndarray):
