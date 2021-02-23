@@ -296,9 +296,7 @@ class Env(gym.Env):
         while True:
             # noinspection PyTypeChecker
             state = (
-                yield state.success
-                or state.unnecessary_deployment
-                or not state.no_ops_remaining,
+                yield state.success or state.fail or not state.no_ops_remaining,
                 lambda: None,
             )
 
@@ -771,12 +769,14 @@ class Env(gym.Env):
         )
         # carrying: Carrying = {w: None for w in Worker}
         # ptr: int = 0
-        destroyed_unit: Optional[Unit] = None
+        unit_destroyed_this_timestep: Optional[Unit]
+        unit_destroyed_this_timestep = destroyed_unit = None
         destroyed_buildings: BuildingCounter = Counter()
         action = Action.parse()
         time_remaining = len(instructions) * self.time_per_line
         no_ops_remaining = len(instructions) * self.no_ops_per_line
         error_msg = None
+        fail = False
 
         def render():
             print("Time remaining:", time_remaining)
@@ -788,8 +788,8 @@ class Env(gym.Env):
             print()
             # for k, v in sorted(assignments.items()):
             #     print(f"{k}: {v}")
-            if destroyed_unit:
-                print(fg("red"), "Destroyed unit:", destroyed_unit, RESET)
+            if unit_destroyed_this_timestep:
+                print(fg("red"), "Destroyed unit:", unit_destroyed_this_timestep, RESET)
             if destroyed_buildings:
                 print(fg("red"), "Destroyed buildings:", sep="")
                 pprint(destroyed_buildings)
@@ -802,7 +802,7 @@ class Env(gym.Env):
         while True:
             # resources = resources & self.max_resources  # cap resources
             required = initial_required - deployed
-            unnecessary_deployments = bool(deployed - initial_required)
+            fail = fail or bool(deployed - initial_required)
             success = not required or not time_remaining
 
             # pending_positions = {
@@ -817,14 +817,14 @@ class Env(gym.Env):
                 buildings=buildings,
                 # building_positions=building_positions,
                 # destroyed_buildings=destroyed_buildings,
-                destroyed_unit=destroyed_unit,
+                destroyed_unit=unit_destroyed_this_timestep,
                 no_ops_remaining=no_ops_remaining,
                 # positions=positions,
                 required_units=required,
                 resources=resources,
                 success=success,
                 time_remaining=time_remaining,
-                unnecessary_deployment=unnecessary_deployments
+                fail=fail
                 # valid=error_msg is None,
             )
 
@@ -847,21 +847,29 @@ class Env(gym.Env):
                 buildings.update([action.extrinsic])
             elif isinstance(action.extrinsic, Unit):
                 deployed.update([action.extrinsic])
+                if destroyed_unit == action.extrinsic:
+                    destroyed_unit = None
+                elif destroyed_unit == None:
+                    pass
+                else:
+                    fail = True
             else:
                 raise RuntimeError
 
-            destroyed_unit = None
-            if action.pointer1 == action.pointer2:  # TODO: cheating
+            unit_destroyed_this_timestep = None
+            if destroyed_unit is None:  # TODO: cheating
                 if deployed and self.random.random() < self.ambush_prob:
-                    destroyed_unit = self.random.choice([*deployed])
-                    deployed.pop(destroyed_unit)
+                    destroyed_unit = unit_destroyed_this_timestep = self.random.choice(
+                        [*deployed]
+                    )
+                    deployed.pop(unit_destroyed_this_timestep)
 
-                destroyed_buildings = Counter()
-                if self.random.random() < self.attack_prob:
-                    destroyed_buildings = self.attack(buildings)
-                    required.subtract([destroyed_unit])
-                    for coord in destroyed_buildings.keys():
-                        del buildings[coord]
+            destroyed_buildings = Counter()
+            if self.random.random() < self.attack_prob:
+                destroyed_buildings = self.attack(buildings)
+                required.subtract([unit_destroyed_this_timestep])
+                for coord in destroyed_buildings.keys():
+                    del buildings[coord]
 
     def step(self, action: Union[np.ndarray, Action]):
         if isinstance(action, np.ndarray):

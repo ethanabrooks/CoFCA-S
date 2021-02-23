@@ -999,7 +999,7 @@ class State:
     agent_pointer1: int
     agent_pointer2: int
     success: bool
-    unnecessary_deployment: bool
+    fail: bool
     buildings: BuildingCounter
     required_units: "UnitCounter"
     resources: ResourceCounter
