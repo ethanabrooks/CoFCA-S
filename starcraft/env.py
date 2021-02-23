@@ -856,6 +856,7 @@ class Env(gym.Env):
             else:
                 raise RuntimeError
 
+            destroyed_buildings = Counter()
             unit_destroyed_this_timestep = None
             if destroyed_unit is None:  # TODO: cheating
                 if deployed and self.random.random() < self.ambush_prob:
@@ -864,12 +865,12 @@ class Env(gym.Env):
                     )
                     deployed.pop(unit_destroyed_this_timestep)
 
-            destroyed_buildings = Counter()
-            if self.random.random() < self.attack_prob:
-                destroyed_buildings = self.attack(buildings)
-                required.subtract([unit_destroyed_this_timestep])
-                for coord in destroyed_buildings.keys():
-                    del buildings[coord]
+                    # if self.random.random() < self.attack_prob:
+                    destroyed_buildings = self.attack(buildings)
+                    destroyed_buildings.update([unit_dependencies[destroyed_unit]])
+                    required.subtract([unit_destroyed_this_timestep])
+                    for coord in destroyed_buildings.keys():
+                        del buildings[coord]
 
     def step(self, action: Union[np.ndarray, Action]):
         if isinstance(action, np.ndarray):
