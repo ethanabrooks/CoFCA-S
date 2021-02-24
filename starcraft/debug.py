@@ -79,8 +79,8 @@ class Env(gym.Env):
     def state_generator(
         self, *instructions
     ) -> Generator[bool, Optional[RawAction], None]:
-        def last1() -> int:
-            for i, b in reversed(list(enumerate(instructions))):
+        def first1() -> int:
+            for i, b in enumerate(instructions):
                 if b == 1:
                     return i
 
@@ -97,7 +97,7 @@ class Env(gym.Env):
             action: Optional[RawAction]
             # noinspection PyTypeChecker
             action = yield success, render
-            success = action.pointer == last1()
+            success = action.pointer == first1()
 
     @staticmethod
     def done_generator():
@@ -151,7 +151,7 @@ class Env(gym.Env):
                     obs=[[[0]]],
                     partial_action=[0],
                     resources=[],
-                    pointer=0,
+                    pointer=len(lines) - 1,
                 )
             )
             if self.check_spaces:
