@@ -1,21 +1,23 @@
-import typing
+from dataclasses import astuple, dataclass
 from dataclasses import astuple, dataclass
 from multiprocessing import Queue
 from pprint import pprint
-from typing import Union, Generator, Tuple, List, Optional
+from typing import Generator, Tuple, Optional
 
 import gym
 import hydra
 import numpy as np
 from colored import fg
 from gym import spaces
+from gym.spaces import MultiBinary, MultiDiscrete, Box
 from gym.utils import seeding
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import keyboard_control
 import osx_queue
-from utils import RESET, Discrete
+from data_types import Obs, RawAction
+from utils import RESET, Discrete, asdict
 
 
 @dataclass
@@ -24,26 +26,14 @@ class EnvConfig:
     max_lines: int = 10
     min_lines: int = 2
     tgt_success_rate: float = 0.75
-
-
-@dataclass(frozen=True)
-class RawAction:
-    delta: typing.Any
-    pointer: typing.Any
-
-    @staticmethod
-    def parse(*xs) -> "RawAction":
-        delta, ptr = xs
-        return RawAction(delta, ptr)
-
-    def flatten(self) -> Generator[any, None, None]:
-        yield from astuple(self)
+    check_spaces: bool = False
 
 
 # noinspection PyAttributeOutsideInit
 @dataclass
 class Env(gym.Env):
     break_on_fail: bool
+    check_spaces: bool
     failure_buffer: Queue
     max_lines: int
     min_lines: int
@@ -63,14 +53,28 @@ class Env(gym.Env):
         self.n_lines_space = Discrete(self.min_lines, self.max_lines)
         self.n_lines_space.seed(self.random_seed)
         self.non_failure_random = self.random.get_state()
+
         self.act_spaces = RawAction(
             delta=2 * self.max_lines,
+            gate=2,
             pointer=self.max_lines,
+            extrinsic=1,
         )
+        num_actions = 1
+        self.obs_spaces = Obs(
+            action_mask=MultiBinary(num_actions),
+            destroyed_unit=gym.spaces.Discrete(1),
+            gate_openers=MultiDiscrete(1 + np.arange(num_actions).reshape(-1, 1)),
+            instructions=MultiDiscrete([3] * self.max_lines),
+            instruction_mask=MultiBinary(self.max_lines),
+            obs=Box(high=1, low=0, shape=(1, 1, 1)),
+            partial_action=MultiDiscrete([num_actions]),
+            resources=MultiDiscrete([]),
+            pointer=gym.spaces.Discrete(self.max_lines),
+        )
+
+        self.observation_space = gym.spaces.Dict(asdict(self.obs_spaces))
         self.action_space = spaces.MultiDiscrete(np.array(astuple(self.act_spaces)))
-        self.observation_space = spaces.MultiDiscrete(
-            np.array([2] * self.max_lines)  # +1 for padding
-        )
 
     def state_generator(
         self, *instructions
@@ -94,7 +98,6 @@ class Env(gym.Env):
             # noinspection PyTypeChecker
             action = yield success, render
             success = action.pointer == last1()
-            print("state", success)
 
     @staticmethod
     def done_generator():
@@ -112,7 +115,6 @@ class Env(gym.Env):
             # noinspection PyTupleAssignmentBalance
             if term:
                 i = dict(success=success)
-            print("info", success)
             (success, term) = yield i, lambda: None
 
     @staticmethod
@@ -121,7 +123,6 @@ class Env(gym.Env):
 
         while True:
             reward = float(success)
-            print("reward", success)
             # noinspection PyTypeChecker
             success = yield reward, lambda: print("Reward:", reward)
 
@@ -129,17 +130,39 @@ class Env(gym.Env):
         self,
         *lines,
     ):
-        padded: List[int] = [
-            *(1 + np.array(lines)),
-            *[0] * (self.max_lines - len(lines)),
-        ]
+        padded: np.ndarray = np.array(
+            [
+                *(1 + np.array(lines)),
+                *[0] * (self.max_lines - len(lines)),
+            ]
+        )
 
         def render():
             pprint(lines)
 
         while True:
+            obs = asdict(
+                Obs(
+                    action_mask=[0],
+                    destroyed_unit=0,
+                    gate_openers=[[0]],
+                    instructions=padded,
+                    instruction_mask=padded == 0,
+                    obs=[[[0]]],
+                    partial_action=[0],
+                    resources=[],
+                    pointer=0,
+                )
+            )
+            if self.check_spaces:
+                for k, v in obs.items():
+                    if not self.observation_space.spaces[k].contains(v):
+                        breakpoint()
+                        self.observation_space.spaces[k].contains(v)
+
+            self.observation_space.contains(obs)
             # noinspection PyTypeChecker
-            yield padded, lambda: render()  # perform time-step
+            yield obs, lambda: render()  # perform time-step
 
     def main(self):
         def action_fn():
@@ -212,7 +235,7 @@ class Env(gym.Env):
             # noinspection PyTypeChecker
             a = yield s, r, t, i
 
-            state, render_state = state_iterator.send(a)
+            state, render_state = state_iterator.send(RawAction.parse(*a))
 
     def step(self, action: np.ndarray):
         return self.iterator.send(action)

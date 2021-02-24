@@ -83,6 +83,7 @@ class Env(gym.Env):
             resources=MultiDiscrete([]),
             pointer=Discrete(self.max_lines),
         )
+
         self.action_space = MultiDiscrete(np.array(astuple(self.act_spaces)))
         self.observation_space = gym.spaces.Dict(asdict(self.obs_spaces))
 

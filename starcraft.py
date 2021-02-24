@@ -12,14 +12,12 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 import osx_queue
-import starcraft
 import trainer
 
 # noinspection PyUnresolvedReferences
 from architectures import no_scan, ours, olsk, unstructured_memory
 from config import BaseConfig
-from starcraft import data_types
-from starcraft.env import Env, EnvConfig
+from starcraft.debug import Env, EnvConfig
 from wrappers import VecPyTorch
 
 
@@ -112,13 +110,11 @@ class Trainer(trainer.Trainer):
         min_eval_lines: int,
         max_lines: int,
         min_lines: int,
-        world_size: int,
         **kwargs,
     ):
         if evaluating:
             min_lines = min_eval_lines
             max_lines = max_eval_lines
-        data_types.WORLD_SIZE = world_size
         mp_kwargs = dict()
         return super().make_vec_envs(
             evaluating=evaluating,
@@ -126,7 +122,6 @@ class Trainer(trainer.Trainer):
             max_lines=max_lines,
             min_lines=min_lines,
             mp_kwargs=mp_kwargs,
-            world_size=world_size,
             **kwargs,
         )
 
