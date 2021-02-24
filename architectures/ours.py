@@ -428,9 +428,10 @@ class Agent(NNBase):
         self.print("p", p1)
 
         a_logits = self.actor(za).view(-1, *self.actor_logits_shape)
-        mask = state.action_mask.view(-1, *self.actor_logits_shape)
-        mask = mask * -self.inf
-        dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
+        # mask = state.action_mask.view(-1, *self.actor_logits_shape)
+        # mask = mask * -self.inf
+        # dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
+        dists = replace(dists, extrinsic=Categorical(logits=a_logits))
 
         self.print("a_probs", dists.extrinsic.probs)
 
