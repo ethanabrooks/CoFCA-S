@@ -74,7 +74,7 @@ class Env(gym.Env):
             delta=2 * self.max_lines,
             gate=2,
             pointer=self.max_lines,
-            extrinsic=Building.space().n,
+            extrinsic=Building.space().n + 1,  # +1 for no-op
         )
         self.action_space = spaces.MultiDiscrete(np.array(astuple(self.act_spaces)))
 
@@ -86,15 +86,14 @@ class Env(gym.Env):
 
         # channel_size = len(WorldObjects) + 1  # +1 for destroy
         # max_shape = (channel_size, *world_shape)
-        extrinsic_space = Building.space()
         action_mask = spaces.MultiBinary(
-            extrinsic_space.n
+            self.act_spaces.extrinsic
             #     action_components_space.nvec.max() * action_components_space.nvec.size
         )
         destroyed_unit = spaces.Discrete(Unit.space().n + 1)  # +1 for None
         gate_openers = spaces.MultiDiscrete(
             1
-            + np.arange(extrinsic_space.n).reshape(-1, 1)
+            + np.arange(self.act_spaces.extrinsic).reshape(-1, 1)
             # np.array(
             #     [CompoundAction.input_space().nvec] * ActionStage.gate_opener_max_size()
             # ).flatten()
