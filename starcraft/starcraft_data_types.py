@@ -995,11 +995,9 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 @dataclass
 class State:
-    action: "Action"
-    agent_pointer1: int
-    agent_pointer2: int
+    # action: "Action"
+    agent_pointer: int
     success: bool
-    fail: bool
     buildings: BuildingCounter
     required_units: "UnitCounter"
     resources: ResourceCounter

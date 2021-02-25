@@ -26,7 +26,7 @@ from treelib import Tree
 import keyboard_control
 import osx_queue
 from data_types import RawAction
-from starcraft.data_types import (
+from starcraft.starcraft_data_types import (
     Unit,
     Units,
     # ResourceCounter,
