@@ -604,8 +604,8 @@ class Agent(NNBase):
         dg_probs = F.softmax(d_logits, dim=-1)
         can_open_gate = can_open_gate.long().unsqueeze(-1)
         dg_dist = apply_gate(can_open_gate, dg_probs, ones * 0)
-        self.print("dg prob", dg_dist.probs[:, 1])
         dg = dg_dist.sample()
+        self.print("dg prob:", dg_dist.probs[:, 1], "dg:", dg)
         return dg, dg_dist
 
     def get_G_g(self, rolled):
