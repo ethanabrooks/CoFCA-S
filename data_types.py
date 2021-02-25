@@ -11,10 +11,7 @@ class RawAction:
     extrinsic: Any
 
     @staticmethod
-    def parse(*xs) -> "RawAction":
-        delta, gate, ptr, *extrinsic = xs
-        if extrinsic == [None]:
-            extrinsic = None
+    def parse(delta, gate, ptr, extrinsic) -> "RawAction":
         return RawAction(delta, gate, ptr, extrinsic)
 
     def flatten(self) -> Generator[any, None, None]:

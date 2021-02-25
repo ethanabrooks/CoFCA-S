@@ -161,8 +161,7 @@ class Agent(NNBase):
             embedding_dim=self.action_embed_size,
         )
 
-        extrinsic_nvec = self.action_nvec.extrinsic
-        self.actor_logits_shape = len(extrinsic_nvec), max(extrinsic_nvec)
+        self.actor_logits_shape = self.action_nvec.extrinsic
         num_actor_logits = int(np.prod(self.actor_logits_shape))
         self.register_buffer("ones", torch.ones(1, dtype=torch.long))
 
@@ -351,7 +350,6 @@ class Agent(NNBase):
             action = RawAction.parse(None, None, None, None)
         else:
             action = RawAction.parse(*action.unbind(-1))
-            action = replace(action, extrinsic=torch.stack(action.extrinsic, dim=-1))
 
         # action_rnn_hxs, g_rnn_hxs = self.split_rnn_hxs(rnn_hxs)
 
@@ -418,8 +416,8 @@ class Agent(NNBase):
 
         # self.print("p", p)
 
-        a_logits = self.actor(za).view(-1, *self.actor_logits_shape)
-        mask = state.action_mask.view(-1, *self.actor_logits_shape)
+        a_logits = self.actor(za)
+        mask = state.action_mask
         mask = mask * -self.inf
         dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
 
@@ -433,14 +431,15 @@ class Agent(NNBase):
         #     try:
         #         action = replace(
         #             action,
-        #             a=float(input("a:")) * torch.ones_like(action.a),
+        #             extrinsic=float(input("extrinsic:"))
+        #             * torch.ones_like(action.extrinsic),
         #         )
         #         break
         #     except ValueError:
         #         pass
 
         gate_openers = state.gate_openers.view(-1, *self.gate_openers_shape)[R]
-        matches = gate_openers == action.extrinsic.unsqueeze(1)
+        matches = gate_openers == action.extrinsic.view(N, 1, 1)
         assert isinstance(matches, torch.Tensor)
         more_than_1_line = (1 - instruction_mask[p, R]).sum(-1) > 1
         # noinspection PyArgumentList
@@ -494,8 +493,7 @@ class Agent(NNBase):
             action = replace(action, pointer=p + d)
 
         def compute_metric(raw: RawAction):
-            raw = astuple(replace(raw, extrinsic=raw.extrinsic.sum(1)))
-            return sum([y for y in raw if y is not None])
+            return sum([y for y in astuple(raw) if y is not None])
 
         action_log_probs = RawAction(
             *[
@@ -515,6 +513,7 @@ class Agent(NNBase):
                     gate=action.gate.unsqueeze(-1),
                     delta=action.delta.unsqueeze(-1),
                     pointer=action.pointer.unsqueeze(-1),
+                    extrinsic=action.extrinsic.unsqueeze(-1),
                 )
             ),
             dim=-1,
