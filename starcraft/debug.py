@@ -102,6 +102,7 @@ class Env(gym.Env):
     @staticmethod
     def done_generator():
         yield False, lambda: None
+        yield False, lambda: None
         while True:
             # noinspection PyTypeChecker
             yield True, lambda: None

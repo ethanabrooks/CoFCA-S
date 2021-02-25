@@ -416,14 +416,14 @@ class Agent(NNBase):
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R, zg)
 
-        self.print("p", p)
+        # self.print("p", p)
 
         a_logits = self.actor(za).view(-1, *self.actor_logits_shape)
         mask = state.action_mask.view(-1, *self.actor_logits_shape)
         mask = mask * -self.inf
         dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
 
-        self.print("a_probs", dists.extrinsic.probs)
+        # self.print("a_probs", dists.extrinsic.probs)
 
         if action.extrinsic is None:
             extrinsic = dists.extrinsic.sample()
@@ -585,15 +585,19 @@ class Agent(NNBase):
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
         # self.print("masked", Categorical(probs=masked).probs)
-        self.print("dists.delta", delta_dist.probs.view(delta_dist.probs.size(0), -1))
+        self.print("line_mask")
+        self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
+        self.print("dists.delta")
+        self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
         delta = delta_dist.sample()
         return delta, delta_dist
 
     def get_delta_probs(self, G, P, z):
         u = self.upsilon(z).softmax(dim=-1)
-        self.print("u", u)
+        # self.print("u", u)
         delta_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
-        self.print("d_probs", delta_probs.view(delta_probs.size(0), -1))
+        self.print("d_probs")
+        self.print(delta_probs.view(delta_probs.size(0), 2, -1))
         return delta_probs
 
     def get_gate(self, can_open_gate, ones, z):
@@ -632,6 +636,8 @@ class Agent(NNBase):
             b = self.beta(torch.cat([G, expanded], dim=-1))
 
         B = b.sigmoid()  # N, nl, 2, ne
+        self.print("B")
+        self.print(torch.round(B.squeeze(0).T * 100))
         # B = B * mask[p, R]
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
