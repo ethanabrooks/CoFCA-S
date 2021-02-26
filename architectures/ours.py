@@ -585,9 +585,9 @@ class Agent(NNBase):
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
         # self.print("masked", Categorical(probs=masked).probs)
         self.print("line_mask")
-        self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
+        # self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
         self.print("dists.delta")
-        self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
+        # self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
         delta = delta_dist.sample()
         return delta, delta_dist
 
@@ -596,7 +596,7 @@ class Agent(NNBase):
         # self.print("u", u)
         delta_probs = (P @ u.unsqueeze(-1)).squeeze(-1)
         self.print("d_probs")
-        self.print(delta_probs.view(delta_probs.size(0), 2, -1))
+        # self.print(delta_probs.view(delta_probs.size(0), 2, -1))
         return delta_probs
 
     def get_gate(self, can_open_gate, ones, z):
