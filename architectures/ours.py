@@ -77,6 +77,7 @@ class AgentConfig:
     no_pointer: bool = False
     no_roll: bool = False
     no_scan: bool = False
+    num_gru_layers: int = 1
     olsk: bool = False
     resources_hidden_size: int = 128
     stride: int = 1
@@ -109,6 +110,7 @@ class Agent(NNBase):
     no_roll: bool
     no_scan: bool
     num_edges: int
+    num_gru_layers: int
     observation_space: spaces.Dict
     olsk: bool
     resources_hidden_size: int
@@ -251,7 +253,7 @@ class Agent(NNBase):
 
     @property
     def zg_size(self):
-        return self.za_size + 2 * self.rolled_size * (
+        return self.za_size + 2 * self.num_gru_layers * self.rolled_size * (
             self.num_edges if self.b_dot_product else 1
         )
 
@@ -264,6 +266,7 @@ class Agent(NNBase):
         return nn.GRU(
             self.rolled_size,
             self.rolled_size * (self.num_edges if self.b_dot_product else 1),
+            num_layers=self.num_gru_layers,
             bidirectional=True,
             batch_first=True,
         )
