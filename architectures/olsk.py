@@ -29,6 +29,9 @@ class Agent(no_scan.Agent):
     def build_upsilon(self):
         return None
 
+    def print(*args, **kwargs):
+        pass
+
     def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
         y = torch.cat([x, destroyed_unit, embedded_action, m], dim=-1)
         z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)

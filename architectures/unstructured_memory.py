@@ -15,6 +15,9 @@ class Agent(ours.Agent):
     def __hash__(self):
         return self.hash()
 
+    def print(*args, **kwargs):
+        pass
+
     def build_beta(self):
         return None
 

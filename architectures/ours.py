@@ -586,11 +586,11 @@ class Agent(NNBase):
         sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
-        # self.print("masked", Categorical(probs=masked).probs)
+        self.print("masked", Categorical(probs=masked).probs)
         self.print("line_mask")
-        # self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
+        self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
         self.print("dists.delta")
-        # self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
+        self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
         delta = delta_dist.sample()
         return delta, delta_dist
 
@@ -639,7 +639,7 @@ class Agent(NNBase):
 
         B = b.sigmoid()  # N, nl, 2, ne
         self.print("B")
-        self.print(torch.round(B.squeeze(0).T * 100))
+        self.print(B.squeeze(0).T)
         # B = B * mask[p, R]
         f, b = torch.unbind(B, dim=-2)
         B = torch.stack([f, b.flip(-2)], dim=-2)
