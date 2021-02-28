@@ -151,6 +151,9 @@ class Agent(NNBase):
         self.gru.reset_parameters()
 
         self.g_gru = self.build_g_gru()
+        self.g_nn = nn.Sequential(
+            nn.Linear(self.gru_in_size, self.hidden_size), self.activation
+        )
 
         self.encode_G = self.build_encode_G()
         self.initial_instruction_encoder_hxs = nn.Parameter(
@@ -536,7 +539,8 @@ class Agent(NNBase):
 
     def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
         y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
-        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        # z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        z = self.g_nn(y)
         return z, rnn_hxs
 
     def get_zg(self, z, hg, za):
@@ -586,7 +590,9 @@ class Agent(NNBase):
         sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
-        self.print("masked", Categorical(probs=masked).probs)
+        self.print(
+            "masked", Categorical(probs=masked).probs.view(masked.size(0), 2, -1)
+        )
         self.print("line_mask")
         self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
         self.print("dists.delta")
