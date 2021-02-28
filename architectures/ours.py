@@ -590,13 +590,13 @@ class Agent(NNBase):
         sum_zero = masked.sum(-1, keepdim=True) < 1 / self.inf
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
-        self.print(
-            "masked", Categorical(probs=masked).probs.view(masked.size(0), 2, -1)
-        )
+        # self.print(
+            # "masked", Categorical(probs=masked).probs.view(masked.size(0), 2, -1)
+        # )
         self.print("line_mask")
-        self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
+        # self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
         self.print("dists.delta")
-        self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
+        # self.print(delta_dist.probs.view(delta_dist.probs.size(0), 2, -1))
         delta = delta_dist.sample()
         return delta, delta_dist
 
