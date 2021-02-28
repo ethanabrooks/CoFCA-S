@@ -41,6 +41,7 @@ class EnvConfig:
     break_on_fail: bool = False
     max_lines: int = 10
     min_lines: int = 2
+    no_ops: int = 3
     tgt_success_rate: float = 0.75
     check_spaces: bool = False
 
@@ -53,6 +54,7 @@ class Env(gym.Env):
     failure_buffer: Queue
     max_lines: int
     min_lines: int
+    no_ops: int
     rank: int
     random_seed: int
     tgt_success_rate: float
@@ -296,7 +298,7 @@ class Env(gym.Env):
         destroyed_unit = instructions[destroyed_index]
 
         time_remaining = 1
-        no_ops_remaining = 2
+        no_ops_remaining = self.no_ops
 
         def render():
             print(instructions)
