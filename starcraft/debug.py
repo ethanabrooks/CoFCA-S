@@ -321,9 +321,7 @@ class Env(gym.Env):
 
         while True:
             state = State(
-                agent_pointer=len(instructions) - 1
-                if action is None
-                else action.pointer,
+                agent_pointer=destroyed_index if action is None else action.pointer,
                 success=success,
                 buildings=Counter(),
                 required_units=required_units,
