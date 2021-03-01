@@ -16,7 +16,7 @@ class Agent(ours.Agent):
         return nn.Sequential(
             self.init_(
                 nn.Linear(
-                    self.num_gru_layers*self.instruction_embed_size * 2,  # biGRU
+                    self.z_size,
                     self.delta_size,
                 )
             )
@@ -34,9 +34,7 @@ class Agent(ours.Agent):
         return None
 
     def get_delta_probs(self, G, P, z):
-        N = G.size(0)
-        g = G.reshape(N, 2 *self.num_gru_layers* self.instruction_embed_size)
-        return torch.softmax(self.beta(g), dim=-1)
+        return torch.softmax(self.beta(z), dim=-1)
 
     def get_G_g(self, rolled):
         _, g = super().get_G_g(rolled)

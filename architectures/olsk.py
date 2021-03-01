@@ -32,13 +32,12 @@ class Agent(no_scan.Agent):
     def print(*args, **kwargs):
         pass
 
-    def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
-        y = torch.cat([x, destroyed_unit, embedded_action, m], dim=-1)
-        z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
-        return z, rnn_hxs
+    def forward_gru(self, s, rnn_hxs, masks):
+        h, rnn_hxs = self._forward_gru(s, rnn_hxs, masks, self.gru)
+        return h, rnn_hxs
 
     @property
-    def gru_in_size(self):
+    def f_in_size(self):
         return (
             self.conv_hidden_size
             + self.action_embed_size

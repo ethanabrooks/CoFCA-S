@@ -145,14 +145,14 @@ class Agent(NNBase):
         )
 
         self.gru = nn.GRU(
-            self.gru_in_size,
+            self.hidden_size,
             self.hidden_size,
         )
         self.gru.reset_parameters()
 
         self.g_gru = self.build_g_gru()
-        self.g_nn = nn.Sequential(
-            nn.Linear(self.gru_in_size, self.hidden_size), self.activation
+        self.f = nn.Sequential(
+            nn.Linear(self.f_in_size, self.hidden_size), self.activation
         )
 
         self.encode_G = self.build_encode_G()
@@ -184,7 +184,7 @@ class Agent(NNBase):
         #     ),
         #     self.activation,
         # )
-        self.z_size = self.hidden_size
+        self.h_size = self.s_size = self.hidden_size
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -210,21 +210,21 @@ class Agent(NNBase):
 
         if self.add_actor_layer:
             self.actor = nn.Sequential(
-                self.init_(nn.Linear(self.za_size, self.hidden_size)),
+                self.init_(nn.Linear(self.z_size, self.hidden_size)),
                 self.activation,
                 self.init_(nn.Linear(self.hidden_size, num_actor_logits)),
             )
         else:
-            self.actor = self.init_(nn.Linear(self.za_size, num_actor_logits))
+            self.actor = self.init_(nn.Linear(self.z_size, num_actor_logits))
 
         if self.add_critic_layer:
             self.critic = nn.Sequential(
-                self.init_(nn.Linear(self.zg_size, self.hidden_size)),
+                self.init_(nn.Linear(self.z_size, self.hidden_size)),
                 self.activation,
                 self.init_(nn.Linear(self.hidden_size, 1)),
             )
         else:
-            self.critic = self.init_(nn.Linear(self.zg_size, 1))
+            self.critic = self.init_(nn.Linear(self.z_size, 1))
 
         self.state_sizes = RecurrentState(
             a=1,
@@ -239,26 +239,22 @@ class Agent(NNBase):
         )
 
     @property
-    def gru_in_size(self):
+    def z_size(self):
+        return self.h_size + self.s_size
+
+    @property
+    def f_in_size(self):
         return (
             self.conv_hidden_size
-            + self.action_embed_size
             + self.destroyed_unit_embed_size
+            + self.action_embed_size
+            + self.instruction_embed_size
+            + 2 * self.num_gru_layers * self.instruction_embed_size
         )
 
     @property
     def rolled_size(self):
         return self.instruction_embed_size
-
-    @property
-    def za_size(self):
-        return self.z_size + self.instruction_embed_size
-
-    @property
-    def zg_size(self):
-        return self.za_size + 2 * self.num_gru_layers * self.rolled_size * (
-            self.num_edges if self.b_dot_product else 1
-        )
 
     def build_g_gru(self):
         gru = nn.GRU(2 * self.rolled_size, self.hidden_size)
@@ -275,7 +271,7 @@ class Agent(NNBase):
         )
 
     def build_beta(self):
-        beta_in_size = self.zg_size + (
+        beta_in_size = self.z_size + (
             0
             if self.b_dot_product
             else self.rolled_size * (2 if self.bidirectional_beta_inputs else 1)
@@ -297,12 +293,12 @@ class Agent(NNBase):
     def build_gate(self):
         if self.add_gate_layer:
             return nn.Sequential(
-                self.init_(nn.Linear(self.zg_size, self.hidden_size)),
+                self.init_(nn.Linear(self.z_size, self.hidden_size)),
                 self.activation,
                 self.init_(nn.Linear(self.hidden_size, 2)),
             )
         else:
-            return self.init_(nn.Linear(self.zg_size, 2))
+            return self.init_(nn.Linear(self.z_size, 2))
 
     @staticmethod
     def build_m(M, R, p):
@@ -311,12 +307,12 @@ class Agent(NNBase):
     def build_upsilon(self):
         if self.add_upsilon_layer:
             return nn.Sequential(
-                self.init_(nn.Linear(self.zg_size, self.hidden_size)),
+                self.init_(nn.Linear(self.z_size, self.hidden_size)),
                 self.activation,
                 self.init_(nn.Linear(self.hidden_size, self.num_edges)),
             )
         else:
-            return self.init_(nn.Linear(self.zg_size, self.num_edges))
+            return self.init_(nn.Linear(self.z_size, self.num_edges))
 
     @property
     def max_backward_jump(self):
@@ -389,7 +385,8 @@ class Agent(NNBase):
             state.partial_action.long()
         )  # +1 to deal with negatives
         G, g = self.get_G_g(rolled)
-        m = self.build_m(M, R, p)
+        r = self.build_m(M, R, p)
+        assert r.size(-1) == self.instruction_embed_size
 
         # ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
         #     embedded_action=embedded_action,
@@ -399,30 +396,26 @@ class Agent(NNBase):
         #     g_rnn_hxs=g_rnn_hxs,
         #     masks=masks,
         # )
+        s = self.get_s(destroyed_unit, embedded_action, r, x, g)
+        assert s.size(-1) == self.s_size
 
         # z = torch.cat([x, ha], dim=-1)
-        z, rnn_hxs = self.forward_gru(
-            destroyed_unit=destroyed_unit,
-            embedded_action=embedded_action,
-            m=m,
-            masks=masks,
-            rnn_hxs=rnn_hxs,
-            x=x,
-        )
-        assert z.size(-1) == self.z_size
+        h, rnn_hxs = self.forward_gru(s=s, rnn_hxs=rnn_hxs, masks=masks)
+        assert h.size(-1) == self.h_size
 
-        za = torch.cat([z, m], dim=-1)
-        assert za.size(-1) == self.za_size
-        # zg = self.get_zg(za, hg, za)
-        zg = self.get_zg(za, g, za)
-        assert zg.size(-1) == self.zg_size
+        # za = torch.cat([h, r], dim=-1)
+        # assert za.size(-1) == self.za_size
+        # # zg = self.get_zg(za, hg, za)
+        # zg = self.get_zg(za, g, za)
+        # assert zg.size(-1) == self.zg_size
+        z = torch.cat([s, h], dim=-1)
 
         ones = self.ones.expand_as(R)
-        P = self.get_P(p, G, R, zg)
+        P = self.get_P(p, G, R, z)
 
         # self.print("p", p)
 
-        a_logits = self.actor(za)
+        a_logits = self.actor(z)
         mask = state.action_mask
         mask = mask * -self.inf
         dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
@@ -453,7 +446,7 @@ class Agent(NNBase):
         gate, gate_dist = self.get_gate(
             can_open_gate=can_open_gate,
             ones=ones,
-            z=zg,
+            z=z,
         )
         dists = replace(dists, gate=gate_dist)
         if action.gate is None:
@@ -469,7 +462,7 @@ class Agent(NNBase):
             #         except ValueError:
             #             pass
 
-        d_probs = self.get_delta_probs(G, P, zg)
+        d_probs = self.get_delta_probs(G, P, z)
         d, d_dist = self.get_delta(
             delta_probs=d_probs,
             dg=action.gate,
@@ -511,7 +504,7 @@ class Agent(NNBase):
             *[None if dist is None else dist.entropy() for dist in astuple(dists)]
         )
         aux_loss = -self.entropy_coef * compute_metric(entropy).mean()
-        value = self.critic(zg)
+        value = self.critic(z)
         action = torch.cat(
             astuple(
                 replace(
@@ -537,14 +530,15 @@ class Agent(NNBase):
             log=dict(entropy=entropy),
         )
 
-    def forward_gru(self, destroyed_unit, embedded_action, m, masks, rnn_hxs, x):
-        y = torch.cat([x, destroyed_unit, embedded_action], dim=-1)
-        # z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
-        z = self.g_nn(y)
-        return z, rnn_hxs
+    def get_s(self, destroyed_unit, embedded_action, r, x, g):
+        g = g.reshape(g.size(0), 2 * self.num_gru_layers *  self.rolled_size)
+        cat = torch.cat([x, destroyed_unit, embedded_action, r, g], dim=-1)
+        assert cat.size(-1) == self.f_in_size
+        return self.f(cat)
 
-    def get_zg(self, z, hg, za):
-        return torch.cat([z, hg.reshape(z.size(0), -1)], dim=-1)
+    def forward_gru(self, s, rnn_hxs, masks):
+        # z, rnn_hxs = self._forward_gru(y, rnn_hxs, masks, self.gru)
+        return s, rnn_hxs
 
     def update_hxs(
         self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
@@ -591,7 +585,7 @@ class Agent(NNBase):
         masked = ~sum_zero * masked + sum_zero * unmask  # uniform distribution
         delta_dist = apply_gate(dg.unsqueeze(-1), masked, ones * self.max_backward_jump)
         # self.print(
-            # "masked", Categorical(probs=masked).probs.view(masked.size(0), 2, -1)
+        # "masked", Categorical(probs=masked).probs.view(masked.size(0), 2, -1)
         # )
         self.print("line_mask")
         # self.print(line_mask.view(delta_dist.probs.size(0), 2, -1))
@@ -619,6 +613,11 @@ class Agent(NNBase):
 
     def get_G_g(self, rolled):
         G, g = self.encode_G(rolled)
+        if self.bidirectional_beta_inputs:
+            G = G.view(
+                G.size(0), self.instruction_length, 2, self.instruction_embed_size
+            )
+            G = torch.cat([G, G.flip(-2)], dim=-1)
         return G, g.transpose(0, 1)
 
     def get_rolled(self, M, R, p):
@@ -627,20 +626,15 @@ class Agent(NNBase):
             dim=0,
         )[p, R]
 
-    def get_P(self, p, G, R, zg):
+    def get_P(self, p, G, R, z):
         N = p.size(0)
-        if self.bidirectional_beta_inputs:
-            G = G.view(N, self.instruction_length, 2, -1)
-            G = torch.cat([G, G.flip(-2)], dim=-1)
         if self.b_dot_product:
             G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
-            beta_out = self.beta(zg).view(N, 1, 1, self.num_edges, -1)
+            beta_out = self.beta(z).view(N, 1, 1, self.num_edges, -1)
             b = torch.sum(beta_out * G, dim=-1)
         else:
             G = G.view(N, self.instruction_length, 2, -1)
-            expanded = zg.view(N, 1, 1, self.zg_size).expand(
-                -1, G.size(1), G.size(2), -1
-            )
+            expanded = z.view(N, 1, 1, self.z_size).expand(-1, G.size(1), G.size(2), -1)
             b = self.beta(torch.cat([G, expanded], dim=-1))
 
         B = b.sigmoid()  # N, nl, 2, ne

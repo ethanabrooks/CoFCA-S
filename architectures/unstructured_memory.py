@@ -93,8 +93,8 @@ class Agent(ours.Agent):
 
     @property
     def za_size(self):
-        return self.z_size + 2 * self.instruction_embed_size
+        return self.h_size + 2 * self.instruction_embed_size
 
     @property
     def zg_size(self):
-        return self.z_size + 2 * self.instruction_embed_size
+        return self.h_size + 2 * self.instruction_embed_size
