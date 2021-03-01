@@ -36,6 +36,18 @@ class Agent(no_scan.Agent):
         h, rnn_hxs = self._forward_gru(s, rnn_hxs, masks, self.gru)
         return h, rnn_hxs
 
+    def get_z(self, h, s, g):
+        g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)
+        return torch.cat([s, h, g], dim=-1)
+
+    @property
+    def z_size(self):
+        return (
+            self.h_size
+            + self.s_size
+            + 2 * self.num_gru_layers * self.instruction_embed_size
+        )
+
     @property
     def f_in_size(self):
         return (

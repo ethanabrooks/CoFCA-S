@@ -20,3 +20,7 @@ class Agent(ours.Agent):
     @property
     def rolled_size(self):
         return self.instruction_embed_size + 1
+
+    @property
+    def z_size(self):
+        return self.s_size + 2 * self.num_gru_layers * (self.instruction_embed_size + 1)
