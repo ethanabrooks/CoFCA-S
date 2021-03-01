@@ -210,12 +210,12 @@ class Agent(NNBase):
 
         if self.add_actor_layer:
             self.actor = nn.Sequential(
-                self.init_(nn.Linear(self.z_size, self.hidden_size)),
+                self.init_(nn.Linear(self.actor_in_size, self.hidden_size)),
                 self.activation,
                 self.init_(nn.Linear(self.hidden_size, num_actor_logits)),
             )
         else:
-            self.actor = self.init_(nn.Linear(self.z_size, num_actor_logits))
+            self.actor = self.init_(nn.Linear(self.actor_in_size, num_actor_logits))
 
         if self.add_critic_layer:
             self.critic = nn.Sequential(
@@ -239,8 +239,16 @@ class Agent(NNBase):
         )
 
     @property
+    def actor_in_size(self):
+        return self.s_size
+
+    @property
     def z_size(self):
-        return self.h_size + self.s_size
+        return (
+            self.h_size
+            + self.s_size
+            + 2 * self.num_gru_layers * self.instruction_embed_size
+        )
 
     @property
     def f_in_size(self):
@@ -249,7 +257,6 @@ class Agent(NNBase):
             + self.destroyed_unit_embed_size
             + self.action_embed_size
             + self.instruction_embed_size
-            + 2 * self.num_gru_layers * self.instruction_embed_size
         )
 
     @property
@@ -396,7 +403,7 @@ class Agent(NNBase):
         #     g_rnn_hxs=g_rnn_hxs,
         #     masks=masks,
         # )
-        s = self.get_s(destroyed_unit, embedded_action, r, x, g)
+        s = self.get_s(destroyed_unit, embedded_action, r, x)
         assert s.size(-1) == self.s_size
 
         # z = torch.cat([x, ha], dim=-1)
@@ -408,14 +415,17 @@ class Agent(NNBase):
         # # zg = self.get_zg(za, hg, za)
         # zg = self.get_zg(za, g, za)
         # assert zg.size(-1) == self.zg_size
-        z = torch.cat([s, h], dim=-1)
+        z = self.get_z(h, s, g)
+        assert z.size(-1) == self.z_size
 
         ones = self.ones.expand_as(R)
         P = self.get_P(p, G, R, z)
 
         # self.print("p", p)
 
-        a_logits = self.actor(z)
+        actor_in = s
+        assert s.size(-1) == self.actor_in_size
+        a_logits = self.actor(actor_in)
         mask = state.action_mask
         mask = mask * -self.inf
         dists = replace(dists, extrinsic=Categorical(logits=a_logits + mask))
@@ -530,9 +540,12 @@ class Agent(NNBase):
             log=dict(entropy=entropy),
         )
 
-    def get_s(self, destroyed_unit, embedded_action, r, x, g):
-        g = g.reshape(g.size(0), 2 * self.num_gru_layers *  self.rolled_size)
-        cat = torch.cat([x, destroyed_unit, embedded_action, r, g], dim=-1)
+    def get_z(self, h, s, g):
+        g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)
+        return torch.cat([s, h, g], dim=-1)
+
+    def get_s(self, destroyed_unit, embedded_action, r, x):
+        cat = torch.cat([x, destroyed_unit, embedded_action, r], dim=-1)
         assert cat.size(-1) == self.f_in_size
         return self.f(cat)
 
