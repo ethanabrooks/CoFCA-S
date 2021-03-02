@@ -63,9 +63,6 @@ class Agent(ours.Agent):
     def build_g_gru(self):
         return None
 
-    def get_g(self, G, R, p):
-        return None
-
     def get_z(self, h, s, g):
         g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)
         return torch.cat([s, g], dim=-1)
@@ -95,9 +92,6 @@ class Agent(ours.Agent):
     @property
     def recurrent_hidden_state_size(self):
         return self.hidden_size
-
-    def get_zg(self, z, hg, za):
-        return za
 
     @property
     def za_size(self):
