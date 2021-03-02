@@ -367,9 +367,9 @@ class Env(gym.Env):
 
             if isinstance(action.extrinsic, Building):
                 buildings.update([action.extrinsic])
-                success = action.extrinsic == first_dependency()
             elif isinstance(action.extrinsic, Unit):
                 deployed.update([action.extrinsic])
+                success = action.extrinsic == destroyed_unit
                 if destroyed_unit == action.extrinsic:
                     destroyed_unit = None
             else:
