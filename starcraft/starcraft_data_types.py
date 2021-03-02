@@ -393,15 +393,13 @@ class Action(RawAction):
         cls,
         delta: int = 0,
         gate: int = 1,
-        pointer1: int = 0,
-        pointer2: int = 0,
+        pointer: int = None,
         extrinsic: int = None,
     ) -> "Action":
         return Action(
             delta=delta,
             gate=gate,
-            pointer1=pointer1,
-            pointer2=pointer2,
+            pointer=pointer,
             extrinsic=cls.parse_extrinsic(extrinsic),
         )
 
@@ -410,6 +408,7 @@ class Action(RawAction):
         if not extrinsic:
             return None
         else:
+            extrinsic = int(extrinsic)
             extrinsic -= 1
             if Building.space().contains(extrinsic):
                 return Building.parse(extrinsic)
@@ -995,7 +994,7 @@ assert tuple(annotations) == tuple(sorted(annotations))
 
 @dataclass
 class State:
-    # action: "Action"
+    action: "Action"
     agent_pointer: int
     success: bool
     buildings: BuildingCounter

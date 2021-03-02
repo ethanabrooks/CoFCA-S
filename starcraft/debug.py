@@ -5,7 +5,7 @@ from collections import Counter, OrderedDict
 from dataclasses import astuple, dataclass
 from multiprocessing import Queue
 from pprint import pprint
-from typing import Generator, Tuple, Optional, List, Union
+from typing import Generator, Tuple, Optional, List, Union, Dict
 
 import gym
 import hydra
@@ -31,9 +31,14 @@ from starcraft.starcraft_data_types import (
     Resource,
     State,
     HighTemplar,
+    BuildingCounter,
+    Action,
 )
 from starcraft.env import BuildingDependencies, UnitDependencies
 from utils import RESET, Discrete, asdict
+
+BuildingDependencies = Dict[Building, Building]
+UnitDependencies = Dict[Unit, Building]
 
 
 @dataclass
@@ -206,7 +211,7 @@ class Env(gym.Env):
                         "*"
                         if line in [*required_buildings, *state.required_units]
                         else " ",
-                        [*Buildings, *Units].index(line),
+                        [None, *Buildings, *Units].index(line),
                         line,
                     )
                 )
@@ -283,12 +288,18 @@ class Env(gym.Env):
             state = yield reward, lambda: print("Reward:", reward)
 
     def state_generator(
-        self, *instructions: Line
+        self,
+        *instructions: Line,
+        building_dependencies: BuildingDependencies,
+        unit_dependencies: UnitDependencies,
     ) -> Generator[bool, Optional[RawAction], None]:
-        action = None
+        action = Action.parse()
         building = None
         success = False
+        error_msg = None
 
+        buildings: BuildingCounter = Counter()
+        deployed: UnitCounter = Counter()
         required_units: UnitCounter = Counter(
             l for l in instructions if isinstance(l, Unit)
         )
@@ -303,9 +314,14 @@ class Env(gym.Env):
         def render():
             print(instructions)
             print()
+            print(
+                "Time remaining:", time_remaining, "No ops remaining", no_ops_remaining
+            )
             print("Destroyed:", destroyed_unit)
             print("Action:", action)
             print("Building:", building)
+            if error_msg is not None:
+                print(fg("yellow"), error_msg, RESET)
             print()
 
         self.render_thunk = render
@@ -321,8 +337,9 @@ class Env(gym.Env):
 
         while True:
             state = State(
+                action=action,
                 agent_pointer=len(instructions) - 1
-                if action is None
+                if action.pointer is None
                 else action.pointer,
                 success=success,
                 buildings=Counter(),
@@ -334,13 +351,29 @@ class Env(gym.Env):
             )
             # noinspection PyTypeChecker
             action = (yield state, render)
-            if action.extrinsic == 0:
-                no_ops_remaining -= 1
+            error_msg = action.invalid(
+                buildings=buildings,
+                building_dependencies=building_dependencies,
+                # resources=resources,
+                # pending_positions=pending_positions,
+                # positions=positions,
+                unit_dependencies=unit_dependencies,
+            )
+            if not (action.is_op() and error_msg is None):
+                no_ops_remaining -= 1  # penalize agent for invalid
+                continue
             else:
                 time_remaining -= 1
-                building = Building.parse(int(action.extrinsic - 1))
-                first = first_dependency()
-                success = building == first
+
+            if isinstance(action.extrinsic, Building):
+                buildings.update([action.extrinsic])
+                success = action.extrinsic == first_dependency()
+            elif isinstance(action.extrinsic, Unit):
+                deployed.update([action.extrinsic])
+                if destroyed_unit == action.extrinsic:
+                    destroyed_unit = None
+            else:
+                raise RuntimeError
 
     def srti_generator(
         self,
@@ -352,7 +385,9 @@ class Env(gym.Env):
         reward_iterator = self.reward_generator()
         done_iterator = self.done_generator()
         info_iterator = self.info_generator()
-        state_iterator = self.state_generator(*instructions)
+        state_iterator = self.state_generator(
+            *instructions, building_dependencies=deps, unit_dependencies=unit_deps
+        )
         next(obs_iterator)
         next(reward_iterator)
         next(done_iterator)
@@ -386,8 +421,8 @@ class Env(gym.Env):
             a: Optional[RawAction]
             # noinspection PyTypeChecker
             a = yield s, r, t, i
-            if not isinstance(a, RawAction):
-                a = RawAction.parse(*a)
+            if not isinstance(a, Action):
+                a = Action.parse(*a)
 
             state, render_state = state_iterator.send(a)
 
@@ -463,7 +498,7 @@ class Env(gym.Env):
                 action = input("go:")
                 try:
                     action = int(action)
-                    return RawAction.parse(0, 0, 0, action)
+                    return Action.parse(0, 0, 0, action)
                 except ValueError:
                     pass
 
