@@ -49,6 +49,7 @@ class EnvConfig:
     no_ops: int = 3
     tgt_success_rate: float = 0.75
     check_spaces: bool = False
+    time_per_line: int = 1
 
 
 # noinspection PyAttributeOutsideInit
@@ -63,6 +64,7 @@ class Env(gym.Env):
     rank: int
     random_seed: int
     tgt_success_rate: float
+    time_per_line: int
     alpha: float = 0.05
     evaluating: bool = None
     i: int = 0
@@ -308,7 +310,7 @@ class Env(gym.Env):
         )
         destroyed_unit = instructions[destroyed_index]
 
-        time_remaining = 1
+        time_remaining = len(instructions) * self.time_per_line
         no_ops_remaining = self.no_ops
 
         def render():
