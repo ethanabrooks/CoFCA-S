@@ -252,7 +252,7 @@ class Agent(NNBase):
             self.conv_hidden_size
             + self.destroyed_unit_embed_size
             + self.action_embed_size
-            + self.instruction_embed_size
+            + self.r_size
         )
 
     @property
@@ -304,7 +304,7 @@ class Agent(NNBase):
             return self.init_(nn.Linear(self.z_size, 2))
 
     @staticmethod
-    def build_m(M, R, p):
+    def build_r(M, R, p, g):
         return M[R, p]
 
     def build_upsilon(self):
@@ -388,8 +388,8 @@ class Agent(NNBase):
             state.partial_action.long()
         )  # +1 to deal with negatives
         G, g = self.get_G_g(rolled)
-        r = self.build_m(M, R, p)
-        assert r.size(-1) == self.instruction_embed_size
+        r = self.build_r(M, R, p, g)
+        assert r.size(-1) == self.r_size
 
         # ha, action_rnn_hxs, hg, g_rnn_hxs = self.update_hxs(
         #     embedded_action=embedded_action,
@@ -535,6 +535,10 @@ class Agent(NNBase):
             rnn_hxs=rnn_hxs,
             log=dict(entropy=entropy),
         )
+
+    @property
+    def r_size(self):
+        return self.instruction_embed_size
 
     def get_z(self, h, s, g):
         g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)

@@ -32,9 +32,12 @@ class Agent(ours.Agent):
             batch_first=True,
         )
 
-    def build_m(self, M, R, p):
-        _, m = self.encode_G(M)
-        return m.transpose(0, 1).reshape(m.size(1), 2 * m.size(2))
+    def build_r(self, M, R, p, g):
+        return g.reshape(g.size(0), 2 * g.size(2))
+
+    @property
+    def r_size(self):
+        return 2 * self.instruction_embed_size
 
     def get_P(self, *args, **kwargs):
         return None
@@ -55,16 +58,17 @@ class Agent(ours.Agent):
         return None
 
     def get_rolled(self, M, R, p):
-        return None
-
-    def get_G_g(self, rolled):
-        return None, None
+        return M
 
     def build_g_gru(self):
         return None
 
     def get_g(self, G, R, p):
         return None
+
+    def get_z(self, h, s, g):
+        g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)
+        return torch.cat([s, g], dim=-1)
 
     def update_hxs(
         self, embedded_action, destroyed_unit, action_rnn_hxs, g, g_rnn_hxs, masks
@@ -76,6 +80,10 @@ class Agent(ours.Agent):
             gru=self.gru,
         )
         return ha, action_rnn_hxs, None, None
+
+    def forward_gru(self, s, rnn_hxs, masks):
+        h, rnn_hxs = self._forward_gru(s, rnn_hxs, masks, self.gru)
+        return h, rnn_hxs
 
     def split_rnn_hxs(self, rnn_hxs):
         return rnn_hxs, None
