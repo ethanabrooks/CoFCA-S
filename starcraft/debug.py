@@ -312,7 +312,7 @@ class Env(gym.Env):
         # destroyed_unit = instructions[destroyed_index]
         target_index = self.random.choice(len(instructions))
 
-        time_remaining = 1  # len(instructions) * self.time_per_line
+        time_remaining = self.time_per_line
         no_ops_remaining = self.no_ops
 
         def render():
