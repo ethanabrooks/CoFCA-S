@@ -3,19 +3,20 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - colored=1.4.2
+  - colored
   #- cudatoolkit=11.0
-  - hydra-core=1.0.4
-  - gym=0.17.3
-  - ipdb=0.13.4
-  - ipython=7.19.0
-  - omegaconf=2.0.5
-  - pip=20.2.4
+  - hydra-core
+  - gym
+  - ipdb
+  - ipython
+  - omegaconf
+  - pip
   - python=3.8.5
-  - pytorch=1.7.1
-  - pyyaml=5.3.1
-  - treelib=1.6.1
+  - pytorch
+  - pyyaml
+  - treelib
   - pip:
-      - wandb==0.10.11
-      - stable-baselines3==0.10.0
+      - wandb
+      - hydra-core
+      - stable-baselines3
 prefix: /home/ethanbro/miniconda3/envs/ppo
