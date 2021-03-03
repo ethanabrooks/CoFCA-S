@@ -374,11 +374,11 @@ class Env(gym.Env):
                 buildings.update([action.extrinsic])
             elif isinstance(action.extrinsic, Unit):
                 deployed.update([action.extrinsic])
-                success = action.extrinsic == instructions[target_index]
                 # if destroyed_unit == action.extrinsic:
                 #     destroyed_unit = None
             else:
                 raise RuntimeError
+            success = action.extrinsic == instructions[target_index]
 
     def srti_generator(
         self,
