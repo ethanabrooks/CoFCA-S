@@ -250,7 +250,7 @@ class Env(gym.Env):
             else:
                 destroyed_unit = 1 + state.destroyed_unit.to_int()
             num_actions = self.act_spaces.extrinsic
-            action_mask = np.zeros(self.act_spaces.extrinsic)
+            action_mask = state.action.mask(unit_dependencies, state.buildings).ravel()
             obs = OrderedDict(
                 asdict(
                     Obs(
