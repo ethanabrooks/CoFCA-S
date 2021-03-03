@@ -83,7 +83,7 @@ class Env(gym.Env):
             delta=2 * self.max_lines,
             gate=2,
             pointer=self.max_lines,
-            extrinsic=Building.space().n + 1,  # +1 for no-op
+            extrinsic=Action.extrinsic_space().n,
         )
         self.action_space = spaces.MultiDiscrete(np.array(astuple(self.act_spaces)))
 
@@ -296,7 +296,6 @@ class Env(gym.Env):
         unit_dependencies: UnitDependencies,
     ) -> Generator[bool, Optional[RawAction], None]:
         action = Action.parse()
-        building = None
         success = False
         error_msg = None
 
@@ -321,7 +320,7 @@ class Env(gym.Env):
             )
             print("Destroyed:", destroyed_unit)
             print("Action:", action)
-            print("Building:", building)
+            print("Buildings:", buildings)
             if error_msg is not None:
                 print(fg("yellow"), error_msg, RESET)
             print()
@@ -344,7 +343,7 @@ class Env(gym.Env):
                 if action.pointer is None
                 else action.pointer,
                 success=success,
-                buildings=Counter(),
+                buildings=buildings,
                 required_units=required_units,
                 resources=Counter(),
                 destroyed_unit=destroyed_unit,
