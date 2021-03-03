@@ -245,10 +245,12 @@ class Env(gym.Env):
                 (-1, 1, 1)
             )
 
-            if state.destroyed_unit is None:
-                destroyed_unit = 0
-            else:
-                destroyed_unit = 1 + state.destroyed_unit.to_int()
+            # if state.destroyed_unit is None:
+            #     destroyed_unit = 0
+            # else:
+            #     destroyed_unit = 1 + state.destroyed_unit.to_int()
+            destroyed_unit = state.destroyed_unit
+
             num_actions = self.act_spaces.extrinsic
             action_mask = state.action.mask(unit_dependencies, state.buildings).ravel()
             obs = OrderedDict(
@@ -304,12 +306,13 @@ class Env(gym.Env):
         required_units: UnitCounter = Counter(
             l for l in instructions if isinstance(l, Unit)
         )
-        destroyed_index = self.random.choice(
-            [i for i, l in enumerate(instructions) if isinstance(l, Unit)]
-        )
-        destroyed_unit = instructions[destroyed_index]
+        # destroyed_index = self.random.choice(
+        #     [i for i, l in enumerate(instructions) if isinstance(l, Unit)]
+        # )
+        # destroyed_unit = instructions[destroyed_index]
+        target_index = self.random.choice(len(instructions))
 
-        time_remaining = len(instructions) * self.time_per_line
+        time_remaining = 1  # len(instructions) * self.time_per_line
         no_ops_remaining = self.no_ops
 
         def render():
@@ -318,7 +321,8 @@ class Env(gym.Env):
             print(
                 "Time remaining:", time_remaining, "No ops remaining", no_ops_remaining
             )
-            print("Destroyed:", destroyed_unit)
+            # print("Destroyed:", destroyed_unit)
+            print("Target:", target_index)
             print("Action:", action)
             print("Buildings:", buildings)
             if error_msg is not None:
@@ -327,14 +331,14 @@ class Env(gym.Env):
 
         self.render_thunk = render
 
-        def first_dependency() -> Building:
-            prev = destroyed_unit
-            for line in reversed(instructions[:destroyed_index]):
-                if isinstance(line, Unit):
-                    assert isinstance(prev, Building)
-                    return prev
-                prev = line
-            return line
+        # def first_dependency() -> Building:
+        #     prev = destroyed_unit
+        #     for line in reversed(instructions[:destroyed_index]):
+        #         if isinstance(line, Unit):
+        #             assert isinstance(prev, Building)
+        #             return prev
+        #         prev = line
+        #     return line
 
         while True:
             state = State(
@@ -346,20 +350,20 @@ class Env(gym.Env):
                 buildings=buildings,
                 required_units=required_units,
                 resources=Counter(),
-                destroyed_unit=destroyed_unit,
+                destroyed_unit=target_index,
                 time_remaining=time_remaining,
                 no_ops_remaining=no_ops_remaining,
             )
             # noinspection PyTypeChecker
             action = (yield state, render)
-            error_msg = action.invalid(
-                buildings=buildings,
-                building_dependencies=building_dependencies,
-                # resources=resources,
-                # pending_positions=pending_positions,
-                # positions=positions,
-                unit_dependencies=unit_dependencies,
-            )
+            # error_msg = action.invalid(
+            #     buildings=buildings,
+            #     building_dependencies=building_dependencies,
+            #     # resources=resources,
+            #     # pending_positions=pending_positions,
+            #     # positions=positions,
+            #     unit_dependencies=unit_dependencies,
+            # )
             if not (action.is_op() and error_msg is None):
                 no_ops_remaining -= 1  # penalize agent for invalid
                 continue
@@ -370,9 +374,9 @@ class Env(gym.Env):
                 buildings.update([action.extrinsic])
             elif isinstance(action.extrinsic, Unit):
                 deployed.update([action.extrinsic])
-                success = action.extrinsic == destroyed_unit
-                if destroyed_unit == action.extrinsic:
-                    destroyed_unit = None
+                success = action.extrinsic == instructions[target_index]
+                # if destroyed_unit == action.extrinsic:
+                #     destroyed_unit = None
             else:
                 raise RuntimeError
 

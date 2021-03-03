@@ -393,7 +393,7 @@ class Action(RawAction):
         cls,
         delta: int = 0,
         gate: int = 1,
-        pointer: int = None,
+        pointer: int = 0,
         extrinsic: int = None,
     ) -> "Action":
         return Action(

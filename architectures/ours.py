@@ -250,7 +250,7 @@ class Agent(NNBase):
     def f_in_size(self):
         return (
             self.conv_hidden_size
-            + self.destroyed_unit_embed_size
+            # + self.destroyed_unit_embed_size
             + self.action_embed_size
             + self.r_size
         )
@@ -381,13 +381,14 @@ class Agent(NNBase):
             assert rolled.size(-1) == self.rolled_size
 
         x = self.conv(state.obs)
-        destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
-            N, self.destroyed_unit_embed_size
-        )
+        # destroyed_unit = self.embed_destroyed_unit(state.destroyed_unit.long()).view(
+        #     N, self.destroyed_unit_embed_size
+        # )
         embedded_action = self.embed_action(
             state.partial_action.long()
         )  # +1 to deal with negatives
         G, g = self.get_G_g(rolled)
+        destroyed_unit = G[R, state.destroyed_unit.flatten().long()]
         r = self.build_r(M, R, p, g)
         assert r.size(-1) == self.r_size
 
@@ -545,7 +546,7 @@ class Agent(NNBase):
         return torch.cat([s, g], dim=-1)
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
-        cat = torch.cat([x, destroyed_unit, embedded_action, r], dim=-1)
+        cat = torch.cat([x, embedded_action, r], dim=-1)
         assert cat.size(-1) == self.f_in_size
         return self.f(cat)
 
