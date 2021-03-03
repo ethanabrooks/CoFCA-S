@@ -388,7 +388,7 @@ class Agent(NNBase):
             state.partial_action.long()
         )  # +1 to deal with negatives
         G, g = self.get_G_g(rolled)
-        destroyed_unit = G[R, state.destroyed_unit.flatten().long()]
+        destroyed_unit = G[R, state.destroyed_unit.flatten().long() - p]
         r = self.build_r(M, R, p, g)
         assert r.size(-1) == self.r_size
 
