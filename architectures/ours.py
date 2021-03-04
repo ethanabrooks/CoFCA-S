@@ -124,6 +124,7 @@ class Agent(NNBase):
 
     def __post_init__(self):
         nn.Module.__init__(self)
+        self.num_edges = 1  # TODO
         self.activation = eval(f"nn.{self.activation_name}()")
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_nvec = RawAction.parse(*self.action_space.nvec)
@@ -185,6 +186,7 @@ class Agent(NNBase):
         #     self.activation,
         # )
         self.h_size = self.s_size = self.hidden_size
+        self.h_size = self.s_size = self.G_size  # TODO
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -244,7 +246,8 @@ class Agent(NNBase):
 
     @property
     def z_size(self):
-        return self.s_size + 2 * self.num_gru_layers * self.instruction_embed_size
+        return self.G_size  # TODO
+        return self.s_size + 2 * self.G_size
 
     @property
     def f_in_size(self):
@@ -264,10 +267,18 @@ class Agent(NNBase):
         gru.reset_parameters()
         return gru
 
+    @property
+    def G_size(self):
+        return (
+            self.rolled_size
+            * (self.num_edges if self.b_dot_product else 1)
+            * (2 if self.bidirectional_beta_inputs else 1)
+        )
+
     def build_encode_G(self):
         return nn.GRU(
             self.rolled_size,
-            self.rolled_size * (self.num_edges if self.b_dot_product else 1),
+            self.rolled_size,
             num_layers=self.num_gru_layers,
             bidirectional=True,
             batch_first=True,
@@ -388,7 +399,9 @@ class Agent(NNBase):
             state.partial_action.long()
         )  # +1 to deal with negatives
         G, g = self.get_G_g(rolled)
-        destroyed_unit = G[R, state.destroyed_unit.flatten().long() - p]
+        destroyed_unit = G[
+            R, state.destroyed_unit.flatten().long() - p, 0
+        ]  # TODO (0 for forward direction)
         r = self.build_r(M, R, p, g)
         assert r.size(-1) == self.r_size
 
@@ -542,10 +555,12 @@ class Agent(NNBase):
         return self.instruction_embed_size
 
     def get_z(self, h, s, g):
-        g = g.reshape(g.size(0), 2 * self.num_gru_layers * self.rolled_size)
-        return torch.cat([s, g], dim=-1)
+        return s
+        g = g.reshape(g.size(0), 2 * self.G_size)
+        return torch.cat([s, g], dim=-1)  # TODO
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
+        return destroyed_unit.view(destroyed_unit.size(0), self.G_size)  # TODO
         cat = torch.cat([x, embedded_action, r], dim=-1)
         assert cat.size(-1) == self.f_in_size
         return self.f(cat)
@@ -627,9 +642,10 @@ class Agent(NNBase):
 
     def get_G_g(self, rolled):
         G, g = self.encode_G(rolled)
+        G = G.view(G.size(0), self.instruction_length, 2, -1)
         if self.bidirectional_beta_inputs:
-            G = G.view(G.size(0), self.instruction_length, 2, -1)
             G = torch.cat([G, G.flip(-2)], dim=-1)
+        assert G.size(-1) == self.G_size
         return G, g.transpose(0, 1)
 
     def get_rolled(self, M, R, p):
@@ -641,9 +657,13 @@ class Agent(NNBase):
     def get_P(self, p, G, R, z):
         N = p.size(0)
         if self.b_dot_product:
-            G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
-            beta_out = self.beta(z).view(N, 1, 1, self.num_edges, -1)
-            b = torch.sum(beta_out * G, dim=-1)
+            # G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
+            G = G.reshape(N, 2 * self.instruction_length, self.G_size)  # TODO
+            beta_out = self.beta(z).view(N, 1, self.num_edges, self.G_size)
+            beta_out = z.unsqueeze(1)  # TODO
+            b = torch.sum(beta_out * G, dim=-1).view(
+                N, self.instruction_length, 2, self.num_edges
+            )
         else:
             G = G.view(N, self.instruction_length, 2, -1)
             expanded = z.view(N, 1, 1, self.z_size).expand(-1, G.size(1), G.size(2), -1)
