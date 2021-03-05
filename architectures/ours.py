@@ -186,7 +186,7 @@ class Agent(NNBase):
         #     self.activation,
         # )
         self.h_size = self.s_size = self.hidden_size
-        self.h_size = self.s_size = self.G_size  # TODO
+        # self.h_size = self.s_size = self.G_size  # TODO
 
         self.upsilon = self.build_upsilon()
         self.beta = self.build_beta()
@@ -246,13 +246,14 @@ class Agent(NNBase):
 
     @property
     def z_size(self):
-        return self.G_size  # TODO
+        return self.s_size  # TODO
         return self.s_size + 2 * self.G_size
 
     @property
     def f_in_size(self):
         return (
             self.conv_hidden_size
+            + self.G_size  # TODO
             # + self.destroyed_unit_embed_size
             + self.action_embed_size
             + self.r_size
@@ -560,8 +561,7 @@ class Agent(NNBase):
         return torch.cat([s, g], dim=-1)  # TODO
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
-        return destroyed_unit.view(destroyed_unit.size(0), self.G_size)  # TODO
-        cat = torch.cat([x, embedded_action, r], dim=-1)
+        cat = torch.cat([x, destroyed_unit, embedded_action, r], dim=-1)
         assert cat.size(-1) == self.f_in_size
         return self.f(cat)
 
@@ -659,8 +659,7 @@ class Agent(NNBase):
         if self.b_dot_product:
             # G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
             G = G.reshape(N, 2 * self.instruction_length, self.G_size)  # TODO
-            beta_out = self.beta(z).view(N, 1, self.num_edges, self.G_size)
-            beta_out = z.unsqueeze(1)  # TODO
+            beta_out = self.beta(z).view(N, self.num_edges, self.G_size)
             b = torch.sum(beta_out * G, dim=-1).view(
                 N, self.instruction_length, 2, self.num_edges
             )
