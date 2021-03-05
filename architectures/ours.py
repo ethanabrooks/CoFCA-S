@@ -124,7 +124,6 @@ class Agent(NNBase):
 
     def __post_init__(self):
         nn.Module.__init__(self)
-        self.num_edges = 1  # TODO
         self.activation = eval(f"nn.{self.activation_name}()")
         self.obs_spaces = Obs(**self.observation_space.spaces)
         self.action_nvec = RawAction.parse(*self.action_space.nvec)
@@ -269,7 +268,7 @@ class Agent(NNBase):
 
     @property
     def g_size(self):
-        return self.rolled_size * (self.num_edges if self.b_dot_product else 1)
+        return self.rolled_size
 
     @property
     def G_size(self):
@@ -556,7 +555,7 @@ class Agent(NNBase):
 
     def get_z(self, h, s, g):
         g = g.reshape(g.size(0), 2 * self.g_size)
-        return torch.cat([s, g], dim=-1)  # TODO
+        return torch.cat([s, g], dim=-1)
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
         cat = torch.cat([x, destroyed_unit, embedded_action, r], dim=-1)
@@ -656,9 +655,8 @@ class Agent(NNBase):
     def get_P(self, p, G, R, z):
         N = p.size(0)
         if self.b_dot_product:
-            # G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
-            G = G.reshape(N, 2 * self.instruction_length, self.G_size)  # TODO
-            beta_out = self.beta(z).view(N, self.num_edges, self.G_size)
+            G = G.reshape(N, 2 * self.instruction_length, 1, self.G_size)
+            beta_out = self.beta(z).view(N, 1, self.num_edges, self.G_size)
             b = torch.sum(beta_out * G, dim=-1).view(
                 N, self.instruction_length, 2, self.num_edges
             )
