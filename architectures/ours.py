@@ -245,14 +245,13 @@ class Agent(NNBase):
 
     @property
     def z_size(self):
-        return self.s_size + 2 * self.g_size
+        return self.s_size + 2 * self.g_size + self.G_size
 
     @property
     def f_in_size(self):
         return (
             self.conv_hidden_size
-            + self.G_size  # TODO
-            # + self.destroyed_unit_embed_size
+            # + self.destroyed_unit_embed_size TODO
             + self.action_embed_size
             + self.r_size
         )
@@ -424,7 +423,7 @@ class Agent(NNBase):
         # # zg = self.get_zg(za, hg, za)
         # zg = self.get_zg(za, g, za)
         # assert zg.size(-1) == self.zg_size
-        z = self.get_z(h, s, g)
+        z = self.get_z(h, s, g, destroyed_unit)
         assert z.size(-1) == self.z_size
 
         ones = self.ones.expand_as(R)
@@ -553,12 +552,12 @@ class Agent(NNBase):
     def r_size(self):
         return self.instruction_embed_size
 
-    def get_z(self, h, s, g):
+    def get_z(self, h, s, g, destroyed_unit):
         g = g.reshape(g.size(0), 2 * self.g_size)
-        return torch.cat([s, g], dim=-1)
+        return torch.cat([s, g, destroyed_unit], dim=-1)
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
-        cat = torch.cat([x, destroyed_unit, embedded_action, r], dim=-1)
+        cat = torch.cat([x, embedded_action, r], dim=-1)
         assert cat.size(-1) == self.f_in_size
         return self.f(cat)
 
