@@ -246,8 +246,7 @@ class Agent(NNBase):
 
     @property
     def z_size(self):
-        return self.s_size  # TODO
-        return self.s_size + 2 * self.G_size
+        return self.s_size + 2 * self.g_size
 
     @property
     def f_in_size(self):
@@ -269,12 +268,12 @@ class Agent(NNBase):
         return gru
 
     @property
+    def g_size(self):
+        return self.rolled_size * (self.num_edges if self.b_dot_product else 1)
+
+    @property
     def G_size(self):
-        return (
-            self.rolled_size
-            * (self.num_edges if self.b_dot_product else 1)
-            * (2 if self.bidirectional_beta_inputs else 1)
-        )
+        return self.g_size * (2 if self.bidirectional_beta_inputs else 1)
 
     def build_encode_G(self):
         return nn.GRU(
@@ -556,8 +555,7 @@ class Agent(NNBase):
         return self.instruction_embed_size
 
     def get_z(self, h, s, g):
-        return s
-        g = g.reshape(g.size(0), 2 * self.G_size)
+        g = g.reshape(g.size(0), 2 * self.g_size)
         return torch.cat([s, g], dim=-1)  # TODO
 
     def get_s(self, destroyed_unit, embedded_action, r, x):
@@ -642,6 +640,7 @@ class Agent(NNBase):
 
     def get_G_g(self, rolled):
         G, g = self.encode_G(rolled)
+        assert g.size(-1) == self.g_size
         G = G.view(G.size(0), self.instruction_length, 2, -1)
         if self.bidirectional_beta_inputs:
             G = torch.cat([G, G.flip(-2)], dim=-1)
