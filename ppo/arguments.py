@@ -18,6 +18,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="RL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    parser.add_argument("--name", help=" ")
     parser.add_argument("--run-id", help=" ")
     parser.add_argument(
         "--gamma", type=float, default=0.99, help="discount factor for rewards"

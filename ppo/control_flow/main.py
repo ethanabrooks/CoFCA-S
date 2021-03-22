@@ -84,11 +84,6 @@ def main(
 
         def process_infos(self, episode_counter, done, infos, **act_log):
             if lower_level != "train-alone":
-                P = act_log.pop("P")
-                P = P[done]
-                if P.size(0) > 0:
-                    P = P.cpu().numpy()
-                    episode_counter["P"] += np.split(P, P.shape[0])
                 for d in infos:
                     for name in NAMES:
                         if name in d:

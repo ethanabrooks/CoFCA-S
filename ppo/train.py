@@ -427,6 +427,7 @@ class Train(TrainBase):
     def __init__(
         self,
         run_id,
+        name,
         log_dir: Path,
         save_interval: int,
         num_processes: int,

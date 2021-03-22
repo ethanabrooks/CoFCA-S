@@ -12,7 +12,7 @@ from ppo.control_flow.multi_step.transformer import TransformerModel
 from ppo.distributions import Categorical, FixedCategorical
 from ppo.utils import init_
 
-RecurrentState = namedtuple("RecurrentState", "a d h p v a_probs d_probs P")
+RecurrentState = namedtuple("RecurrentState", "a d h p v a_probs d_probs")
 
 
 def get_obs_sections(obs_spaces):
@@ -94,7 +94,9 @@ class Recurrence(nn.Module):
         else:
             self.upsilon = init_(nn.Linear(hidden_size, self.ne))
             layers = []
-            in_size = (2 if self.no_roll or self.no_scan else 1) * task_embed_size
+            in_size = (
+                2 if self.no_roll or self.no_scan else 1
+            ) * task_embed_size + hidden_size
             for _ in range(num_encoding_layers - 1):
                 layers.extend([init_(nn.Linear(in_size, task_embed_size)), activation])
                 in_size = task_embed_size
@@ -110,7 +112,6 @@ class Recurrence(nn.Module):
             h=hidden_size,
             p=1,
             v=1,
-            P=(self.P_shape().prod()),
         )
 
     def P_shape(self):
@@ -122,7 +123,7 @@ class Recurrence(nn.Module):
         if self.olsk or self.no_pointer:
             return np.zeros(1, dtype=int)
         else:
-            return np.array([len(lines.nvec), self.d_space(), self.ne])
+            return np.array([self.d_space(), self.ne])
 
     def d_space(self):
         if self.olsk:
@@ -163,7 +164,7 @@ class Recurrence(nn.Module):
         self.train_lines = len(self.obs_spaces["lines"].nvec)
         # noinspection PyProtectedMember
         self.state_sizes = self.state_sizes._replace(
-            d_probs=self.d_space(), P=self.P_shape().prod()
+            d_probs=self.d_space(),
         )
 
     @staticmethod
@@ -287,7 +288,6 @@ class Recurrence(nn.Module):
         nl = len(self.obs_spaces.lines.nvec)
         M = self.build_memory(N, T, inputs)
 
-        P = self.build_P(M, N, rnn_hxs.device, nl)
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
         hx = self.parse_hidden(rnn_hxs)
         for _x in hx:
@@ -302,6 +302,10 @@ class Recurrence(nn.Module):
         A = torch.cat([actions[:, :, 0], hx.a.view(1, N)], dim=0).long()
         D = torch.cat([actions[:, :, 1], hx.d.view(1, N)], dim=0).long()
 
+        rolled = torch.stack(
+            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        )
+
         for t in range(T):
             self.print("p", p)
             obs = inputs.obs[t]
@@ -311,6 +315,54 @@ class Recurrence(nn.Module):
             self.sample_new(A[t], a_dist)
             u = self.upsilon(z).softmax(dim=-1)
             self.print("u", u)
+
+            if self.no_pointer:
+                _, G = self.task_encoder(M)
+                P = G.transpose(0, 1).reshape(N, -1)
+            elif self.no_scan:
+                if self.no_roll:
+                    H, _ = self.task_encoder(M)
+                else:
+                    _, H = self.task_encoder(rolled[R, p])
+                H = H.transpose(0, 1).reshape(N, -1)
+                P = self.beta(H).view(N, -1, self.ne).softmax(1)
+            elif self.transformer:
+                P = self.task_encoder(M.transpose(0, 1)).view(N, -1, self.ne).softmax(1)
+            else:
+                if self.no_roll:
+                    G, _ = self.task_encoder(M)
+                    G = torch.cat(
+                        [
+                            G.unsqueeze(1).expand(-1, nl, -1, -1),
+                            G.unsqueeze(2).expand(-1, -1, nl, -1),
+                        ],
+                        dim=-1,
+                    ).transpose(0, 1)
+                else:
+                    G, _ = self.task_encoder(rolled[R, p])
+                    expanded = z.view(N, 1, 1, -1).expand(-1, G.size(1), G.size(2), -1)
+
+                B = bb = self.beta(torch.cat([G, expanded], dim=-1)).sigmoid()
+                # B = b.sigmoid()  # N, nl, 2, ne
+                # B = B * mask[p, R]
+                f, b = torch.unbind(B, dim=-2)
+                B = torch.stack([f, b.flip(-2)], dim=-2)
+                B = B.view(N, 2 * self.instruction_length, self.num_edges)
+
+                last = torch.zeros(2 * self.instruction_length, device=p.device)
+                last[-1] = 1
+                last = last.view(1, -1, 1)
+
+                B = (1 - last).flip(-2) * B  # this ensures the first B is 0
+                zero_last = (1 - last) * B
+                B = zero_last + last  # this ensures that the last B is 1
+                C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
+                P = B * C
+                P = P.view(N, self.instruction_length, 2, self.num_edges)
+                f, b = torch.unbind(P, dim=-2)
+
+                P = torch.cat([b.flip(-2), f], dim=-2)
+
             w = P[p, R]
             half1 = w.size(1) // 2
             self.print(w[0, half1:])
@@ -331,3 +383,38 @@ class Recurrence(nn.Module):
                 d=d,
                 d_probs=d_dist.probs,
             )
+
+    def get_P(self, p, G, R, zg):
+        N = p.size(0)
+        if self.b_dot_product:
+            G = G.view(N, self.instruction_length, 2, self.num_edges, -1)
+            beta_out = self.beta(zg).view(
+                N, 1, 1, self.num_edges, self.instruction_embed_size
+            )
+            b = torch.sum(beta_out * G, dim=-1)
+        else:
+            G = G.view(N, self.instruction_length, 2, -1)
+            expanded = zg.view(N, 1, 1, self.zg_size).expand(
+                -1, G.size(1), G.size(2), -1
+            )
+            b = self.beta(torch.cat([G, expanded], dim=-1))
+
+        B = b.sigmoid()  # N, nl, 2, ne
+        # B = B * mask[p, R]
+        f, b = torch.unbind(B, dim=-2)
+        B = torch.stack([f, b.flip(-2)], dim=-2)
+        B = B.view(N, 2 * self.instruction_length, self.num_edges)
+
+        last = torch.zeros(2 * self.instruction_length, device=p.device)
+        last[-1] = 1
+        last = last.view(1, -1, 1)
+
+        B = (1 - last).flip(-2) * B  # this ensures the first B is 0
+        zero_last = (1 - last) * B
+        B = zero_last + last  # this ensures that the last B is 1
+        C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
+        P = B * C
+        P = P.view(N, self.instruction_length, 2, self.num_edges)
+        f, b = torch.unbind(P, dim=-2)
+
+        return torch.cat([b.flip(-2), f], dim=-2)
