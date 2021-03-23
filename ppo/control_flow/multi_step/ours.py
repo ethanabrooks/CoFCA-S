@@ -118,7 +118,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         )
         z2_size = m_size + hidden2 + gate_hidden_size * output_dim2 ** 2
         self.d_gate = Categorical(z2_size, 2)
-        self.upsilon = nn.Linear(gate_hidden_size, self.ne)
+        # self.upsilon = nn.Linear(gate_hidden_size, self.ne)
         self.linear1 = nn.Linear(
             m_size, conv_hidden_size * gate_conv_kernel_size ** 2 * gate_hidden_size
         )
@@ -390,8 +390,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
                 u = self.beta(h).softmax(dim=-1)
                 d_dist = gate(dg, u, ones)
                 self.sample_new(D[t], d_dist)
-                delta = D[t].clone() - 1
-                P = hx.P.transpose(0, 1)
+                delta = D[t].clone() - self.eval_lines
             else:
                 u = self.upsilon(z3).softmax(dim=-1)
                 self.print("u", u)
