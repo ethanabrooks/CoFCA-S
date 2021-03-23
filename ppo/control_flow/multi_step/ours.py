@@ -324,54 +324,65 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             # channel1 = state.obs[t][R, index1].sum(-1).sum(-1)
             # channel2 = state.obs[t][R, index2].sum(-1).sum(-1)
             # z = (channel1 > channel2).unsqueeze(-1).float()
-            if self.no_pointer:
-                _, G = self.task_encoder(M)
-                P = G.transpose(0, 1).reshape(N, -1)
-            elif self.no_scan:
-                if self.no_roll:
-                    H, _ = self.task_encoder(M)
+            if not self.olsk:
+                if self.no_pointer:
+                    _, G = self.task_encoder(M)
+                    P = G.transpose(0, 1).reshape(N, -1)
+                elif self.no_scan:
+                    if self.no_roll:
+                        H, _ = self.task_encoder(M)
+                    else:
+                        _, H = self.task_encoder(rolled[p, R])
+                    H = H.transpose(0, 1).reshape(N, -1)
+                    P = (
+                        self.beta(torch.cat([H, z], dim=-1))
+                        .view(N, -1, self.ne)
+                        .softmax(1)
+                    )
+                elif self.transformer:
+                    P = (
+                        self.task_encoder(M.transpose(0, 1))
+                        .view(N, -1, self.ne)
+                        .softmax(1)
+                    )
                 else:
-                    _, H = self.task_encoder(rolled[p, R])
-                H = H.transpose(0, 1).reshape(N, -1)
-                P = self.beta(H).view(N, -1, self.ne).softmax(1)
-            elif self.transformer:
-                P = self.task_encoder(M.transpose(0, 1)).view(N, -1, self.ne).softmax(1)
-            else:
-                if self.no_roll:
-                    G, _ = self.task_encoder(M)
-                    G = torch.cat(
-                        [
-                            G.unsqueeze(1).expand(-1, nl, -1, -1),
-                            G.unsqueeze(2).expand(-1, -1, nl, -1),
-                        ],
-                        dim=-1,
-                    ).transpose(0, 1)
-                else:
-                    G, _ = self.task_encoder(rolled[p, R])
-                G = G.view(N, nl, 2, -1)
-                expanded = z.view(N, 1, 1, -1).expand(-1, G.size(1), G.size(2), -1)
-                B = bb = self.beta(torch.cat([G, expanded], dim=-1)).sigmoid()
-                # B = b.sigmoid()  # N, nl, 2, ne
-                # B = B * mask[p, R]
-                f, b = torch.unbind(B, dim=-2)
-                B = torch.stack([f, b.flip(-2)], dim=-2)
-                B = B.view(N, 2 * self.nl, self.ne)
+                    if self.no_roll:
+                        G, _ = self.task_encoder(M)
+                        G = torch.cat(
+                            [
+                                G.unsqueeze(1).expand(-1, nl, -1, -1),
+                                G.unsqueeze(2).expand(-1, -1, nl, -1),
+                            ],
+                            dim=-1,
+                        ).transpose(0, 1)
+                    else:
+                        G, _ = self.task_encoder(rolled[p, R])
+                    G = G.view(N, nl, 2, -1)
+                    expanded = z.view(N, 1, 1, -1).expand(-1, G.size(1), G.size(2), -1)
+                    B = bb = self.beta(torch.cat([G, expanded], dim=-1)).sigmoid()
+                    # B = b.sigmoid()  # N, nl, 2, ne
+                    # B = B * mask[p, R]
+                    f, b = torch.unbind(B, dim=-2)
+                    B = torch.stack([f, b.flip(-2)], dim=-2)
+                    B = B.view(N, 2 * self.nl, self.ne)
 
-                last = torch.zeros(2 * self.nl, device=p.device)
-                last[-1] = 1
-                last = last.view(1, -1, 1)
+                    last = torch.zeros(2 * self.nl, device=p.device)
+                    last[-1] = 1
+                    last = last.view(1, -1, 1)
 
-                B = (1 - last).flip(-2) * B  # this ensures the first B is 0
-                zero_last = (1 - last) * B
-                B = zero_last + last  # this ensures that the last B is 1
-                C = torch.cumprod(1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2)
-                P = B * C
-                P = P.view(N, self.nl, 2, self.ne)
-                f, b = torch.unbind(P, dim=-2)
+                    B = (1 - last).flip(-2) * B  # this ensures the first B is 0
+                    zero_last = (1 - last) * B
+                    B = zero_last + last  # this ensures that the last B is 1
+                    C = torch.cumprod(
+                        1 - torch.roll(zero_last, shifts=1, dims=-2), dim=-2
+                    )
+                    P = B * C
+                    P = P.view(N, self.nl, 2, self.ne)
+                    f, b = torch.unbind(P, dim=-2)
 
-                P = torch.cat([b.flip(-2), f], dim=-2)
+                    P = torch.cat([b.flip(-2), f], dim=-2)
 
-            half = P.size(1) // 2 if self.no_scan else nl
+                half = P.size(1) // 2 if self.no_scan else nl
 
             z3 = h1.sum(-1).sum(-1)
             if self.olsk or self.no_pointer:
