@@ -16,14 +16,6 @@ class Agent(cofi.Agent):
     def __hash__(self):
         return self.hash()
 
-    @property
-    def max_backward_jump(self):
-        return 1
-
-    @property
-    def max_forward_jump(self):
-        return 1
-
     def build_upsilon(self):
         return None
 
