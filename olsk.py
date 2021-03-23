@@ -26,3 +26,10 @@ class Agent(cofi.Agent):
 
     def build_upsilon(self):
         return None
+
+    @property
+    def beta_in(self):
+        return self.z_size
+
+    def get_delta_probs(self, G, P, z):
+        return torch.softmax(self.beta(z), dim=-1)

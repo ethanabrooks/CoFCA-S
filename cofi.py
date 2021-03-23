@@ -12,11 +12,15 @@ class Agent(cofi_s.Agent):
     def __hash__(self):
         return self.hash()
 
+    @property
+    def beta_in(self):
+        return self.instruction_embed_size * 2
+
     def build_beta(self):
         return nn.Sequential(
             self.init_(
                 nn.Linear(
-                    self.instruction_embed_size * 2,  # biGRU
+                    self.beta_in,
                     self.delta_size,
                 )
             )
