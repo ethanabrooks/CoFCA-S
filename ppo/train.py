@@ -132,7 +132,7 @@ class TrainBase(abc.ABC):
 
         load_path = Path(
             "/home/ethanbro/checkpoints",
-            self.run_id.replace("neurips/long-jump/", ""),
+            self.run_id.replace("icml/long-jump/", ""),
             "checkpoint.pt",
         )
         load_path = str(load_path)
