@@ -221,7 +221,7 @@ class Env(gym.Env):
         ), "At least 2 lines required to build a worker."
 
         building_dependencies: BuildingDependencies = dict(
-            self.build_building_dependencies()
+            self.build_building_dependencies(None if self.evaluating else 3)
         )
         unit_dependencies: UnitDependencies = dict(self.build_unit_dependencies())
 
