@@ -142,6 +142,7 @@ def main(
 def control_flow_args():
     parsers = build_parser()
     parser = parsers.main
+    parser.add_argument("--name")
     parser.add_argument("--no-tqdm", dest="use_tqdm", action="store_false")
     parser.add_argument("--eval-steps", type=int)
     parser.add_argument("--min-eval-lines", type=int, required=True)

@@ -1,6 +1,6 @@
 import functools
 from abc import ABC
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, OrderedDict
 from typing import List, Tuple, Iterator
 import numpy as np
 from gym.utils import seeding
@@ -389,9 +389,9 @@ class Env(gym.Env, ABC):
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
         lines = [self.preprocess_line(p) for p in padded]
-        obs = Obs(
+        obs = OrderedDict(Obs(
             obs=obs, lines=lines, active=self.n_lines if active is None else active
-        )._asdict()
+        )._asdict())
         # if not self.observation_space.contains(obs):
         #     import ipdb
         #

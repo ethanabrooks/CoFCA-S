@@ -9,7 +9,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict
 
-import dataset
 import gym
 import numpy as np
 import torch
@@ -436,6 +435,7 @@ class Train(TrainBase):
         num_processes: int,
         num_steps: int,
         save_separate: bool,
+        name: str,
         **kwargs,
     ):
         self.save_separate = save_separate
