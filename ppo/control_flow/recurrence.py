@@ -106,9 +106,7 @@ class Recurrence(nn.Module):
             return np.array([len(lines.nvec), self.d_space(), self.ne])
 
     def d_space(self):
-        if self.olsk:
-            return 3
-        elif self.transformer or self.no_scan or self.no_pointer:
+        if self.transformer or self.no_scan or self.no_pointer or self.olsk:
             return 2 * self.eval_lines
         else:
             return 2 * self.train_lines
