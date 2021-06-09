@@ -48,7 +48,6 @@ class Agent(ppo.agent.Agent, NNBase):
     @property
     def recurrent_hidden_state_size(self):
         state_sizes = self.recurrent_module.state_sizes
-        state_sizes = state_sizes._replace(P=0)
         return sum(state_sizes)
 
     @property
@@ -105,10 +104,7 @@ class Agent(ppo.agent.Agent, NNBase):
         if probs.dg is not None:
             aux_loss += rm.gate_coef * hx.dg_probs[:, 1].mean()
 
-        P = hx.P.reshape(N, *rm.P_shape())
-        rnn_hxs = torch.cat(
-            hx._replace(P=torch.tensor([], device=hx.P.device), l=X.lower), dim=-1
-        )
+        rnn_hxs = torch.cat(hx._replace(l=X.lower), dim=-1)
         action = torch.cat(X, dim=-1)
         return AgentValues(
             value=hx.v,
@@ -117,7 +113,7 @@ class Agent(ppo.agent.Agent, NNBase):
             aux_loss=aux_loss,
             dist=None,
             rnn_hxs=rnn_hxs,
-            log=dict(entropy=entropy, P=P),
+            log=dict(entropy=entropy),
         )
 
     def _forward_gru(self, x, hxs, masks, action=None):
