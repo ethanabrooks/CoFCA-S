@@ -394,9 +394,9 @@ class Env(gym.Env, ABC):
 
     def get_observation(self, obs, active, lines):
         padded = lines + [Padding(0)] * (self.n_lines - len(lines))
-        lines = [self.preprocess_line(p) for p in padded]
+        lines = np.array([self.preprocess_line(p) for p in padded])
         obs = Obs(
-            obs=obs, lines=lines, active=self.n_lines if active is None else active
+            obs=np.zeros_like(obs), lines=np.zeros_like(lines), active=self.n_lines if active is None else active
         )._asdict()
         # if not self.observation_space.contains(obs):
         #     import ipdb

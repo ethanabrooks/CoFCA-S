@@ -211,7 +211,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
 
         # build memory
         self.nl = nl = len(self.obs_spaces.lines.nvec)
-        M = self.embed_task(self.preprocess_embed(N, T, state)).view(
+        _M = self.embed_task(self.preprocess_embed(N, T, state)).view(
             N, -1, self.task_embed_size
         )
         new_episode = torch.all(rnn_hxs == 0, dim=-1).squeeze(0)
@@ -223,6 +223,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         h = hx.h
         hx.a[new_episode] = self.n_a - 1
         R = torch.arange(N, device=rnn_hxs.device)
+        Q = torch.arange(_M.size(1), device=rnn_hxs.device)
         ones = self.ones.expand_as(R)
         actions = Action(*inputs.actions.unbind(dim=2))
         A = torch.cat([actions.upper, hx.a.view(1, N)], dim=0).long()
@@ -230,11 +231,12 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
         D = torch.cat([actions.delta, hx.d.view(1, N)], dim=0).long()
         DG = torch.cat([actions.dg, hx.dg.view(1, N)], dim=0).long()
 
-        rolled = torch.stack(
-            [torch.roll(M, shifts=-i, dims=1) for i in range(nl)], dim=0
-        )
+        # rolled = torch.stack(
+        #     [torch.roll(_M, shifts=-i, dims=1) for i in range(nl)], dim=0
+        # )
 
         for t in range(T):
+            M = _M * (p.unsqueeze(1) == Q.unsqueeze(0)).unsqueeze(-1).float()
             self.print("p", p)
             conv_output = self.conv(state.obs[t]).relu()
             obs_conv_output = conv_output.sum(-1).sum(-1).view(N, -1)
@@ -243,6 +245,7 @@ class Recurrence(abstract_recurrence.Recurrence, recurrence.Recurrence):
             zeta_input = torch.cat([m, obs_conv_output, inventory], dim=-1)
             z = F.relu(self.zeta(zeta_input))
             a_dist = self.actor(z)
+            a_dist = torch.distributions.Categorical(torch.ones_like(a_dist.logits))
             self.sample_new(A[t], a_dist)
             a = A[t]
             # self.print("a_probs", a_dist.probs)
